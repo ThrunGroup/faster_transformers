@@ -1,12 +1,10 @@
 import os
-from transformers import Trainer, TrainingArguments, EarlyStoppingCallback
-from typing import List
+from transformers import (Trainer, TrainingArguments, EarlyStoppingCallback,
+                          GPT2ForSequenceClassification, AutoTokenizer)
 
-from accelerators.apply_accelerator import apply_accelerator
 from data.get_dataset import get_dataset
 from evaluate_models import evaluate_model
-from utils.parse_string import parse_string, dict_to_string
-from models.gpt2_from_qkv import build_gated_attention_model
+from models.gpt2_classification_from_qkv import build_gated_attention_model
 from utils.constants import (
     # Accelerators
     SVD,
@@ -17,7 +15,8 @@ from utils.constants import (
     NUM_BLOCKS_GPT2,
     NUM_BLOCKS_GPT2_MEDIUM,
     # Datasets
-    BILLSUM,
+    # BILLSUM,
+    SST2,
 )
 
 
@@ -68,7 +67,7 @@ def finetune(
         greater_is_better=True,
         # the higher the rouge score, the better the model
         gradient_accumulation_steps=4,
-        fp16=True,
+        # fp16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -104,6 +103,8 @@ def finetune(
 
 
 def create_model(
+        apply_gated_attention: bool,
+        model_name: str,
         model_type: str,
         dataset_name: str,
         num_epochs: int = 5,
@@ -119,42 +120,24 @@ def create_model(
     :param do_evaluation: Whether to evaluate the model after training and save the metrics
     :return: Dictionary of evaluation logs if `do_evaluation` is true
     """
-    # Load a custom model with GPT2
-    model = build_gated_attention_model()
+    # Build a Gated Attention model
+    if apply_gated_attention:
+        model = build_gated_attention_model()
+    else:
+        model = GPT2ForSequenceClassification.from_pretrained("gpt2")
+    model.config.pad_token_id = model.config.eos_token_id
+
+    tokenizer = AutoTokenizer.from_pretrained("gpt2")
+    tokenizer.pad_token = tokenizer.eos_token
+
+    finetune(model_name, model, tokenizer, dataset_name, num_epochs)
 
 
 if __name__ == "__main__":
-    # Train a model without any accelerator
-    # create_model(model_type=GPT2,
-    #              dataset_name=BILLSUM,
-    #              num_epochs=30,
-    #              layers_to_freeze=f"0-{NUM_BLOCKS_GPT2 - 2}")
-    #
-    # # # Only train the accelerated FC layer and the very final linear layer
-    # create_model(model_type=GPT2,
-    #              dataset_name=BILLSUM,
-    #              num_epochs=30,
-    #              layers_to_freeze=f"0-{NUM_BLOCKS_GPT2 - 3}",
-    #              layers_to_accelerate=f"{NUM_BLOCKS_GPT2 - 3}-{NUM_BLOCKS_GPT2 - 1}",
-    #              train_accelerated_layers=True,
-    #              accelerator_type=SVD,
-    #              k=64)
-
     create_model(
+        apply_gated_attention=False,
+        model_name="GPT2_small",
         model_type=GPT2,
-        dataset_name=BILLSUM,
-        num_epochs=10,
-        layers_to_freeze=f"0-{NUM_BLOCKS_GPT2 - 4}",
-    )
-
-    create_model(
-        model_type=GPT2_MEDIUM,
-        dataset_name=BILLSUM,
-        num_epochs=30,
-        layers_to_freeze=f"0-{NUM_BLOCKS_GPT2_MEDIUM - 4}",  # GPT2_MEDIUM
-        layers_to_accelerate=f"{NUM_BLOCKS_GPT2_MEDIUM - 3}-{NUM_BLOCKS_GPT2_MEDIUM - 1}",
-        # GPT2_MEDIUM
-        train_accelerated_layers=True,
-        accelerator_type=SVD,
-        k=64,
+        dataset_name=SST2,
+        num_epochs=1,
     )

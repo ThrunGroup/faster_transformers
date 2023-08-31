@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from transformers import GPT2Model, GPT2Config
+from transformers import GPT2Model, GPT2Config, GPT2ForSequenceClassification
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
 from typing import Optional, Tuple, Union
 

@@ -15,5 +15,5 @@ class Dataset(ABC):
         pass
 
     @abstractmethod
-    def compute_metrics(self):
+    def compute_metrics(self, logits=None, labels=None):
         pass

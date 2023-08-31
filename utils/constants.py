@@ -39,6 +39,7 @@ BILLSUM = "billsum"
 WIKITEXT2 = "wikitext-2-raw-v1"
 SQUAD = "squad"
 OPENWEBTEXT = 'openwebtext'
+SST2 = "sst2"
 
 # Number of blocks
 NUM_BLOCKS_GPT2 = 12
