@@ -5,6 +5,12 @@ from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
 from typing import Optional, Tuple, Union
 
 
+if torch.cuda.is_available():
+    device = "cuda:0"
+else:
+    device = "cpu"
+
+
 class Router(nn.Module):
     def __init__(self, embed_dim, num_heads):
         super().__init__()
@@ -118,8 +124,10 @@ def build_gated_attention_model():
     config = GPT2Config.from_pretrained("gpt2")
     model = GPT2ForSequenceClassification.from_pretrained("gpt2",
                                                           config=config)
+    print("Device: ", device)
+    model.to(device)
     apply_gated_attention(model, config)
-    freeze_model(model)
+    # freeze_model(model)
 
     return model
 

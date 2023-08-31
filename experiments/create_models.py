@@ -126,6 +126,7 @@ def create_model(
     else:
         model = GPT2ForSequenceClassification.from_pretrained("gpt2")
     model.config.pad_token_id = model.config.eos_token_id
+    model.to("cuda")
 
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token

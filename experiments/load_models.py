@@ -4,7 +4,7 @@ import os
 
 from utils.constants import TRANSFORMER_XL, GPT2, GPT2_LARGE, NUM_BLOCKS_GPT2, SVD
 from utils.parse_string import get_model_type, parse_string, string_to_dict
-from accelerators.apply_accelerator import apply_accelerator
+# from accelerators.apply_accelerator import apply_accelerator
 
 
 def get_naive_model_and_tokenizer(model_name: str):

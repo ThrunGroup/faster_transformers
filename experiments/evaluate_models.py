@@ -5,7 +5,7 @@ import time
 import os
 
 from utils.constants import GPT2, BILLSUM
-from accelerators.apply_accelerator import apply_accelerator
+# from accelerators.apply_accelerator import apply_accelerator
 from data.get_dataset import get_dataset
 from load_models import get_naive_model_and_tokenizer, load_model, list_checkpoint_models
 from utils.parse_string import get_model_type

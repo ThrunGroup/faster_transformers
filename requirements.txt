@@ -27,3 +27,8 @@ grpcio>=1.35.0,<=1.48.2
 grpcio-tools>=1.35.0,<=1.48.2
 googleapis-common-protos>=1.56.4
 sqlalchemy==1.4
+evaluate
+scikit-learn
+optimum
+onnx
+onnxruntime
