@@ -1,4 +1,4 @@
-from datasets import load_dataset
+from datasets import load_dataset, load_metric
 from transformers import DataCollatorWithPadding
 import numpy as np
 import evaluate
@@ -14,6 +14,8 @@ class SST2_Dataset(Dataset):
 
     def get_tokenized_dataset(self):
         dataset = load_dataset("glue", "sst2")
+        # , split="train[:10]"
+        # dataset = dataset.train_test_split(test_size=0.2)
         tokenized_dataset = dataset.map(self.preprocess, batched=True)
         return tokenized_dataset["train"], tokenized_dataset["validation"]
 
@@ -33,9 +35,12 @@ class SST2_Dataset(Dataset):
         )
         return data_collator
 
-    def compute_metrics(self, logits, labels):
+    def compute_metrics(self, evals):
+        logits, labels = evals
         predictions = np.argmax(logits, axis=-1)
-        return self.metric.compute(predictions, labels)
+        # print(predictions.shape, labels.shape)
+        return self.metric.compute(predictions=predictions, references=labels)
 
     def get_compute_metrics(self):
         return self.compute_metrics
+

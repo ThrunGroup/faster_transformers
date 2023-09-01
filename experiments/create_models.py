@@ -51,27 +51,27 @@ def finetune(
 
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
-        evaluation_strategy="epoch",
-        save_strategy="epoch",
+        evaluation_strategy="steps",
+        eval_steps=500,
+        save_strategy="steps",
         learning_rate=2e-5,
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=1,
+        # warmup_steps=500,
+        per_device_train_batch_size=64,
+        per_device_eval_batch_size=32,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
         save_total_limit=1,
         load_best_model_at_end=True,
-        # load the best model when finished training
-        metric_for_best_model="rouge1",
-        # use rouge1 as the metric to determine best model
-        greater_is_better=True,
+        logging_steps=50,
+        # eval_steps=40
         # the higher the rouge score, the better the model
-        gradient_accumulation_steps=4,
-        # fp16=True,
+        # gradient_accumulation_steps=4,
+        fp16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=8, early_stopping_threshold=0.0001
+        early_stopping_patience=5, early_stopping_threshold=0.001
     )
 
     trainer = Trainer(
@@ -126,19 +126,19 @@ def create_model(
     else:
         model = GPT2ForSequenceClassification.from_pretrained("gpt2")
     model.config.pad_token_id = model.config.eos_token_id
-    model.to("cuda")
 
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token
 
-    finetune(model_name, model, tokenizer, dataset_name, num_epochs)
+    finetune(model_name, model, tokenizer, dataset_name, num_epochs, resume_from_checkpoint=False)
 
 
 if __name__ == "__main__":
     create_model(
-        apply_gated_attention=False,
-        model_name="GPT2_small",
+        apply_gated_attention=True,
+        model_name="GPT2_small_gated",
         model_type=GPT2,
         dataset_name=SST2,
-        num_epochs=1,
+        num_epochs=5,
     )
+ 

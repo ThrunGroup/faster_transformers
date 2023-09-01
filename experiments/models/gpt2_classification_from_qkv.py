@@ -10,6 +10,8 @@ if torch.cuda.is_available():
 else:
     device = "cpu"
 
+NUM_LAYERS = 12
+
 
 class Router(nn.Module):
     def __init__(self, embed_dim, num_heads):
@@ -29,19 +31,19 @@ class GatedAttention(GPT2Attention):
         super().__init__(
             config, is_cross_attention=is_cross_attention, layer_idx=layer_idx
         )
-        self.router = Router(self.embed_dim, self.num_heads)
+        self.router = Router(self.embed_dim, self.num_heads).to(device)
 
-    def _merge_heads(self, tensor, T, top_k):
+    def _merge_heads(self, tensor, T, top_k_indices, top_k_probs):
         B, H, K, c = tensor.shape
-        logits = torch.zeros(B, self.num_heads, T, self.head_dim)
-        # indices: (B, H, K, c)
-        indices = top_k.indices.unsqueeze(-1).expand(-1, -1, -1, self.head_dim)
-        logits_per_head = top_k.values.unsqueeze(-1) * tensor
+        logits = torch.zeros(B, self.num_heads, T, self.head_dim, dtype=tensor.dtype, device=device)
+        indices = top_k_indices.unsqueeze(-1).expand(-1, -1, -1, self.head_dim) # (B, H, K, c)
+        logits_per_head = tensor
+        # top_k_probs.unsqueeze(-1) * 
         logits.scatter_(2, indices,
                         logits_per_head)  # (B, H, K, c) -> (B, H, T, c)
-        splits = logits.chunk(self.num_heads, dim=1)  # H x (B, T, c)
-        out = torch.cat(splits, dim=-1).squeeze(1)  # (B, T, C)
-        return out
+        logits = logits.permute(0, 2, 1, 3).contiguous()  # (B, T, H, c)
+        logits = logits.view(B, T, -1)
+        return logits
 
     def forward(
             self,
@@ -56,33 +58,49 @@ class GatedAttention(GPT2Attention):
     ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]], ...]:
         # select the top k tokens for each head
         B, T, C = hidden_states.shape
-        K = min(max(int(T / self.num_heads), 8), T)
-
-        # get query, key, value
-        attention_proj = self.c_attn(hidden_states)  # (B, T, 3C)
-
-        # (B, T, 3C) -> (B, H, T, 3c)
-        attention_proj = attention_proj.view(B,
-                                             T,
-                                             self.num_heads,
-                                             3 * self.head_dim).permute(0, 2,
-                                                                        1, 3)
-
+        
         # pick top k tokens # (B, H, K, C)
+        # K = T
+        # K = min(max(int(T / 2), 8), T)
+        if self.layer_idx <= NUM_LAYERS // 4:
+            K = T
+        elif self.layer_idx <= NUM_LAYERS // 3:
+            K = min(max(int(T / 3), 6), T)
+        elif self.layer_idx <= NUM_LAYERS // 3 * 2:
+            K = min(max(int(T / 6), 6), T)
+        else:
+            K = min(max(int(T / 12), 4), T)
+
         router = self.router(hidden_states)  # (B, H, T)
         top_k = torch.topk(router, k=K, dim=-1, sorted=False)  # (B, H, K)
+        top_k_indices, indices_ = torch.sort(top_k.indices)
+        top_k_probs = torch.gather(top_k.values, 2, indices_)
 
-        # (B, H, K, 3c)
-        attention_per_head = torch.gather(
-            input=attention_proj,  # (B, H, T, 3c)
+        # get query, key, value (B, T, 3C) -> (B, T, C)
+        query, key, value = self.c_attn(hidden_states).split(self.split_size, dim=2)
+        
+        # split heads (B, T, C) -> (B, H, T, c)
+        query = self._split_heads(query, self.num_heads, self.head_dim)
+        key = self._split_heads(key, self.num_heads, self.head_dim)
+        value = self._split_heads(value, self.num_heads, self.head_dim)
+
+        query = torch.gather(
+            input=query,
             dim=2,
-            index=top_k.indices.unsqueeze(-1).expand(-1, -1, -1,
-                                                     3 * self.head_dim),
-            # (B, H, K, 3C)
+            index=top_k_indices.unsqueeze(-1).expand(-1, -1, -1, self.head_dim), # (B, H, K, c)
         )
 
-        # (B, H, K, c)
-        query, key, value = attention_per_head.split(self.head_dim, dim=-1)
+        key = torch.gather(
+            input=key,
+            dim=2,
+            index=top_k_indices.unsqueeze(-1).expand(-1, -1, -1, self.head_dim), # (B, H, K, c)
+        )
+
+        value = torch.gather(
+            input=value,
+            dim=2,
+            index=top_k_indices.unsqueeze(-1).expand(-1, -1, -1, self.head_dim), # (B, H, K, c)
+        )
 
         # causal self-attention
         attn_output, attn_weights = self._attn(
@@ -90,7 +108,7 @@ class GatedAttention(GPT2Attention):
         )  # (B, H, K, c), (B, H, K, K)
 
         # put the head logits together
-        attn_output = self._merge_heads(attn_output, T, top_k)
+        attn_output = self._merge_heads(attn_output, T, top_k_indices, top_k_probs)
         attn_output = self.c_proj(attn_output)
         attn_output = self.resid_dropout(attn_output)
 
@@ -103,9 +121,11 @@ class GatedAttention(GPT2Attention):
 def apply_gated_attention(model, config):
     # Iterate through blocks and replace self-attention layers
     for i, block in enumerate(model.transformer.h):
-        new_attention = GatedAttention(config)
+        new_attention = GatedAttention(config, layer_idx=i).to(device)
         new_attention.c_attn.weight = block.attn.c_attn.weight
+        new_attention.c_attn.bias = block.attn.c_attn.bias
         new_attention.c_proj.weight = block.attn.c_proj.weight
+        new_attention.c_proj.bias = block.attn.c_proj.bias
         block.attn = new_attention
 
 
@@ -124,10 +144,8 @@ def build_gated_attention_model():
     config = GPT2Config.from_pretrained("gpt2")
     model = GPT2ForSequenceClassification.from_pretrained("gpt2",
                                                           config=config)
-    print("Device: ", device)
     model.to(device)
     apply_gated_attention(model, config)
-    # freeze_model(model)
 
     return model
 
