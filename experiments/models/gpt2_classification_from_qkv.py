@@ -17,12 +17,15 @@ class Router(nn.Module):
     def __init__(self, embed_dim, num_heads):
         super().__init__()
         self.router = nn.Sequential(
-            nn.Linear(embed_dim, num_heads), nn.Softmax(dim=1)  # (B, T, H)
+            nn.Linear(embed_dim, num_heads),  # (B, T, H)
+            nn.Softmax(dim=1),
         )
+        self.batch_norm = nn.BatchNorm1d(num_heads)
 
     def forward(self, x):
         x = self.router(x)  # (B, T, H)
         x = x.permute(0, 2, 1)  # (B, H, T)
+        # x = self.batch_norm(x)
         return x
 
 
@@ -32,13 +35,17 @@ class GatedAttention(GPT2Attention):
             config, is_cross_attention=is_cross_attention, layer_idx=layer_idx
         )
         self.router = Router(self.embed_dim, self.num_heads).to(device)
+        self.softmax = nn.Softmax(dim=-1)
 
     def _merge_heads(self, tensor, T, top_k_indices, top_k_probs):
         B, H, K, c = tensor.shape
         logits = torch.zeros(B, self.num_heads, T, self.head_dim, dtype=tensor.dtype, device=device)
         indices = top_k_indices.unsqueeze(-1).expand(-1, -1, -1, self.head_dim) # (B, H, K, c)
-        logits_per_head = tensor
-        # top_k_probs.unsqueeze(-1) * 
+        if self.layer_idx <= NUM_LAYERS // 3:
+            logits_per_head = tensor
+        else:
+            logits_per_head = top_k_probs.unsqueeze(-1).to(tensor.dtype) * tensor 
+            # print(top_k_probs[0][0], top_k_probs[0][0].sum(), top_k_probs[0][0].shape)  # (B, H, K)
         logits.scatter_(2, indices,
                         logits_per_head)  # (B, H, K, c) -> (B, H, T, c)
         logits = logits.permute(0, 2, 1, 3).contiguous()  # (B, T, H, c)
@@ -59,22 +66,26 @@ class GatedAttention(GPT2Attention):
         # select the top k tokens for each head
         B, T, C = hidden_states.shape
         
-        # pick top k tokens # (B, H, K, C)
-        # K = T
-        # K = min(max(int(T / 2), 8), T)
+        # pick top k tokens (B, H, K, C)
         if self.layer_idx <= NUM_LAYERS // 4:
             K = T
-        elif self.layer_idx <= NUM_LAYERS // 3:
-            K = min(max(int(T / 3), 6), T)
-        elif self.layer_idx <= NUM_LAYERS // 3 * 2:
+        elif self.layer_idx <= NUM_LAYERS // 4 * 2:
+            K = min(max(int(T / 4), 6), T)
+        elif self.layer_idx <= NUM_LAYERS // 4 * 3:
             K = min(max(int(T / 6), 6), T)
         else:
             K = min(max(int(T / 12), 4), T)
 
         router = self.router(hidden_states)  # (B, H, T)
         top_k = torch.topk(router, k=K, dim=-1, sorted=False)  # (B, H, K)
-        top_k_indices, indices_ = torch.sort(top_k.indices)
-        top_k_probs = torch.gather(top_k.values, 2, indices_)
+        top_k_indices = top_k.indices
+        top_k_probs = top_k.values
+        top_k_indices, indices_ = torch.sort(top_k.indices, dim=-1) 
+        top_k_probs = torch.gather(top_k.values, -1, indices_) * K
+        # top_k_probs = self.softmax(top_k_probs) 
+
+        # if self.layer_idx == NUM_LAYERS // 2:
+        #     print(self.router.router[0].weight.sum())
 
         # get query, key, value (B, T, 3C) -> (B, T, C)
         query, key, value = self.c_attn(hidden_states).split(self.split_size, dim=2)

@@ -27,6 +27,7 @@ def finetune(
         dataset_name: str,
         num_epochs: int = 10,
         resume_from_checkpoint: bool = False,
+        learning_rate: float = 0.001,
         do_evaluation: bool = True,
 ):
     """
@@ -54,8 +55,8 @@ def finetune(
         evaluation_strategy="steps",
         eval_steps=500,
         save_strategy="steps",
-        learning_rate=2e-5,
-        # warmup_steps=500,
+        learning_rate=learning_rate,
+        warmup_steps=500,
         per_device_train_batch_size=64,
         per_device_eval_batch_size=32,
         weight_decay=0.01,
@@ -64,8 +65,6 @@ def finetune(
         save_total_limit=1,
         load_best_model_at_end=True,
         logging_steps=50,
-        # eval_steps=40
-        # the higher the rouge score, the better the model
         # gradient_accumulation_steps=4,
         fp16=True,
     )
@@ -107,8 +106,10 @@ def create_model(
         model_name: str,
         model_type: str,
         dataset_name: str,
+        learning_rate: float,
         num_epochs: int = 5,
         do_evaluation: bool = True,
+        
 ):
     """
     Load a naive pretrained model from HuggingFace, apply the accelerator to FC layers,
@@ -130,7 +131,9 @@ def create_model(
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token
 
-    finetune(model_name, model, tokenizer, dataset_name, num_epochs, resume_from_checkpoint=False)
+    finetune(model_name, model, tokenizer, dataset_name, num_epochs, 
+             resume_from_checkpoint=False, 
+             learning_rate=learning_rate)
 
 
 if __name__ == "__main__":
@@ -139,6 +142,7 @@ if __name__ == "__main__":
         model_name="GPT2_small_gated",
         model_type=GPT2,
         dataset_name=SST2,
-        num_epochs=5,
+        num_epochs=10,
+        learning_rate=5e-5,
     )
  

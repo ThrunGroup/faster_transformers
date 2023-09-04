@@ -1,5 +1,8 @@
+from vizier import service
 from vizier.service import clients
 from vizier.service import pyvizier as vz
+import pandas as pd
+import os
 
 from create_models import create_model
 from utils.constants import (
@@ -20,37 +23,39 @@ from utils.constants import (
     BILLSUM,
     OPENWEBTEXT,
     SQUAD,
+    SST2,
 )
 
 
 def run_vizier_experiment(study, dataset_name: str, num_experiments: int = 10):
     # Run the experiments multiple times
+    print("Running vizier...")
     for i in range(num_experiments):
+        print("Experiment " + str(i))
         suggestions = study.suggest(count=1)
-        for suggestion in suggestions:
+        print("suggestions: ", suggestions)
+        for (j, suggestion) in enumerate(suggestions):
+            print(j, suggestion)
             params = suggestion.parameters
-            print(params)
-            k, first_block_to_accelerate, last_block_to_accelerate, num_blocks_to_finetune = list(map(int,
-                                                                                                      params.values()))
+            learning_rate = params["learning_rate"]
 
-            model_type = GPT2
+            model_name = f"GPT2_small_gated_{i}_{j}"
 
-            blocks_to_accelerate = f"{first_block_to_accelerate}-{last_block_to_accelerate}"
-            blocks_to_freeze = f"0-{NUM_BLOCKS_GPT2 - num_blocks_to_finetune}"
+            print("learning rate: ", learning_rate)
+            create_model(
+                apply_gated_attention=True,
+                model_name=model_name,
+                model_type=GPT2,
+                dataset_name=dataset_name,
+                num_epochs=1,
+                learning_rate=learning_rate,
+            )
 
-            evaluation_logs = create_model(model_type=model_type,
-                                           dataset_name=dataset_name,
-                                           num_epochs=1,
-                                           layers_to_freeze=blocks_to_freeze,
-                                           layers_to_accelerate=blocks_to_accelerate,
-                                           train_accelerated_layers=True,
-                                           accelerator_type=SVD,
-                                           k=k)
-            rouge = evaluation_logs['eval_rougeLsum']
-            inference_time = evaluation_logs['inference_time']
-            suggestion.complete(vz.Measurement({'score': rouge,
-                                                'inference_time': inference_time}))
-            print(f'Iteration {i}, suggestion {params} led to rouge score {rouge} and inference_time {inference_time}.')
+            log_csv = pd.read_csv(os.path.join("exp_logs"), model_name)
+            eval_loss = log_csv["eval_loss"][0]
+            
+            suggestion.complete(vz.Measurement({'eval_loss': eval_loss}))
+            print(f'Iteration {i}, suggestion {params} led to eval loss {eval_loss}')
 
     # Get the optimal results
     for optimal_trial in study.optimal_trials():
@@ -61,32 +66,12 @@ def run_vizier_experiment(study, dataset_name: str, num_experiments: int = 10):
 
 if __name__ == '__main__':
     # Algorithm, search space, and metrics.
-    study_config = vz.StudyConfig(algorithm='NSGA2')
-    study_config_root = study_config.search_space.root
-    accelerator = study_config_root.add_categorical_param(
-        name="accelerator", feasible_values=[SVD, QUANTIZATION, PRUNING]
-    )
-
-    # SVD parameters
-    svd = accelerator.select_values([SVD])
-    svd.add_discrete_param('k', [32, 64, 128, 256])
-    svd.add_int_param('first_block_to_accelerate', 0, NUM_BLOCKS_GPT2 // 2)
-    svd.add_int_param('last_block_to_accelerate', NUM_BLOCKS_GPT2 // 2, NUM_BLOCKS_GPT2)
-    svd.add_int_param('num_blocks_to_finetune', 1, 4)
-
-    # Quantisation parameters
-    quantisation = accelerator.select_values([QUANTIZATION])
-    quantisation.add_int_param('first_block_to_accelerate', 0, NUM_BLOCKS_GPT2 // 2)
-    quantisation.add_int_param('last_block_to_accelerate', NUM_BLOCKS_GPT2 // 2, NUM_BLOCKS_GPT2)
-
-    # BanditReLU parameters
-    bandit_rulu = accelerator.select_values([PRUNING])
-    # TODO: Add more parameters in the future
-
-    study_config.metric_information.append(vz.MetricInformation('score', goal=vz.ObjectiveMetricGoal.MAXIMIZE))
-    study_config.metric_information.append(vz.MetricInformation('inference_time', goal=vz.ObjectiveMetricGoal.MINIMIZE))
+    study_config = vz.StudyConfig(algorithm='GAUSSIAN_PROCESS_BANDIT')
+    study_config.search_space.root.add_float_param('learning_rate', 1e-5, 1e-3)
+    study_config.metric_information.append(vz.MetricInformation('eval_loss', goal=vz.ObjectiveMetricGoal.MINIMIZE))
 
     # Setup client and begin optimization. Vizier Service will be implicitly created.
     study = clients.Study.from_study_config(study_config, owner='lab', study_id='fast_transformer')
+    print('Local SQL database file located at: ', service.VIZIER_DB_PATH)
 
-    run_vizier_experiment(study, dataset_name=BILLSUM, num_experiments=10)
+    run_vizier_experiment(study, dataset_name=SST2, num_experiments=10)
