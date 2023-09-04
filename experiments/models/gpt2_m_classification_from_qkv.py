@@ -3,6 +3,7 @@ from torch import nn
 from transformers import GPT2Model, GPT2Config, GPT2ForSequenceClassification
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
 from typing import Optional, Tuple, Union
+from peft import get_peft_model, LoraConfig, TaskType
 
 from utils.constants import (
     # Accelerators
@@ -158,18 +159,3 @@ def freeze_model(model):
         if not do_train:
             param.requires_grad = False
 
-
-def build_gated_attention_model():
-    model_name = GPT2_MEDIUM
-    config = GPT2Config.from_pretrained(model_name)
-    model = GPT2ForSequenceClassification.from_pretrained(model_name,
-                                                          config=config)
-    model.to(device)
-    apply_gated_attention(model, config)
-    # print(config)
-
-    return model
-
-
-if __name__ == '__main__':
-    build_gated_attention_model()

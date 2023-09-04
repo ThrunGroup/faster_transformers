@@ -4,8 +4,7 @@ from transformers import (Trainer, TrainingArguments, EarlyStoppingCallback,
 
 from data.get_dataset import get_dataset
 from evaluate_models import evaluate_model
-# from models.gpt2_classification_from_qkv import build_gated_attention_model
-from models.gpt2_m_classification_from_qkv import build_gated_attention_model
+from models.build_model import build_model
 from utils.constants import (
     # Accelerators
     SVD,
@@ -103,7 +102,8 @@ def finetune(
 
 
 def create_model(
-        apply_gated_attention: bool,
+        use_gated_attention: bool,
+        use_lora: bool,
         model_name: str,
         model_type: str,
         dataset_name: str,
@@ -123,10 +123,7 @@ def create_model(
     :return: Dictionary of evaluation logs if `do_evaluation` is true
     """
     # Build a Gated Attention model
-    if apply_gated_attention:
-        model = build_gated_attention_model()
-    else:
-        model = GPT2ForSequenceClassification.from_pretrained(model_type)
+    model = build_model(model_type, use_lora, use_gated_attention)
     model.config.pad_token_id = model.config.eos_token_id
 
     tokenizer = AutoTokenizer.from_pretrained(model_type)
@@ -139,7 +136,8 @@ def create_model(
 
 if __name__ == "__main__":
     create_model(
-        apply_gated_attention=True,
+        use_lora=True,
+        use_gated_attention=False,
         model_name="GPT2_medium_gated",
         model_type=GPT2_MEDIUM,
         dataset_name=SST2,
