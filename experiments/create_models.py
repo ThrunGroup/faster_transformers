@@ -4,7 +4,8 @@ from transformers import (Trainer, TrainingArguments, EarlyStoppingCallback,
 
 from data.get_dataset import get_dataset
 from evaluate_models import evaluate_model
-from models.gpt2_classification_from_qkv import build_gated_attention_model
+# from models.gpt2_classification_from_qkv import build_gated_attention_model
+from models.gpt2_m_classification_from_qkv import build_gated_attention_model
 from utils.constants import (
     # Accelerators
     SVD,
@@ -125,10 +126,10 @@ def create_model(
     if apply_gated_attention:
         model = build_gated_attention_model()
     else:
-        model = GPT2ForSequenceClassification.from_pretrained("gpt2")
+        model = GPT2ForSequenceClassification.from_pretrained(model_type)
     model.config.pad_token_id = model.config.eos_token_id
 
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
+    tokenizer = AutoTokenizer.from_pretrained(model_type)
     tokenizer.pad_token = tokenizer.eos_token
 
     finetune(model_name, model, tokenizer, dataset_name, num_epochs, 
@@ -139,8 +140,8 @@ def create_model(
 if __name__ == "__main__":
     create_model(
         apply_gated_attention=True,
-        model_name="GPT2_small_gated",
-        model_type=GPT2,
+        model_name="GPT2_medium_gated",
+        model_type=GPT2_MEDIUM,
         dataset_name=SST2,
         num_epochs=10,
         learning_rate=5e-5,

@@ -4,13 +4,21 @@ from transformers import GPT2Model, GPT2Config, GPT2ForSequenceClassification
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
 from typing import Optional, Tuple, Union
 
+from utils.constants import (
+    # Accelerators
+    SVD,
+    # Models
+    GPT2,
+    GPT2_MEDIUM,
+)
+
 
 if torch.cuda.is_available():
     device = "cuda:0"
 else:
     device = "cpu"
 
-NUM_LAYERS = 12
+NUM_LAYERS = 24
 
 
 class Router(nn.Module):
@@ -152,11 +160,13 @@ def freeze_model(model):
 
 
 def build_gated_attention_model():
-    config = GPT2Config.from_pretrained("gpt2")
-    model = GPT2ForSequenceClassification.from_pretrained("gpt2",
+    model_name = GPT2_MEDIUM
+    config = GPT2Config.from_pretrained(model_name)
+    model = GPT2ForSequenceClassification.from_pretrained(model_name,
                                                           config=config)
     model.to(device)
     apply_gated_attention(model, config)
+    # print(config)
 
     return model
 
