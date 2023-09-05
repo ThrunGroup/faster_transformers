@@ -67,10 +67,8 @@ class GatedAttention(GPT2Attention):
             K = T
         elif self.layer_idx <= self.config.n_layer // 4 * 2:
             K = min(max(int(T / 4), 6), T)
-        elif self.layer_idx <= self.config.n_layer // 4 * 3:
-            K = min(max(int(T / 6), 6), T)
         else:
-            K = min(max(int(T / 12), 4), T)
+            K = min(max(int(T / 6), 6), T)
 
         router = self.router(hidden_states)  # (B, H, T)
         top_k = torch.topk(router, k=K, dim=-1, sorted=False)  # (B, H, K)

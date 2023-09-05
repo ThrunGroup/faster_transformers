@@ -66,7 +66,7 @@ class Samsum(Dataset):
         Load and build a simple summarization dataset
         :return: tokenized dataset, data collator, and compute_metrics function
         """
-        dataset = load_dataset("samsum", split="train[:100]")
+        dataset = load_dataset("samsum", split="train")
         dataset = dataset.map(self.apply_prompt_template,
                               remove_columns=list(dataset.features))
         dataset = dataset.map(

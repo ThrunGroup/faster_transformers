@@ -18,6 +18,7 @@ from utils.constants import (
     # BILLSUM,
     # SST2,
     SAMSUM,
+    BILLSUM,
 )
 
 
@@ -54,20 +55,23 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
-        eval_steps=5,
+        eval_steps=50,
+        logging_steps=25,
         save_strategy="steps",
         learning_rate=learning_rate,
         warmup_steps=500,
-        per_device_train_batch_size=1,
-        per_device_eval_batch_size=1,
+        per_device_train_batch_size=32,
+        per_device_eval_batch_size=16,
         weight_decay=0.01,
+        # bf16=True,
+        # torch_compile=True,
+        # optim="adamw_torch_fused",
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
         save_total_limit=1,
         load_best_model_at_end=True,
-        logging_steps=5,
-        # gradient_accumulation_steps=4,
-        # fp16=True,
+        gradient_accumulation_steps=4,
+        fp16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -105,7 +109,6 @@ def finetune(
 def create_model(
         use_gated_attention: bool,
         use_lora: bool,
-        model_name: str,
         model_type: str,
         dataset_name: str,
         learning_rate: float,
@@ -124,6 +127,10 @@ def create_model(
     :return: Dictionary of evaluation logs if `do_evaluation` is true
     """
     # Build a Gated Attention model
+    model_name = model_type
+    if use_lora: model_name += "_lora"
+    if use_gated_attention: model_name += "_gated"
+
     model = build_model(model_type, use_lora, use_gated_attention)
     model.config.pad_token_id = model.config.eos_token_id
 
@@ -136,13 +143,21 @@ def create_model(
 
 
 if __name__ == "__main__":
+    # create_model(
+    #     use_lora=False,
+    #     use_gated_attention=False,
+    #     model_type=GPT2,
+    #     dataset_name=BILLSUM,
+    #     num_epochs=2,
+    #     learning_rate=5e-5,
+    # )
+
     create_model(
         use_lora=False,
-        use_gated_attention=False,
-        model_name="GPT2",
+        use_gated_attention=True,
         model_type=GPT2,
-        dataset_name=SAMSUM,
-        num_epochs=10,
+        dataset_name=BILLSUM,
+        num_epochs=6,
         learning_rate=5e-5,
     )
  
