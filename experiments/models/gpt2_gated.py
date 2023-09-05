@@ -1,25 +1,12 @@
 import torch
 from torch import nn
-from transformers import GPT2Model, GPT2Config, GPT2ForSequenceClassification
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
 from typing import Optional, Tuple, Union
-from peft import get_peft_model, LoraConfig, TaskType
-
-from utils.constants import (
-    # Accelerators
-    SVD,
-    # Models
-    GPT2,
-    GPT2_MEDIUM,
-)
-
 
 if torch.cuda.is_available():
     device = "cuda:0"
 else:
     device = "cpu"
-
-NUM_LAYERS = 24
 
 
 class Router(nn.Module):
@@ -43,6 +30,7 @@ class GatedAttention(GPT2Attention):
         super().__init__(
             config, is_cross_attention=is_cross_attention, layer_idx=layer_idx
         )
+        self.config = config
         self.router = Router(self.embed_dim, self.num_heads).to(device)
         self.softmax = nn.Softmax(dim=-1)
 
@@ -50,11 +38,10 @@ class GatedAttention(GPT2Attention):
         B, H, K, c = tensor.shape
         logits = torch.zeros(B, self.num_heads, T, self.head_dim, dtype=tensor.dtype, device=device)
         indices = top_k_indices.unsqueeze(-1).expand(-1, -1, -1, self.head_dim) # (B, H, K, c)
-        if self.layer_idx <= NUM_LAYERS // 3:
+        if self.layer_idx <= self.config.n_layer // 3:
             logits_per_head = tensor
         else:
             logits_per_head = top_k_probs.unsqueeze(-1).to(tensor.dtype) * tensor 
-            # print(top_k_probs[0][0], top_k_probs[0][0].sum(), top_k_probs[0][0].shape)  # (B, H, K)
         logits.scatter_(2, indices,
                         logits_per_head)  # (B, H, K, c) -> (B, H, T, c)
         logits = logits.permute(0, 2, 1, 3).contiguous()  # (B, T, H, c)
@@ -76,11 +63,11 @@ class GatedAttention(GPT2Attention):
         B, T, C = hidden_states.shape
         
         # pick top k tokens (B, H, K, C)
-        if self.layer_idx <= NUM_LAYERS // 4:
+        if self.layer_idx <= self.config.n_layer // 4:
             K = T
-        elif self.layer_idx <= NUM_LAYERS // 4 * 2:
+        elif self.layer_idx <= self.config.n_layer // 4 * 2:
             K = min(max(int(T / 4), 6), T)
-        elif self.layer_idx <= NUM_LAYERS // 4 * 3:
+        elif self.layer_idx <= self.config.n_layer // 4 * 3:
             K = min(max(int(T / 6), 6), T)
         else:
             K = min(max(int(T / 12), 4), T)
@@ -93,7 +80,7 @@ class GatedAttention(GPT2Attention):
         top_k_probs = torch.gather(top_k.values, -1, indices_) * K
         # top_k_probs = self.softmax(top_k_probs) 
 
-        # if self.layer_idx == NUM_LAYERS // 2:
+        # if self.layer_idx == self.config.n_layer // 2:
         #     print(self.router.router[0].weight.sum())
 
         # get query, key, value (B, T, 3C) -> (B, T, C)

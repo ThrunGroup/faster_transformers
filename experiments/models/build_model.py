@@ -1,8 +1,8 @@
 import torch
-from transformers import GPT2Config, GPT2ForSequenceClassification
+from transformers import GPT2Config, GPT2ForSequenceClassification, GPT2LMHeadModel
 from peft import get_peft_model, LoraConfig, TaskType
 
-from gpt2_m_classification_from_qkv import apply_gated_attention
+from .gpt2_gated import apply_gated_attention
 from utils.constants import GPT2, GPT2_MEDIUM
 
 if torch.cuda.is_available():
@@ -13,8 +13,7 @@ else:
 
 def build_model(model_name: str, use_lora: bool, use_gated_attention: bool):
     config = GPT2Config.from_pretrained(model_name)
-    model = GPT2ForSequenceClassification.from_pretrained(model_name,
-                                                          config=config)
+    model = GPT2LMHeadModel.from_pretrained(model_name, config=config)
 
     if use_gated_attention:
         apply_gated_attention(model, config)

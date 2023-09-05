@@ -16,7 +16,8 @@ from utils.constants import (
     NUM_BLOCKS_GPT2_MEDIUM,
     # Datasets
     # BILLSUM,
-    SST2,
+    # SST2,
+    SAMSUM,
 )
 
 
@@ -53,20 +54,20 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
-        eval_steps=500,
+        eval_steps=5,
         save_strategy="steps",
         learning_rate=learning_rate,
         warmup_steps=500,
-        per_device_train_batch_size=64,
-        per_device_eval_batch_size=32,
+        per_device_train_batch_size=1,
+        per_device_eval_batch_size=1,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
         save_total_limit=1,
         load_best_model_at_end=True,
-        logging_steps=50,
+        logging_steps=5,
         # gradient_accumulation_steps=4,
-        fp16=True,
+        # fp16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -80,7 +81,7 @@ def finetune(
         eval_dataset=test_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        compute_metrics=compute_metrics,
+        # compute_metrics=compute_metrics,
         callbacks=[early_stopping],
     )
 
@@ -136,11 +137,11 @@ def create_model(
 
 if __name__ == "__main__":
     create_model(
-        use_lora=True,
+        use_lora=False,
         use_gated_attention=False,
-        model_name="GPT2_medium_gated",
-        model_type=GPT2_MEDIUM,
-        dataset_name=SST2,
+        model_name="GPT2",
+        model_type=GPT2,
+        dataset_name=SAMSUM,
         num_epochs=10,
         learning_rate=5e-5,
     )

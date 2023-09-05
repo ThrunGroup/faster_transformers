@@ -2,7 +2,8 @@ from .get_billsum_dataset import Billsum
 from .get_squad_dataset import SQuAD
 from .get_openwebtext_dataset import OpenWebText
 from .get_sst2_dataset import SST2_Dataset
-from utils.constants import BILLSUM, SQUAD, OPENWEBTEXT, SST2
+from .get_samsum_dataset import Samsum
+from utils.constants import BILLSUM, SQUAD, OPENWEBTEXT, SST2, SAMSUM
 
 
 def get_dataset(dataset_name: str, tokenizer, model):
@@ -22,6 +23,8 @@ def get_dataset(dataset_name: str, tokenizer, model):
         dataset = OpenWebText(tokenizer, model)
     elif dataset_name == SST2:
         dataset = SST2_Dataset(tokenizer, model)
+    elif dataset_name == SAMSUM:
+        dataset = Samsum(tokenizer, model)
     else:
         assert False, f"No dataset named {dataset_name} available."
 
