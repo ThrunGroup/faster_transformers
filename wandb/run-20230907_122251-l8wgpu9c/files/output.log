@@ -1,0 +1,41 @@
+  0%|                                                                                                                                           | 0/34108 [00:00<?, ?it/s]You're using a GPT2TokenizerFast tokenizer. Please note that with a fast tokenizer, using the `__call__` method is faster than using a method to encode the text followed by a call to the `pad` method to get a padded encoding.
+
+
+
+
+  0%|                                                                                                                                | 24/34108 [00:09<3:20:06,  2.84it/s]
+
+
+
+
+  0%|▏                                                                                                                               | 47/34108 [00:17<3:20:20,  2.83it/s]
+
+
+
+
+
+  0%|▎                                                                                                                               | 75/34108 [00:27<3:19:39,  2.84it/s]
+
+
+  0%|▎                                                                                                                               | 87/34108 [00:31<3:20:00,  2.83it/s]Traceback (most recent call last):
+  File "/home/lukeleeai/faster_transformers/experiments/create_models.py", line 151, in <module>
+    create_model(
+  File "/home/lukeleeai/faster_transformers/experiments/create_models.py", line 145, in create_model
+    finetune(model_name, model, tokenizer, dataset_name, num_epochs,
+  File "/home/lukeleeai/faster_transformers/experiments/create_models.py", line 101, in finetune
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/transformers/trainer.py", line 1543, in train
+    return inner_training_loop(
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/transformers/trainer.py", line 1853, in _inner_training_loop
+    self.scaler.step(self.optimizer)
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/torch/cuda/amp/grad_scaler.py", line 374, in step
+    retval = self._maybe_opt_step(optimizer, optimizer_state, *args, **kwargs)
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/torch/cuda/amp/grad_scaler.py", line 290, in _maybe_opt_step
+    retval = optimizer.step(*args, **kwargs)
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/torch/optim/lr_scheduler.py", line 69, in wrapper
+    return wrapped(*args, **kwargs)
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/torch/optim/optimizer.py", line 280, in wrapper
+    out = func(*args, **kwargs)
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/transformers/optimization.py", line 361, in step
+    exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1.0 - beta2)
+KeyboardInterrupt

@@ -1,0 +1,108 @@
+{
+    "os": "Linux-5.10.0-23-cloud-amd64-x86_64-with-glibc2.31",
+    "python": "3.9.17",
+    "heartbeatAt": "2023-09-07T12:24:36.598934",
+    "startedAt": "2023-09-07T12:24:36.021556",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "/home/lukeleeai/faster_transformers/experiments/create_models.py",
+    "codePathLocal": "experiments/create_models.py",
+    "codePath": "experiments/create_models.py",
+    "git": {
+        "remote": "git@github.com:ThrunGroup/faster_transformers.git",
+        "commit": "e4f41bbc852336107e84859c98e2bc56488e40e3"
+    },
+    "email": "lukeleeai@gmail.com",
+    "root": "/home/lukeleeai/faster_transformers",
+    "host": "a100-europe-vm",
+    "username": "lukeleeai",
+    "executable": "/opt/conda/envs/gated_attention/bin/python",
+    "cpu_count": 6,
+    "cpu_count_logical": 12,
+    "cpu_freq": {
+        "current": 2200.1480000000006,
+        "min": 0.0,
+        "max": 0.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 2200.148,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.148,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.148,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.148,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.148,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.148,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.148,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.148,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.148,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.148,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.148,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.148,
+            "min": 0.0,
+            "max": 0.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 98.18611526489258,
+            "used": 78.05353546142578
+        }
+    },
+    "gpu": "NVIDIA A100-SXM4-40GB",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA A100-SXM4-40GB",
+            "memory_total": 42949672960
+        }
+    ],
+    "memory": {
+        "total": 83.48266983032227
+    }
+}

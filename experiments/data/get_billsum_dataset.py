@@ -2,6 +2,7 @@ from transformers import DataCollatorForSeq2Seq
 import evaluate
 import numpy as np
 from datasets import load_dataset
+import pickle
 
 from .dataset import Dataset
 
@@ -23,12 +24,43 @@ class Billsum(Dataset):
         Load and build a simple summarization dataset
         :return: tokenized dataset, data collator, and compute_metrics function
         """
-        dataset = load_dataset("billsum", split="train",)
-        dataset = dataset.train_test_split(test_size=0.1)
+        try:
+            # Try to load preprocessed data
+            with open('tokenized_train_dataset.pkl', 'rb') as f:
+                train_dataset = pickle.load(f)
+            with open('tokenized_test_dataset.pkl', 'rb') as f:
+                test_dataset = pickle.load(f)
+            print("Loaded preprocessed data from disk.")
+            
+        except FileNotFoundError:
+            # If preprocessed data does not exist, load and preprocess
+            dataset = load_dataset("billsum", split="train",)
+            dataset = dataset.train_test_split(test_size=0.1)
+            tokenized_dataset = dataset.map(self.preprocess, batched=True)
+            train_dataset = tokenized_dataset["train"]
+            test_dataset = tokenized_dataset["test"]
+            
+            # Save the preprocessed data
+            with open('tokenized_train_dataset.pkl', 'wb') as f:
+                pickle.dump(train_dataset, f)
+            with open('tokenized_test_dataset.pkl', 'wb') as f:
+                pickle.dump(test_dataset, f)
+            print("Preprocessed and saved data to disk.")
+            
+        return train_dataset, test_dataset
 
-        tokenized_dataset = dataset.map(self.preprocess, batched=True)
 
-        return tokenized_dataset["train"], tokenized_dataset["test"]
+    # def get_tokenized_dataset(self):
+        # """
+        # Load and build a simple summarization dataset
+        # :return: tokenized dataset, data collator, and compute_metrics function
+        # """
+        # dataset = load_dataset("billsum", split="train",)
+        # dataset = dataset.train_test_split(test_size=0.1)
+
+        # tokenized_dataset = dataset.map(self.preprocess, batched=True)
+
+        # return tokenized_dataset["train"], tokenized_dataset["test"]
 
     def get_data_collator(self):
         """

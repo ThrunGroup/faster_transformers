@@ -1,0 +1,280 @@
+  0%|                                                                                                                                           | 0/34108 [00:00<?, ?it/s]You're using a GPT2TokenizerFast tokenizer. Please note that with a fast tokenizer, using the `__call__` method is faster than using a method to encode the text followed by a call to the `pad` method to get a padded encoding.
+
+
+
+
+  0%|                                                                                                                                | 24/34108 [00:09<3:20:47,  2.83it/s]
+
+
+
+
+  0%|▏                                                                                                                               | 47/34108 [00:17<3:19:34,  2.84it/s]
+
+
+
+
+
+  0%|▎                                                                                                                               | 76/34108 [00:27<3:19:50,  2.84it/s]
+
+
+
+
+  0%|▎                                                                                                                               | 98/34108 [00:35<3:19:23,  2.84it/s]
+  0%|▎                                                                                                                              | 100/34108 [00:36<3:19:11,  2.85it/s]The following columns in the evaluation set don't have a corresponding argument in `GPT2LMHeadModel.forward` and have been ignored: summary, title, text. If summary, title, text are not expected by `GPT2LMHeadModel.forward`,  you can safely ignore this message.
+***** Running Evaluation *****
+  Num examples = 1895
+  Batch size = 32
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 95%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▎      | 57/60 [00:52<00:02,  1.07it/s]
+
+
+
+
+  0%|▍                                                                                                                              | 123/34108 [01:39<3:23:29,  2.78it/s]
+
+
+
+
+
+  0%|▌                                                                                                                              | 151/34108 [01:49<3:19:34,  2.84it/s]
+
+
+
+
+  1%|▋                                                                                                                              | 174/34108 [01:57<3:19:20,  2.84it/s]
+
+
+
+
+  1%|▋                                                                                                                              | 197/34108 [02:06<3:19:02,  2.84it/s]
+  1%|▋                                                                                                                              | 200/34108 [02:07<3:19:04,  2.84it/s]The following columns in the evaluation set don't have a corresponding argument in `GPT2LMHeadModel.forward` and have been ignored: summary, title, text. If summary, title, text are not expected by `GPT2LMHeadModel.forward`,  you can safely ignore this message.
+***** Running Evaluation *****
+  Num examples = 1895
+  Batch size = 32
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 98%|██████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▊  | 59/60 [00:54<00:00,  1.07it/s]
+
+
+
+
+  1%|▊                                                                                                                              | 222/34108 [03:10<3:25:02,  2.75it/s]
+
+
+
+
+
+  1%|▉                                                                                                                              | 250/34108 [03:19<3:18:49,  2.84it/s]
+
+
+
+
+  1%|█                                                                                                                              | 273/34108 [03:28<3:18:45,  2.84it/s]
+
+
+
+
+  1%|█                                                                                                                              | 300/34108 [03:37<3:18:25,  2.84it/s]The following columns in the evaluation set don't have a corresponding argument in `GPT2LMHeadModel.forward` and have been ignored: summary, title, text. If summary, title, text are not expected by `GPT2LMHeadModel.forward`,  you can safely ignore this message.
+***** Running Evaluation *****
+  Num examples = 1895
+  Batch size = 32
+{'loss': 3.399, 'learning_rate': 2.98e-05, 'epoch': 0.04}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 97%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌    | 58/60 [00:53<00:01,  1.07it/s]
+
+
+
+
+
+  1%|█▏                                                                                                                             | 327/34108 [04:42<3:20:10,  2.81it/s]
+
+
+
+
+  1%|█▎                                                                                                                             | 349/34108 [04:50<3:18:06,  2.84it/s]
+
+
+
+
+  1%|█▍                                                                                                                             | 372/34108 [04:58<3:17:51,  2.84it/s]
+
+
+
+
+  1%|█▍                                                                                                                             | 400/34108 [05:08<3:17:39,  2.84it/s]The following columns in the evaluation set don't have a corresponding argument in `GPT2LMHeadModel.forward` and have been ignored: summary, title, text. If summary, title, text are not expected by `GPT2LMHeadModel.forward`,  you can safely ignore this message.
+***** Running Evaluation *****
+  Num examples = 1895
+  Batch size = 32
+{'loss': 3.5246, 'learning_rate': 3.9800000000000005e-05, 'epoch': 0.05}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 97%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▌    | 58/60 [00:53<00:01,  1.07it/s]
+
+
+
+
+
+  1%|█▌                                                                                                                             | 426/34108 [06:12<3:20:25,  2.80it/s]
+
+
+
+
+  1%|█▋                                                                                                                             | 448/34108 [06:20<3:17:34,  2.84it/s]
+
+
+
+
+
+  1%|█▊                                                                                                                             | 477/34108 [06:30<3:18:32,  2.82it/s]
+
+
+
+  1%|█▊                                                                                                                             | 500/34108 [06:38<3:17:08,  2.84it/s]The following columns in the evaluation set don't have a corresponding argument in `GPT2LMHeadModel.forward` and have been ignored: summary, title, text. If summary, title, text are not expected by `GPT2LMHeadModel.forward`,  you can safely ignore this message.
+***** Running Evaluation *****
+  Num examples = 1895
+  Batch size = 32
+{'loss': 3.2526, 'learning_rate': 4.9800000000000004e-05, 'epoch': 0.06}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Configuration saved in /home/lukeleeai/faster_transformers/experiments/checkpoints/gpt2-xl/checkpoint-500/config.json
+Configuration saved in /home/lukeleeai/faster_transformers/experiments/checkpoints/gpt2-xl/checkpoint-500/generation_config.json
+{'eval_loss': 3.2120492458343506, 'eval_runtime': 55.1977, 'eval_samples_per_second': 34.331, 'eval_steps_per_second': 1.087, 'epoch': 0.06}
+Model weights saved in /home/lukeleeai/faster_transformers/experiments/checkpoints/gpt2-xl/checkpoint-500/pytorch_model.bin
+tokenizer config file saved in /home/lukeleeai/faster_transformers/experiments/checkpoints/gpt2-xl/checkpoint-500/tokenizer_config.json
+Special tokens file saved in /home/lukeleeai/faster_transformers/experiments/checkpoints/gpt2-xl/checkpoint-500/special_tokens_map.json
+Traceback (most recent call last):
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/torch/serialization.py", line 441, in save
+    _save(obj, opened_zipfile, pickle_module, pickle_protocol)
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/torch/serialization.py", line 668, in _save
+    zip_file.write_record(name, storage.data_ptr(), num_bytes)
+RuntimeError: [enforce fail at inline_container.cc:471] . PytorchStreamWriter failed writing file data/52: file write failed
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "/home/lukeleeai/faster_transformers/experiments/create_models.py", line 151, in <module>
+    create_model(
+  File "/home/lukeleeai/faster_transformers/experiments/create_models.py", line 145, in create_model
+    finetune(model_name, model, tokenizer, dataset_name, num_epochs,

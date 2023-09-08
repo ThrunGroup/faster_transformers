@@ -1,0 +1,2 @@
+eval_loss,eval_runtime,eval_samples_per_second,eval_steps_per_second,epoch,inference_time
+3.0789237022399902,14.7253,128.69,8.081,3.16,14.732657194137573

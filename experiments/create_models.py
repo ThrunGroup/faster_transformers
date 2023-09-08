@@ -11,6 +11,7 @@ from utils.constants import (
     # Models
     GPT2,
     GPT2_MEDIUM,
+    GPT2_XL,
     # Parameters
     NUM_BLOCKS_GPT2,
     NUM_BLOCKS_GPT2_MEDIUM,
@@ -55,14 +56,15 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
-        eval_steps=50,
+        eval_steps=100,
         logging_steps=25,
         save_strategy="steps",
         learning_rate=learning_rate,
         warmup_steps=500,
-        per_device_train_batch_size=32,
-        per_device_eval_batch_size=16,
+        per_device_train_batch_size=2,
+        per_device_eval_batch_size=32,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
+        # optim="adamw_bnb_8bit",
         # bf16=True,
         # torch_compile=True,
         # optim="adamw_torch_fused",
@@ -70,7 +72,11 @@ def finetune(
         logging_dir="exp_logs",
         save_total_limit=1,
         load_best_model_at_end=True,
-        gradient_accumulation_steps=4,
+        report_to="wandb",
+        run_name=model_name+"_"+dataset_name,
+        # for memory issues
+        gradient_accumulation_steps=2,
+        # gradient_checkpointing=True,
         fp16=True,
     )
 
@@ -143,21 +149,21 @@ def create_model(
 
 
 if __name__ == "__main__":
-    # create_model(
-    #     use_lora=False,
-    #     use_gated_attention=False,
-    #     model_type=GPT2,
-    #     dataset_name=BILLSUM,
-    #     num_epochs=2,
-    #     learning_rate=5e-5,
-    # )
-
     create_model(
         use_lora=False,
-        use_gated_attention=True,
-        model_type=GPT2,
+        use_gated_attention=False,
+        model_type=GPT2_XL,
         dataset_name=BILLSUM,
-        num_epochs=6,
+        num_epochs=4,
         learning_rate=5e-5,
     )
+
+    # create_model(
+    #     use_lora=False,
+    #     use_gated_attention=True,
+    #     model_type=GPT2_XL,
+    #     dataset_name=BILLSUM,
+    #     num_epochs=10,
+    #     learning_rate=5e-5,
+    # )
  

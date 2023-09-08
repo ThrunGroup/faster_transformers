@@ -1,0 +1,59 @@
+  0%|                                                                                                                                           | 0/14220 [00:00<?, ?it/s]You're using a GPT2TokenizerFast tokenizer. Please note that with a fast tokenizer, using the `__call__` method is faster than using a method to encode the text followed by a call to the `pad` method to get a padded encoding.
+
+
+  0%|▎                                                                                                                                 | 32/14220 [00:05<33:54,  6.97it/s]
+
+
+  0%|▌                                                                                                                                 | 60/14220 [00:09<33:50,  6.97it/s]
+
+  1%|▋                                                                                                                                 | 74/14220 [00:11<33:48,  6.97it/s]
+
+  1%|▉                                                                                                                                | 100/14220 [00:15<33:52,  6.95it/s]The following columns in the evaluation set don't have a corresponding argument in `GPT2LMHeadModel.forward` and have been ignored: summary, title, text. If summary, title, text are not expected by `GPT2LMHeadModel.forward`,  you can safely ignore this message.
+***** Running Evaluation *****
+  Num examples = 1895
+  Batch size = 16
+  5%|██████▋                                                                                                                              | 6/119 [00:00<00:05, 20.91it/s]
+
+
+
+ 96%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████▍     | 114/119 [00:06<00:00, 17.88it/s]
+
+
+  1%|█▏                                                                                                                               | 126/14220 [00:25<33:41,  6.97it/s]
+
+
+  1%|█▍                                                                                                                               | 154/14220 [00:29<33:42,  6.95it/s]
+
+
+  1%|█▋                                                                                                                               | 182/14220 [00:33<33:59,  6.88it/s]
+
+  1%|█▊                                                                                                                               | 200/14220 [00:36<33:43,  6.93it/s]The following columns in the evaluation set don't have a corresponding argument in `GPT2LMHeadModel.forward` and have been ignored: summary, title, text. If summary, title, text are not expected by `GPT2LMHeadModel.forward`,  you can safely ignore this message.
+***** Running Evaluation *****
+  Num examples = 1895
+  Batch size = 16
+ 23%|█████████████████████████████▉                                                                                                      | 27/119 [00:01<00:05, 17.92it/s]
+
+
+
+ 83%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████▊                      | 99/119 [00:05<00:01, 17.96it/s]
+
+
+  2%|██                                                                                                                               | 234/14220 [00:47<33:27,  6.97it/s]
+  2%|██▏                                                                                                                              | 242/14220 [00:49<33:19,  6.99it/s]Traceback (most recent call last):
+  File "/home/lukeleeai/faster_transformers/experiments/create_models.py", line 158, in <module>
+    create_model(
+  File "/home/lukeleeai/faster_transformers/experiments/create_models.py", line 143, in create_model
+    finetune(model_name, model, tokenizer, dataset_name, num_epochs,
+  File "/home/lukeleeai/faster_transformers/experiments/create_models.py", line 99, in finetune
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/transformers/trainer.py", line 1543, in train
+    return inner_training_loop(
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/transformers/trainer.py", line 1791, in _inner_training_loop
+    tr_loss_step = self.training_step(model, inputs)
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/transformers/trainer.py", line 2549, in training_step
+    self.scaler.scale(loss).backward()
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/torch/_tensor.py", line 487, in backward
+    torch.autograd.backward(
+  File "/opt/conda/envs/gated_attention/lib/python3.9/site-packages/torch/autograd/__init__.py", line 200, in backward
+    Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+KeyboardInterrupt
