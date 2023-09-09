@@ -72,7 +72,7 @@ def finetune(
         logging_dir="exp_logs",
         save_total_limit=1,
         load_best_model_at_end=True,
-        report_to="wandb",
+        # report_to="wandb",
         run_name=model_name+"_"+dataset_name,
         # for memory issues
         gradient_accumulation_steps=2,
@@ -149,21 +149,29 @@ def create_model(
 
 
 if __name__ == "__main__":
-    create_model(
-        use_lora=False,
-        use_gated_attention=False,
-        model_type=GPT2_XL,
-        dataset_name=BILLSUM,
-        num_epochs=4,
-        learning_rate=5e-5,
-    )
+    original = {
+        'use_lora':False,
+        'use_gated_attention':False,
+        'model_type':GPT2_MEDIUM,
+        'dataset_name':BILLSUM,
+        'num_epochs':4,
+        'learning_rate':5e-5,
+    }
 
-    # create_model(
-    #     use_lora=False,
-    #     use_gated_attention=True,
-    #     model_type=GPT2_XL,
-    #     dataset_name=BILLSUM,
-    #     num_epochs=10,
-    #     learning_rate=5e-5,
-    # )
+    gated = {
+        'use_lora':False,
+        'use_gated_attention':True,
+        'model_type':GPT2_MEDIUM,
+        'dataset_name':BILLSUM,
+        'num_epochs':4,
+        'learning_rate':5e-5,
+    }
+
+    exps_to_run = [
+        # original,
+        gated,
+    ]
+
+    for exp in exps_to_run:
+        create_model(**exp)
  

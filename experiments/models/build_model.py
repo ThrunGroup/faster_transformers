@@ -2,7 +2,8 @@ import torch
 from transformers import GPT2Config, GPT2ForSequenceClassification, GPT2LMHeadModel
 from peft import get_peft_model, LoraConfig, TaskType
 
-from .gpt2_gated import apply_gated_attention
+# from .gpt2_gated import apply_gated_attention
+from .gpt2_gated_faster import apply_gated_attention
 from utils.constants import GPT2, GPT2_MEDIUM
 
 if torch.cuda.is_available():

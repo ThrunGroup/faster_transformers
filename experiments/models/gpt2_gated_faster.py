@@ -97,7 +97,7 @@ class GatedAttention(GPT2Attention):
         # G is the number of generalists
         router = self.router(hidden_states)  # (B, H, T)
         # x.permute(0, 2, 1)
-        top_k = torch.topk(router, k=K, dim=-1, sorted=False)  # (B, H, K)
+        top_k = torch.topk(router, k=K, sorted=False)  # (B, H, K)
         # TODO (@luke): Investigate why topk sometimes outputs an arbitrary
         #  sequence and remove the following sorting
         top_k_indices, indices_ = torch.sort(top_k.indices, dim=-1)
@@ -109,7 +109,7 @@ class GatedAttention(GPT2Attention):
             1,
             top_k_indices.permute(0, 2, 1)
             .unsqueeze(-1)
-            .expand(-1, -1, -1, self.head_dim, self),  # (B, K, H, c)
+            .expand(-1, -1, -1, self.head_dim),  # (B, K, H, c)
         ).view(
             B, K, C
         )  # (B, K, C)
