@@ -43,7 +43,18 @@ class GatedAttention(GPT2Attention):
         ).to(device)
         self.softmax = nn.Softmax(dim=-1)
 
-    def _merge_heads(self, tensor, T, top_k_indices, top_k_probs):
+    def merge_heads(self, tensor, T, K, top_k_indices, top_k_probs):
+        if K == T:
+            attn_output = self._merge_heads(
+                tensor, self.num_heads, self.head_dim
+            )
+        else:
+            attn_output = self._merge_gated_heads(
+                tensor, T, top_k_indices, top_k_probs
+            )
+        return attn_output
+
+    def _merge_gated_heads(self, tensor, T, top_k_indices, top_k_probs):
         B, H, K, c = tensor.shape
         logits = torch.zeros(
             B,
@@ -69,6 +80,34 @@ class GatedAttention(GPT2Attention):
         logits = logits.view(B, T, -1)
         return logits
 
+    def _route_tokens(self, hidden_states, K):
+        # Router decides which head attends to which tokens.
+        # It emits softmax outputs of shape (B, H, T).
+        B, T, C = hidden_states.shape
+
+        if T == K:
+            return hidden_states, None, None
+
+        # G is the number of generalists
+        router = self.router(hidden_states)  # (B, H, T)
+        top_k = torch.topk(router, k=K, sorted=False)  # (B, H, K)
+        # TODO (@luke): Investigate why topk sometimes outputs an arbitrary
+        #  sequence and remove the following sorting
+        top_k_indices, indices_ = torch.sort(top_k.indices, dim=-1)
+        top_k_probs = torch.gather(top_k.values * K, -1, indices_)
+
+        hidden_states = hidden_states.view(
+            B, T, K, self.num_heads, self.head_dim
+        )
+        hidden_states = torch.gather(
+            hidden_states,  # (B, T, H, c),
+            1,
+            top_k_indices.permute(0, 2, 1)
+            .unsqueeze(-1)
+            .expand(-1, -1, -1, self.head_dim),  # (B, K, H, c)
+        ).view(B, K, C)
+        return hidden_states, top_k_indices, top_k_probs
+
     def forward(
         self,
         hidden_states: Optional[Tuple[torch.FloatTensor]],
@@ -83,9 +122,6 @@ class GatedAttention(GPT2Attention):
         # select the top k tokens for each head
         B, T, C = hidden_states.shape  # (Batch size, Num tokens, Embd dim)
 
-        # Router decides which head attends to which tokens.
-        # It emits softmax outputs of shape (B, H, T).
-
         # Diminishing token selection
         if self.layer_idx <= self.config.n_layer // 4:
             K = T
@@ -94,25 +130,10 @@ class GatedAttention(GPT2Attention):
         else:
             K = min(max(int(T / 6), 6), T)
 
-        # G is the number of generalists
-        router = self.router(hidden_states)  # (B, H, T)
-        # x.permute(0, 2, 1)
-        top_k = torch.topk(router, k=K, sorted=False)  # (B, H, K)
-        # TODO (@luke): Investigate why topk sometimes outputs an arbitrary
-        #  sequence and remove the following sorting
-        top_k_indices, indices_ = torch.sort(top_k.indices, dim=-1)
-        top_k_probs = torch.gather(top_k.values * K, -1, indices_)
-
-        hidden_states = hidden_states.view(B, T, self.num_heads, self.head_dim)
-        hidden_states = torch.gather(
-            hidden_states,  # (B, T, H, c),
-            1,
-            top_k_indices.permute(0, 2, 1)
-            .unsqueeze(-1)
-            .expand(-1, -1, -1, self.head_dim),  # (B, K, H, c)
-        ).view(
-            B, K, C
-        )  # (B, K, C)
+        # Route the tokens to each head
+        hidden_states, top_k_indices, top_k_probs = self._route_tokens(
+            hidden_states, K
+        )
 
         # project inputs to query, key, value (B, K, 3C) -> (B, K, C)
         query, key, value = self.c_attn(hidden_states).split(
@@ -130,7 +151,7 @@ class GatedAttention(GPT2Attention):
         )  # (B, H, K, c), (B, H, K, K)
 
         # put the head logits together
-        attn_output = self._merge_heads(
+        attn_output = self.merge_heads(
             attn_output, T, top_k_indices, top_k_probs
         )
         attn_output = self.c_proj(attn_output)

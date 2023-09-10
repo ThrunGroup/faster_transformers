@@ -1,9 +1,14 @@
 import torch
-from transformers import GPT2Config, GPT2ForSequenceClassification, GPT2LMHeadModel
+from transformers import (
+    GPT2Config,
+    GPT2ForSequenceClassification,
+    GPT2LMHeadModel,
+)
 from peft import get_peft_model, LoraConfig, TaskType
 
 # from .gpt2_gated import apply_gated_attention
-from .gpt2_gated_faster import apply_gated_attention
+# from .gpt2_gated_faster import apply_gated_attention
+from .gpt2_gated_no_scatter import apply_gated_attention
 from utils.constants import GPT2, GPT2_MEDIUM
 
 if torch.cuda.is_available():
@@ -21,8 +26,11 @@ def build_model(model_name: str, use_lora: bool, use_gated_attention: bool):
 
     if use_lora:
         peft_config = LoraConfig(
-            task_type=TaskType.SEQ_CLS, inference_mode=False,
-            r=32, lora_alpha=32, lora_dropout=0.1
+            task_type=TaskType.SEQ_CLS,
+            inference_mode=False,
+            r=32,
+            lora_alpha=32,
+            lora_dropout=0.1,
         )
         model = get_peft_model(model, peft_config)
 
@@ -30,15 +38,23 @@ def build_model(model_name: str, use_lora: bool, use_gated_attention: bool):
     return model
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     model_name = GPT2_MEDIUM
     base = build_model(model_name, use_lora=True, use_gated_attention=False)
-    lora_base = build_model(model_name, use_lora=True, use_gated_attention=False)
+    lora_base = build_model(
+        model_name, use_lora=True, use_gated_attention=False
+    )
     gated = build_model(model_name, use_lora=True, use_gated_attention=False)
-    lora_gated = build_model(model_name, use_lora=True, use_gated_attention=False)
+    lora_gated = build_model(
+        model_name, use_lora=True, use_gated_attention=False
+    )
 
-    for (b, lb, g, lg) in zip(base.transformer.h, lora_base.transformer.h,
-                              gated.transformer.h, lora_gated.transformer.h):
+    for b, lb, g, lg in zip(
+        base.transformer.h,
+        lora_base.transformer.h,
+        gated.transformer.h,
+        lora_gated.transformer.h,
+    ):
         match1 = torch.allclose(b.attn.c_attn.weight, lb.attn.c_attn.weight)
         match2 = torch.allclose(b.attn.c_attn.weight, g.attn.c_attn.weight)
         match3 = torch.allclose(b.attn.c_attn.weight, lg.attn.c_attn.weight)

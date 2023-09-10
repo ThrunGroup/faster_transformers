@@ -1,28 +1,14 @@
 from typing import Optional, Tuple, Union
-
 import torch
 from torch import nn
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
+
+from router import Router
 
 if torch.cuda.is_available():
     device = "cuda:0"
 else:
     device = "cpu"
-
-
-class Router(nn.Module):
-    def __init__(self, embed_dim, num_heads):
-        super().__init__()
-        self.router = nn.Sequential(
-            nn.Linear(embed_dim, num_heads),  # (B, T, H)
-            nn.Softmax(dim=1),
-        )
-        self.batch_norm = nn.BatchNorm1d(num_heads)
-
-    def forward(self, x):
-        x = self.router(x)  # (B, T, H)
-        x = x.permute(0, 2, 1)  # (B, H, T)
-        return x
 
 
 class GatedAttention(GPT2Attention):
@@ -95,21 +81,20 @@ class GatedAttention(GPT2Attention):
             K = min(max(int(T / 6), 6), T)
 
         # G is the number of generalists
-        router = self.router(hidden_states)  # (B, H, T)
-        top_k = torch.topk(router, k=K, dim=-1, sorted=False)  # (B, H, K)
+        router = self.router(hidden_states)  # (B, H-G, T)
+        top_k = torch.topk(router, k=K, dim=-1, sorted=False)  # (B, H-G, K)
         # TODO (@luke): Investigate why topk sometimes outputs an arbitrary
         #  sequence and remove the following sorting
         top_k_indices, indices_ = torch.sort(top_k.indices, dim=-1)
         top_k_probs = torch.gather(top_k.values * K, -1, indices_)
 
-        tokens = torch.gather(
-            hidden_states,  # (B, T, Hc)
-        )
-
         # project inputs to query, key, value (B, T, 3Hc) -> (B, T, Hc)
         query, key, value = self.c_attn(hidden_states).split(
             self.split_size, dim=2
         )
+
+        if hidden_states.shape[1] == 1:
+            print("Yay")
 
         # split heads (B, T, C) -> (B, H, T, c)
         query = self._split_heads(query, self.num_heads, self.head_dim)

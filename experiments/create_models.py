@@ -1,6 +1,11 @@
 import os
-from transformers import (Trainer, TrainingArguments, EarlyStoppingCallback,
-                          GPT2ForSequenceClassification, AutoTokenizer)
+from transformers import (
+    Trainer,
+    TrainingArguments,
+    EarlyStoppingCallback,
+    GPT2ForSequenceClassification,
+    AutoTokenizer,
+)
 
 from data.get_dataset import get_dataset
 from evaluate_models import evaluate_model
@@ -24,14 +29,14 @@ from utils.constants import (
 
 
 def finetune(
-        model_name: str,
-        model,
-        tokenizer,
-        dataset_name: str,
-        num_epochs: int = 10,
-        resume_from_checkpoint: bool = False,
-        learning_rate: float = 0.001,
-        do_evaluation: bool = True,
+    model_name: str,
+    model,
+    tokenizer,
+    dataset_name: str,
+    num_epochs: int = 10,
+    resume_from_checkpoint: bool = False,
+    learning_rate: float = 0.001,
+    do_evaluation: bool = True,
 ):
     """
     Finetune the model on a dataset
@@ -73,11 +78,11 @@ def finetune(
         save_total_limit=1,
         load_best_model_at_end=True,
         # report_to="wandb",
-        run_name=model_name+"_"+dataset_name,
+        run_name=model_name + "_" + dataset_name,
         # for memory issues
         gradient_accumulation_steps=2,
         # gradient_checkpointing=True,
-        fp16=True,
+        # fp16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -113,14 +118,13 @@ def finetune(
 
 
 def create_model(
-        use_gated_attention: bool,
-        use_lora: bool,
-        model_type: str,
-        dataset_name: str,
-        learning_rate: float,
-        num_epochs: int = 5,
-        do_evaluation: bool = True,
-        
+    use_gated_attention: bool,
+    use_lora: bool,
+    model_type: str,
+    dataset_name: str,
+    learning_rate: float,
+    num_epochs: int = 5,
+    do_evaluation: bool = True,
 ):
     """
     Load a naive pretrained model from HuggingFace, apply the accelerator to FC layers,
@@ -134,8 +138,10 @@ def create_model(
     """
     # Build a Gated Attention model
     model_name = model_type
-    if use_lora: model_name += "_lora"
-    if use_gated_attention: model_name += "_gated"
+    if use_lora:
+        model_name += "_lora"
+    if use_gated_attention:
+        model_name += "_gated"
 
     model = build_model(model_type, use_lora, use_gated_attention)
     model.config.pad_token_id = model.config.eos_token_id
@@ -143,28 +149,34 @@ def create_model(
     tokenizer = AutoTokenizer.from_pretrained(model_type)
     tokenizer.pad_token = tokenizer.eos_token
 
-    finetune(model_name, model, tokenizer, dataset_name, num_epochs, 
-             resume_from_checkpoint=False, 
-             learning_rate=learning_rate)
+    finetune(
+        model_name,
+        model,
+        tokenizer,
+        dataset_name,
+        num_epochs,
+        resume_from_checkpoint=False,
+        learning_rate=learning_rate,
+    )
 
 
 if __name__ == "__main__":
     original = {
-        'use_lora':False,
-        'use_gated_attention':False,
-        'model_type':GPT2_MEDIUM,
-        'dataset_name':BILLSUM,
-        'num_epochs':4,
-        'learning_rate':5e-5,
+        "use_lora": False,
+        "use_gated_attention": False,
+        "model_type": GPT2_MEDIUM,
+        "dataset_name": BILLSUM,
+        "num_epochs": 4,
+        "learning_rate": 5e-5,
     }
 
     gated = {
-        'use_lora':False,
-        'use_gated_attention':True,
-        'model_type':GPT2_MEDIUM,
-        'dataset_name':BILLSUM,
-        'num_epochs':4,
-        'learning_rate':5e-5,
+        "use_lora": False,
+        "use_gated_attention": True,
+        "model_type": GPT2,
+        "dataset_name": BILLSUM,
+        "num_epochs": 4,
+        "learning_rate": 5e-5,
     }
 
     exps_to_run = [
@@ -174,4 +186,3 @@ if __name__ == "__main__":
 
     for exp in exps_to_run:
         create_model(**exp)
- 
