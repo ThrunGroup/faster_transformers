@@ -102,6 +102,9 @@ class GatedAttention(GPT2Attention):
         else:
             K = min(max(int(T / 6), 6), T)
 
+        # Hard-coded
+        K = 5
+
         # G is the number of generalists
         router = self.router(hidden_states)  # (B, H, T)
         # x.permute(0, 2, 1)
