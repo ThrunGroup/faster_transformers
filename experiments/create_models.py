@@ -181,7 +181,7 @@ if __name__ == "__main__":
         'dataset_name':BILLSUM,
         'num_epochs':4,
         'learning_rate':5e-5,
-        'freeze_router': True,
+        'freeze_router': False,
     }
 
     exps_to_run = [
