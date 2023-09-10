@@ -1,4 +1,5 @@
 import os
+import subprocess
 from transformers import (Trainer, TrainingArguments, EarlyStoppingCallback,
                           GPT2ForSequenceClassification, AutoTokenizer)
 
@@ -21,6 +22,14 @@ from utils.constants import (
     SAMSUM,
     BILLSUM,
 )
+def login_to_huggingface():
+    try:
+        result = subprocess.run(["huggingface-cli", "login"], check=True, text=True)
+        print(result.stdout)
+    except subprocess.CalledProcessError as e:
+        print(f"Error during login: {e}")
+        print(e.stdout)
+        print(e.stderr)
 
 
 def finetune(
@@ -32,6 +41,7 @@ def finetune(
         resume_from_checkpoint: bool = False,
         learning_rate: float = 0.001,
         do_evaluation: bool = True,
+        push_to_hub: bool = True,
 ):
     """
     Finetune the model on a dataset
@@ -78,6 +88,8 @@ def finetune(
         gradient_accumulation_steps=2,
         # gradient_checkpointing=True,
         fp16=True,
+        push_to_hub=push_to_hub,
+        hub_model_id=f"thrunlab/{model_name}"
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -110,6 +122,9 @@ def finetune(
             test_dataset=test_dataset,
             trainer=trainer,
         )
+    if push_to_hub:
+        login_to_huggingface()
+        trainer.push_to_hub()
 
 
 def create_model(
