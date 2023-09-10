@@ -63,6 +63,9 @@ def finetune(
     current_dir = os.path.dirname(os.path.abspath(__file__))
     checkpoint_path = os.path.join(current_dir, "checkpoints", model_name)
 
+    if push_to_hub:
+        login_to_huggingface()
+
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
@@ -123,7 +126,6 @@ def finetune(
             trainer=trainer,
         )
     if push_to_hub:
-        login_to_huggingface()
         trainer.push_to_hub()
 
 
