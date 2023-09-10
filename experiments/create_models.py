@@ -56,8 +56,8 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
-        eval_steps=100,
-        logging_steps=25,
+        eval_steps=500,
+        logging_steps=100,
         save_strategy="steps",
         learning_rate=learning_rate,
         warmup_steps=500,
@@ -119,6 +119,7 @@ def create_model(
         dataset_name: str,
         learning_rate: float,
         num_epochs: int = 5,
+        freeze_router: bool = False,
         do_evaluation: bool = True,
         
 ):
@@ -137,7 +138,7 @@ def create_model(
     if use_lora: model_name += "_lora"
     if use_gated_attention: model_name += "_gated"
 
-    model = build_model(model_type, use_lora, use_gated_attention)
+    model = build_model(model_type, use_lora, use_gated_attention, freeze_router=freeze_router,)
     model.config.pad_token_id = model.config.eos_token_id
 
     tokenizer = AutoTokenizer.from_pretrained(model_type)
@@ -165,6 +166,7 @@ if __name__ == "__main__":
         'dataset_name':BILLSUM,
         'num_epochs':4,
         'learning_rate':5e-5,
+        'freeze_router': True,
     }
 
     exps_to_run = [

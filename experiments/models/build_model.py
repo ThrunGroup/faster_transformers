@@ -12,9 +12,9 @@ else:
     device = "cpu"
 
 
-def build_model(model_name: str, use_lora: bool, use_gated_attention: bool):
+def build_model(model_name: str, use_lora: bool, use_gated_attention: bool, freeze_router: bool = False,):
     config = GPT2Config.from_pretrained(model_name)
-    model = GPT2LMHeadModel.from_pretrained(model_name, config=config)
+    model = GPT2LMHeadModel.from_pretrained(model_name, config=config, freeze_router=freeze_router,)
 
     if use_gated_attention:
         apply_gated_attention(model, config)
