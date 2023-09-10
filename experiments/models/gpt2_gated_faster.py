@@ -102,9 +102,6 @@ class GatedAttention(GPT2Attention):
         else:
             K = min(max(int(T / 6), 6), T)
 
-        # Hard-coded
-        K = 5
-
         # G is the number of generalists
         router = self.router(hidden_states)  # (B, H, T)
         # x.permute(0, 2, 1)
@@ -146,6 +143,7 @@ class GatedAttention(GPT2Attention):
         # HuggingFace's implementation of GPT2 requires
         # at least two outputs from the attention layer
         outputs = (attn_output, None)
+        print(self.router.router.weight.grad)
         return outputs  # a, present, (attentions)
 
 
