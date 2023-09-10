@@ -143,8 +143,8 @@ class GatedAttention(GPT2Attention):
         # HuggingFace's implementation of GPT2 requires
         # at least two outputs from the attention layer
         outputs = (attn_output, None)
-        for param, name in self.router.router.named_parameters():
-            print(f"name: {self.router.router.param.grad}")
+        for name, param in self.router.router.named_parameters():
+            print(f"{name}: {param.grad}")
 
         return outputs  # a, present, (attentions)
 
