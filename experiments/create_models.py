@@ -138,7 +138,7 @@ def finetune(
 
 
 def create_model(
-    use_oracle_attetion: bool,
+    use_oracle_attention: bool,
     use_gated_attention: bool,
     use_lora: bool,
     model_type: str,
