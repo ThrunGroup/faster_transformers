@@ -183,19 +183,19 @@ if __name__ == "__main__":
         'learning_rate':5e-5,
     }
 
-    gated_freeze = {
-        "model_name": GPT2_MEDIUM + "_gated_freeze",
+    gated_random_freeze = {
+        "model_name": GPT2_MEDIUM + "_gated_random_freeze",
         'use_lora':False,
         'use_gated_attention':True,
         'model_type':GPT2_MEDIUM,
         'dataset_name':BILLSUM,
         'num_epochs':1,
         'learning_rate':1e-2,
-        'freeze_router': False,
+        'freeze_router': True,
         "freeze_all_layers_except_router": True,
     }
-    gated = {
-        "model_name": GPT2_MEDIUM + "_gated",
+    gated_freeze = {
+        "model_name": GPT2_MEDIUM + "_gated_freeze",
         'use_lora': False,
         'use_gated_attention': True,
         'model_type': GPT2_MEDIUM,
@@ -208,7 +208,7 @@ if __name__ == "__main__":
 
     exps_to_run = [
         # original,
-        gated,
+        gated_random_freeze,
         gated_freeze,
     ]
 
