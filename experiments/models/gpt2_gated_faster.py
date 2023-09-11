@@ -181,7 +181,7 @@ def freeze_all_params_except_router(model):
     for name, module in model.named_modules():
         print(f"{name} is regarded.")
         if "router" in name:
-            for name, param in module.named_paramters():
+            for name, param in module.named_parameters():
                 print(f"{name}'s grad is set to be tracked.")
                 param.requires_grad = True
     for name, param in model.named_parameters():
