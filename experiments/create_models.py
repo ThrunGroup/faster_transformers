@@ -22,6 +22,7 @@ from utils.constants import (
     SAMSUM,
     BILLSUM,
 )
+from experiments.models.gpt2_gated_faster import freeze_all_params_except_router
 def login_to_huggingface():
     try:
         result = subprocess.run(["huggingface-cli", "login"], check=True, text=True)
@@ -137,6 +138,7 @@ def create_model(
         learning_rate: float,
         num_epochs: int = 5,
         freeze_router: bool = False,
+        freeze_all_layers_except_router: bool = True,
         do_evaluation: bool = True,
         
 ):
@@ -161,6 +163,9 @@ def create_model(
     tokenizer = AutoTokenizer.from_pretrained(model_type)
     tokenizer.pad_token = tokenizer.eos_token
 
+    if freeze_all_layers_except_router:
+        freeze_all_params_except_router(model)
+
     finetune(model_name, model, tokenizer, dataset_name, num_epochs, 
              resume_from_checkpoint=False, 
              learning_rate=learning_rate)
@@ -184,6 +189,7 @@ if __name__ == "__main__":
         'num_epochs':4,
         'learning_rate':5e-5,
         'freeze_router': False,
+        "freeze_all_layers_except_router": True,
     }
 
     exps_to_run = [

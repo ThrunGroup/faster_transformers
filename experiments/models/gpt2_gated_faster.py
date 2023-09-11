@@ -143,9 +143,9 @@ class GatedAttention(GPT2Attention):
         # HuggingFace's implementation of GPT2 requires
         # at least two outputs from the attention layer
         outputs = (attn_output, None)
-        for name, param in self.router.router.named_parameters():
-            print("layer idx: ", self.layer_idx, f" {param.requires_grad}")
-            print(f"{name}: {param.grad}")
+        # for name, param in self.router.router.named_parameters():
+        #     print("layer idx: ", self.layer_idx, f" {param.requires_grad}")
+        #     print(f"{name}: {param.grad}")
 
         return outputs  # a, present, (attentions)
 
@@ -173,3 +173,13 @@ def freeze_model(model):
         do_train = any([layer in name for layer in layers_to_train])
         if not do_train:
             param.requires_grad = False
+
+
+def freeze_all_params_except_router(model):
+    for name, param in model.named_parameters():
+        param.requires_grad = False
+    for name, module in model.named_modules():
+        if isinstance(module, Router):
+            for param in module.paramters():
+                param.requires_grad = True
+        print(f"{name} requires grad.")
