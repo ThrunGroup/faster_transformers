@@ -147,7 +147,7 @@ def create_model(
     learning_rate: float,
     num_epochs: int = 5,
     freeze_router: bool = False,
-    freeze_all_layers_except_router: bool = True,
+    freeze_all_layers_except_router: bool = False,
     model_name: str = None,
     do_evaluation: bool = True,
     use_oracle_attention: bool = False,
