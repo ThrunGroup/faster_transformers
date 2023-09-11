@@ -37,6 +37,76 @@ class Router(nn.Module):
         return x
 
 
+def OracleAttention(GPT2Attention):
+    def __init__(self, config, is_cross_attention=False, layer_idx=None, K:int = 10,):
+        super().__init__(config, is_cross_attention, layer_idx)
+        self.config = not config
+        self.K = K
+
+    def _attn(self, query, key, value, attention_mask=None, head_mask=None):
+
+        # Diminishing token selection
+        T = query.size()[-2]
+        if self.layer_idx <= self.config.n_layer // 4:
+            self.K = T
+        elif self.layer_idx <= self.config.n_layer // 4 * 2:
+            self.K = min(max(int(T / 4), 6), T)
+        else:
+            self.K = min(max(int(T / 6), 6), T)
+
+        attn_weights = torch.matmul(query, key.transpose(-1, -2))
+
+        if self.scale_attn_weights:
+            attn_weights = attn_weights / torch.full(
+                [],
+                value.size(-1) ** 0.5,
+                dtype=attn_weights.dtype,
+                device=attn_weights.device,
+            )
+
+        # Layer-wise attention scaling
+        if self.scale_attn_by_inverse_layer_idx:
+            attn_weights = attn_weights / float(self.layer_idx + 1)
+
+        if not self.is_cross_attention:
+            # if only "normal" attention layer implements causal mask
+            query_length, key_length = query.size(-2), key.size(-2)
+            causal_mask = self.bias[
+                :, :, key_length - query_length : key_length, :key_length
+            ]
+            mask_value = torch.finfo(attn_weights.dtype).min
+            # Need to be a tensor, otherwise we get error: `RuntimeError: expected scalar type float but found double`.
+            # Need to be on the same device, otherwise `RuntimeError: ..., x and y to be on the same device`
+            mask_value = torch.full([], mask_value, dtype=attn_weights.dtype).to(
+                attn_weights.device
+            )
+            attn_weights = torch.where(
+                causal_mask, attn_weights.to(attn_weights.dtype), mask_value
+            )
+
+        if attention_mask is not None:
+            # Apply the attention mask
+            attn_weights = attn_weights + attention_mask
+
+        attn_weights = nn.functional.softmax(attn_weights, dim=-1)
+
+        # Downcast (if necessary) back to V's dtype (if in mixed-precision) -- No-Op otherwise
+        attn_weights = attn_weights.type(value.dtype)
+        attn_weights = self.attn_dropout(attn_weights)
+
+        # Mask heads if we want to
+        if head_mask is not None:
+            attn_weights = attn_weights * head_mask
+
+        top_k= torch.topk(attn_weights, self.K, dim=-1)
+        attn_weights = torch.zeros_like(attn_weights).scatter(dim=-1, index=top_k.indices, src=top_k.values)
+        attn_output = torch.matmul(attn_weights, value)
+        with torch.no_grad():
+            print(attn_weights.sum(dim=-1))
+
+        return attn_output, attn_weights
+
+
 class GatedAttention(GPT2Attention):
     def __init__(
         self,
@@ -163,6 +233,15 @@ def apply_gated_attention(model, config, freeze_router: bool = True):
             for param in new_attention.router.router.parameters():
                 param.requires_grad = False
 
+def apply_oracle_attention(model, config):
+    # Iterate through blocks and replace self-attention layers
+    for i, block in enumerate(model.transformer.h):
+        new_attention = OracleAttention(config, layer_idx=i).to(device)
+        new_attention.c_attn.weight = block.attn.c_attn.weight
+        new_attention.c_attn.bias = block.attn.c_attn.bias
+        new_attention.c_proj.weight = block.attn.c_proj.weight
+        new_attention.c_proj.bias = block.attn.c_proj.bias
+        block.attn = new_attention
 
 def freeze_model(model):
     blocks_to_train = [f"h.{i}." for i in list(range(6, 12))] + ["score"]

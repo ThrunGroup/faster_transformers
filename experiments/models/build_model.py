@@ -3,7 +3,7 @@ from transformers import GPT2Config, GPT2ForSequenceClassification, GPT2LMHeadMo
 from peft import get_peft_model, LoraConfig, TaskType
 
 # from .gpt2_gated import apply_gated_attention
-from .gpt2_gated_faster import apply_gated_attention
+from .gpt2_gated_faster import apply_gated_attention, apply_oracle_attention
 from utils.constants import GPT2, GPT2_MEDIUM
 
 if torch.cuda.is_available():
@@ -12,12 +12,15 @@ else:
     device = "cpu"
 
 
-def build_model(model_name: str, use_lora: bool, use_gated_attention: bool, freeze_router: bool = False,):
+def build_model(model_name: str, use_lora: bool, use_gated_attention: bool, use_oracle_attention:bool, freeze_router: bool = False,):
     config = GPT2Config.from_pretrained(model_name)
     model = GPT2LMHeadModel.from_pretrained(model_name, config=config)
 
     if use_gated_attention:
         apply_gated_attention(model, config, freeze_router=freeze_router,)
+
+    elif use_oracle_attention:
+        apply_oracle_attention(model, config,)
 
     if use_lora:
         peft_config = LoraConfig(

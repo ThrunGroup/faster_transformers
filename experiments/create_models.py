@@ -1,7 +1,12 @@
 import os
 import subprocess
-from transformers import (Trainer, TrainingArguments, EarlyStoppingCallback,
-                          GPT2ForSequenceClassification, AutoTokenizer)
+from transformers import (
+    Trainer,
+    TrainingArguments,
+    EarlyStoppingCallback,
+    GPT2ForSequenceClassification,
+    AutoTokenizer,
+)
 
 from data.get_dataset import get_dataset
 from evaluate_models import evaluate_model
@@ -23,6 +28,8 @@ from utils.constants import (
     BILLSUM,
 )
 from experiments.models.gpt2_gated_faster import freeze_all_params_except_router
+
+
 def login_to_huggingface():
     try:
         result = subprocess.run(["huggingface-cli", "login"], check=True, text=True)
@@ -34,15 +41,15 @@ def login_to_huggingface():
 
 
 def finetune(
-        model_name: str,
-        model,
-        tokenizer,
-        dataset_name: str,
-        num_epochs: int = 10,
-        resume_from_checkpoint: bool = False,
-        learning_rate: float = 0.001,
-        do_evaluation: bool = True,
-        push_to_hub: bool = True,
+    model_name: str,
+    model,
+    tokenizer,
+    dataset_name: str,
+    num_epochs: int = 10,
+    resume_from_checkpoint: bool = False,
+    learning_rate: float = 0.001,
+    do_evaluation: bool = True,
+    push_to_hub: bool = True,
 ):
     """
     Finetune the model on a dataset
@@ -87,13 +94,13 @@ def finetune(
         save_total_limit=1,
         load_best_model_at_end=True,
         # report_to="wandb",
-        run_name=model_name+"_"+dataset_name,
+        run_name=model_name + "_" + dataset_name,
         # for memory issues
         gradient_accumulation_steps=2,
         # gradient_checkpointing=True,
         fp16=True,
         push_to_hub=push_to_hub,
-        hub_model_id=f"thrunlab/{model_name}"
+        hub_model_id=f"thrunlab/{model_name}",
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -131,17 +138,17 @@ def finetune(
 
 
 def create_model(
-        use_gated_attention: bool,
-        use_lora: bool,
-        model_type: str,
-        dataset_name: str,
-        learning_rate: float,
-        num_epochs: int = 5,
-        freeze_router: bool = False,
-        freeze_all_layers_except_router: bool = True,
-        model_name: str = None,
-        do_evaluation: bool = True,
-        
+    use_oracle_attetion: bool,
+    use_gated_attention: bool,
+    use_lora: bool,
+    model_type: str,
+    dataset_name: str,
+    learning_rate: float,
+    num_epochs: int = 5,
+    freeze_router: bool = False,
+    freeze_all_layers_except_router: bool = True,
+    model_name: str = None,
+    do_evaluation: bool = True,
 ):
     """
     Load a naive pretrained model from HuggingFace, apply the accelerator to FC layers,
@@ -158,7 +165,13 @@ def create_model(
     # if use_lora: model_name += "_lora"
     # if use_gated_attention: model_name += "_gated"
 
-    model = build_model(model_type, use_lora, use_gated_attention, freeze_router=freeze_router,)
+    model = build_model(
+        model_type,
+        use_lora=use_lora,
+        use_gated_attention=use_gated_attention,
+        use_oracle_attention=use_oracle_attetion,
+        freeze_router=freeze_router,
+    )
     model.config.pad_token_id = model.config.eos_token_id
 
     tokenizer = AutoTokenizer.from_pretrained(model_type)
@@ -167,51 +180,68 @@ def create_model(
     if freeze_all_layers_except_router:
         freeze_all_params_except_router(model)
 
-    finetune(model_name, model, tokenizer, dataset_name, num_epochs, 
-             resume_from_checkpoint=False, 
-             learning_rate=learning_rate)
+    finetune(
+        model_name,
+        model,
+        tokenizer,
+        dataset_name,
+        num_epochs,
+        resume_from_checkpoint=False,
+        learning_rate=learning_rate,
+    )
 
 
 if __name__ == "__main__":
     original = {
         "model_name": GPT2_MEDIUM,
-        'use_lora':False,
-        'use_gated_attention':False,
-        'model_type':GPT2_MEDIUM,
-        'dataset_name':BILLSUM,
-        'num_epochs': 1,
-        'learning_rate':5e-5,
+        "use_lora": False,
+        "use_gated_attention": False,
+        "model_type": GPT2_MEDIUM,
+        "dataset_name": BILLSUM,
+        "num_epochs": 1,
+        "learning_rate": 5e-5,
     }
 
     gated_random = {
         "model_name": GPT2_MEDIUM + "_gated_random_freeze",
-        'use_lora': False,
-        'use_gated_attention':True,
-        'model_type':GPT2_MEDIUM,
-        'dataset_name':BILLSUM,
-        'num_epochs':1,
-        'learning_rate':1e-2,
-        'freeze_router': True,
+        "use_lora": False,
+        "use_gated_attention": True,
+        "model_type": GPT2_MEDIUM,
+        "dataset_name": BILLSUM,
+        "num_epochs": 1,
+        "learning_rate": 1e-2,
+        "freeze_router": True,
         "freeze_all_layers_except_router": False,
     }
     gated_freeze = {
         "model_name": GPT2_MEDIUM + "_gated_freeze",
-        'use_lora': False,
-        'use_gated_attention': True,
-        'model_type': GPT2_MEDIUM,
-        'dataset_name': BILLSUM,
-        'num_epochs': 1,
-        'learning_rate': 5e-5,
-        'freeze_router': False,
+        "use_lora": False,
+        "use_gated_attention": True,
+        "model_type": GPT2_MEDIUM,
+        "dataset_name": BILLSUM,
+        "num_epochs": 1,
+        "learning_rate": 5e-5,
+        "freeze_router": False,
+        "freeze_all_layers_except_router": True,
+    }
+    oracle = {
+        "model_name": GPT2_MEDIUM + "_oracle",
+        "use_lora": False,
+        "use_gated_attention": False,
+        "use_oracle_attention": True,
+        "model_type": GPT2_MEDIUM,
+        "dataset_name": BILLSUM,
+        "num_epochs": 1,
+        "learning_rate": 5e-5,
         "freeze_all_layers_except_router": True,
     }
 
     exps_to_run = [
         # original,
-        #gated_random,
-        gated_freeze,
+        # gated_random,
+        # gated_freeze,
+        oracle,
     ]
 
     for exp in exps_to_run:
         create_model(**exp)
- 
