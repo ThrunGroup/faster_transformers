@@ -182,4 +182,5 @@ def freeze_all_params_except_router(model):
         if isinstance(module, Router):
             for param in module.paramters():
                 param.requires_grad = True
-        print(f"{name} requires grad.")
+    for name, param in model.named_parameters():
+        print(f"{name} requires grad: {param.requires_grad}.")
