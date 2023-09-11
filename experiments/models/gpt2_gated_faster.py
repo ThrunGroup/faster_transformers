@@ -180,6 +180,7 @@ def freeze_all_params_except_router(model):
         param.requires_grad = False
     for name, module in model.named_modules():
         print(f"{name} is regarded.")
+        print(isinstance(module, Router))
         if isinstance(module, Router):
             for name, param in module.named_paramters():
                 print(f"{name}'s grad is set to be tracked.")
