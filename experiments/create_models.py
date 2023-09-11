@@ -200,7 +200,7 @@ if __name__ == "__main__":
         "use_gated_attention": False,
         "model_type": GPT2_MEDIUM,
         "dataset_name": BILLSUM,
-        "num_epochs": 0,
+        "num_epochs": 1,
         "learning_rate": 5e-5,
     }
 
@@ -233,9 +233,8 @@ if __name__ == "__main__":
         "use_oracle_attention": True,
         "model_type": GPT2_MEDIUM,
         "dataset_name": BILLSUM,
-        "num_epochs": 0,
+        "num_epochs": 1,
         "learning_rate": 5e-5,
-        "freeze_all_layers_except_router": True,
     }
 
     exps_to_run = [
