@@ -179,13 +179,13 @@ if __name__ == "__main__":
         'use_gated_attention':False,
         'model_type':GPT2_MEDIUM,
         'dataset_name':BILLSUM,
-        'num_epochs': 0,
+        'num_epochs': 1,
         'learning_rate':5e-5,
     }
 
     gated_random = {
         "model_name": GPT2_MEDIUM + "_gated_random_freeze",
-        'use_lora':False,
+        'use_lora': False,
         'use_gated_attention':True,
         'model_type':GPT2_MEDIUM,
         'dataset_name':BILLSUM,
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     }
 
     exps_to_run = [
-        original,
+        # original,
         #gated_random,
         gated_freeze,
     ]
