@@ -37,7 +37,7 @@ class Router(nn.Module):
         return x
 
 
-def OracleAttention(GPT2Attention):
+class OracleAttention(GPT2Attention):
     def __init__(self, config, is_cross_attention=False, layer_idx=None, K:int = 10,):
         super().__init__(config, is_cross_attention, layer_idx)
         self.config = not config
