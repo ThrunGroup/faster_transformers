@@ -169,7 +169,7 @@ def create_model(
         model_type,
         use_lora=use_lora,
         use_gated_attention=use_gated_attention,
-        use_oracle_attention=use_oracle_attetion,
+        use_oracle_attention=use_oracle_attention,
         freeze_router=freeze_router,
     )
     model.config.pad_token_id = model.config.eos_token_id
