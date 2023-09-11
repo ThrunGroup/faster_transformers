@@ -139,6 +139,7 @@ def create_model(
         num_epochs: int = 5,
         freeze_router: bool = False,
         freeze_all_layers_except_router: bool = True,
+        model_name: str = None,
         do_evaluation: bool = True,
         
 ):
@@ -153,9 +154,9 @@ def create_model(
     :return: Dictionary of evaluation logs if `do_evaluation` is true
     """
     # Build a Gated Attention model
-    model_name = model_type
-    if use_lora: model_name += "_lora"
-    if use_gated_attention: model_name += "_gated"
+    # model_name = model_type
+    # if use_lora: model_name += "_lora"
+    # if use_gated_attention: model_name += "_gated"
 
     model = build_model(model_type, use_lora, use_gated_attention, freeze_router=freeze_router,)
     model.config.pad_token_id = model.config.eos_token_id
@@ -173,6 +174,7 @@ def create_model(
 
 if __name__ == "__main__":
     original = {
+        "model_name": GPT2_MEDIUM,
         'use_lora':False,
         'use_gated_attention':False,
         'model_type':GPT2_MEDIUM,
@@ -181,13 +183,25 @@ if __name__ == "__main__":
         'learning_rate':5e-5,
     }
 
-    gated = {
+    gated_freeze = {
+        "model_name": GPT2_MEDIUM + "_gated_freeze",
         'use_lora':False,
         'use_gated_attention':True,
         'model_type':GPT2_MEDIUM,
         'dataset_name':BILLSUM,
-        'num_epochs':4,
-        'learning_rate':5e-5,
+        'num_epochs':1,
+        'learning_rate':1e-2,
+        'freeze_router': False,
+        "freeze_all_layers_except_router": True,
+    }
+    gated = {
+        "model_name": GPT2_MEDIUM + "_gated",
+        'use_lora': False,
+        'use_gated_attention': True,
+        'model_type': GPT2_MEDIUM,
+        'dataset_name': BILLSUM,
+        'num_epochs': 1,
+        'learning_rate': 1e-2,
         'freeze_router': False,
         "freeze_all_layers_except_router": True,
     }
@@ -195,6 +209,7 @@ if __name__ == "__main__":
     exps_to_run = [
         # original,
         gated,
+        gated_freeze,
     ]
 
     for exp in exps_to_run:
