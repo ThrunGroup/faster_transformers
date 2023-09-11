@@ -144,6 +144,7 @@ class GatedAttention(GPT2Attention):
         # at least two outputs from the attention layer
         outputs = (attn_output, None)
         for name, param in self.router.router.named_parameters():
+            print("layer idx: ", self.layer_idx, f" {param.requires_grad}")
             print(f"{name}: {param.grad}")
 
         return outputs  # a, present, (attentions)
