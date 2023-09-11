@@ -98,11 +98,11 @@ class OracleAttention(GPT2Attention):
         if head_mask is not None:
             attn_weights = attn_weights * head_mask
 
-        top_k= torch.topk(attn_weights, self.K, dim=-1)
+        top_k = torch.topk(attn_weights, self.K, dim=-1)
         attn_weights = torch.zeros_like(attn_weights).scatter(dim=-1, index=top_k.indices, src=top_k.values)
         attn_output = torch.matmul(attn_weights, value)
-        with torch.no_grad():
-            print(attn_weights.sum(dim=-1))
+        # with torch.no_grad():
+        #     print(attn_weights.sum(dim=-1))
 
         return attn_output, attn_weights
 
