@@ -140,7 +140,6 @@ def finetune(
 
 
 def create_model(
-    use_oracle_attention: bool,
     use_gated_attention: bool,
     use_lora: bool,
     model_type: str,
@@ -151,6 +150,7 @@ def create_model(
     freeze_all_layers_except_router: bool = True,
     model_name: str = None,
     do_evaluation: bool = True,
+    use_oracle_attention: bool = False,
 ):
     """
     Load a naive pretrained model from HuggingFace, apply the accelerator to FC layers,
