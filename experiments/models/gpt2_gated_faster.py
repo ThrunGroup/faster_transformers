@@ -50,10 +50,12 @@ class OracleAttention(GPT2Attention):
         # self.K = max(int(T/10), 10)
         if self.layer_idx <= self.config.n_layer // 4:
             self.K = T
-        elif self.layer_idx <= self.config.n_layer // 4 * 2:
-            self.K = min(max(int(T / 4), 6), T)
         else:
-            self.K = min(max(int(T / 6), 6), T)
+            self.K = 0
+        # elif self.layer_idx <= self.config.n_layer // 4 * 2:
+        #     self.K = min(max(int(T / 4), 6), T)
+        # else:
+        #     self.K = min(max(int(T / 6), 6), T)
 
         attn_weights = torch.matmul(query, key.transpose(-1, -2))
 
