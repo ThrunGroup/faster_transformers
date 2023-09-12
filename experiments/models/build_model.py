@@ -7,8 +7,8 @@ from transformers import (
 from peft import get_peft_model, LoraConfig, TaskType
 
 # from .gpt2_gated import apply_gated_attention
-# from .gpt2_gated_faster import apply_gated_attention
-from .gpt2_gated_no_scatter import apply_gated_attention
+from .gpt2_gated_faster import apply_gated_attention
+# from .gpt2_gated_no_scatter import apply_gated_attention
 from utils.constants import GPT2, GPT2_MEDIUM
 
 if torch.cuda.is_available():
@@ -17,12 +17,12 @@ else:
     device = "cpu"
 
 
-def build_model(model_name: str, use_lora: bool, use_gated_attention: bool):
+def build_model(model_name: str, use_lora: bool, use_gated_attention: bool, random_token_selection: bool = False):
     config = GPT2Config.from_pretrained(model_name)
     model = GPT2LMHeadModel.from_pretrained(model_name, config=config)
 
     if use_gated_attention:
-        apply_gated_attention(model, config)
+        apply_gated_attention(model, config, random_token_selection)
 
     if use_lora:
         peft_config = LoraConfig(

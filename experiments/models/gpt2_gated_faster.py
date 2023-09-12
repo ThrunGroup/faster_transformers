@@ -32,6 +32,7 @@ class GatedAttention(GPT2Attention):
         is_cross_attention=False,
         layer_idx=None,
         num_generalists: int = 0,
+        random_token_selection: bool = False,
     ):
         super().__init__(
             config, is_cross_attention=is_cross_attention, layer_idx=layer_idx
@@ -41,7 +42,7 @@ class GatedAttention(GPT2Attention):
         self.router = Router(
             self.embed_dim, self.num_heads - self.num_generalists
         ).to(device)
-        self.softmax = nn.Softmax(dim=-1)
+        self.random_token_selection = random_token_selection
 
     def merge_heads(self, tensor, T, K, top_k_indices, top_k_probs):
         if K == T:
@@ -67,7 +68,8 @@ class GatedAttention(GPT2Attention):
         indices = top_k_indices.unsqueeze(-1).expand(
             -1, -1, -1, self.head_dim
         )  # (B, H, K, c)
-        if self.layer_idx <= self.config.n_layer // 4:
+        if self.random_token_selection or self.layer_idx == 0:
+        # or self.layer_idx <= self.config.n_layer // 4:
             logits_per_head = tensor
         else:
             logits_per_head = (
@@ -80,12 +82,12 @@ class GatedAttention(GPT2Attention):
         logits = logits.view(B, T, -1)
         return logits
 
-    def _route_tokens(self, hidden_states, K):
+    def _route_tokens(self, hidden_states, K, layer_past):
         # Router decides which head attends to which tokens.
         # It emits softmax outputs of shape (B, H, T).
         B, T, C = hidden_states.shape
 
-        if T == K:
+        if T == K or layer_past is not None:
             return hidden_states, None, None
 
         # G is the number of generalists
@@ -97,7 +99,7 @@ class GatedAttention(GPT2Attention):
         top_k_probs = torch.gather(top_k.values * K, -1, indices_)
 
         hidden_states = hidden_states.view(
-            B, T, K, self.num_heads, self.head_dim
+            B, T, self.num_heads, self.head_dim
         )
         hidden_states = torch.gather(
             hidden_states,  # (B, T, H, c),
@@ -123,16 +125,21 @@ class GatedAttention(GPT2Attention):
         B, T, C = hidden_states.shape  # (Batch size, Num tokens, Embd dim)
 
         # Diminishing token selection
-        if self.layer_idx <= self.config.n_layer // 4:
-            K = T
-        elif self.layer_idx <= self.config.n_layer // 4 * 2:
-            K = min(max(int(T / 4), 6), T)
-        else:
-            K = min(max(int(T / 6), 6), T)
+        K = min(max(int(T / (self.layer_idx - self.config.n_layer // 12 + 3)), 6), T)
+        # if self.layer_idx <= self.config.n_layer // 12:
+        #     K = T
+        # else:
+        #     K = min(max(int(T / (self.layer_idx - self.config.n_layer // 12 + 2)), 6), T)
+        # elif self.layer_idx <= self.config.n_layer // 4 * 2:
+        #     K = min(max(int(T / 4), 6), T)
+        # elif self.layer_idx <= self.config.n_layer // 4 * 3:
+        #     K = min(max(int(T / 8), 6), T)
+        # else:
+        #     K = min(max(int(T / 12), 6), T)
 
         # Route the tokens to each head
         hidden_states, top_k_indices, top_k_probs = self._route_tokens(
-            hidden_states, K
+            hidden_states, K, layer_past
         )
 
         # project inputs to query, key, value (B, K, 3C) -> (B, K, C)
@@ -145,6 +152,16 @@ class GatedAttention(GPT2Attention):
         key = self._split_heads(key, self.num_heads, self.head_dim)
         value = self._split_heads(value, self.num_heads, self.head_dim)
 
+        if layer_past is not None:
+            past_key, past_value = layer_past
+            key = torch.cat((past_key, key), dim=-2)
+            value = torch.cat((past_value, value), dim=-2)
+
+        if use_cache is True:
+            present = (key, value)
+        else:
+            present = None
+
         # causal self-attention
         attn_output, attn_weights = self._attn(
             query, key, value
@@ -152,21 +169,21 @@ class GatedAttention(GPT2Attention):
 
         # put the head logits together
         attn_output = self.merge_heads(
-            attn_output, T, top_k_indices, top_k_probs
+            attn_output, T, K, top_k_indices, top_k_probs
         )
         attn_output = self.c_proj(attn_output)
         attn_output = self.resid_dropout(attn_output)
 
         # HuggingFace's implementation of GPT2 requires
         # at least two outputs from the attention layer
-        outputs = (attn_output, None)
+        outputs = (attn_output, present)
         return outputs  # a, present, (attentions)
 
 
-def apply_gated_attention(model, config):
+def apply_gated_attention(model, config, random_token_selection):
     # Iterate through blocks and replace self-attention layers
     for i, block in enumerate(model.transformer.h):
-        new_attention = GatedAttention(config, layer_idx=i).to(device)
+        new_attention = GatedAttention(config, layer_idx=i, random_token_selection=random_token_selection).to(device)
         new_attention.c_attn.weight = block.attn.c_attn.weight
         new_attention.c_attn.bias = block.attn.c_attn.bias
         new_attention.c_proj.weight = block.attn.c_proj.weight

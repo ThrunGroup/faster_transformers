@@ -35,6 +35,7 @@ def finetune(
     dataset_name: str,
     num_epochs: int = 10,
     resume_from_checkpoint: bool = False,
+    random_token_selection: bool = False,
     learning_rate: float = 0.001,
     do_evaluation: bool = True,
 ):
@@ -58,6 +59,10 @@ def finetune(
     current_dir = os.path.dirname(os.path.abspath(__file__))
     checkpoint_path = os.path.join(current_dir, "checkpoints", model_name)
 
+    run_name = model_name + "_" + dataset_name
+    if random_token_selection:
+        run_name += "_random"
+
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
@@ -66,7 +71,7 @@ def finetune(
         save_strategy="steps",
         learning_rate=learning_rate,
         warmup_steps=500,
-        per_device_train_batch_size=2,
+        per_device_train_batch_size=12,  # 32 for SMALL, 12 for MED
         per_device_eval_batch_size=32,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
         # optim="adamw_bnb_8bit",
@@ -77,16 +82,16 @@ def finetune(
         logging_dir="exp_logs",
         save_total_limit=1,
         load_best_model_at_end=True,
-        # report_to="wandb",
-        run_name=model_name + "_" + dataset_name,
+        report_to="wandb",
+        run_name=run_name,
         # for memory issues
-        gradient_accumulation_steps=2,
+        # gradient_accumulation_steps=2,
         # gradient_checkpointing=True,
-        # fp16=True,
+        fp16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=5, early_stopping_threshold=0.001
+        early_stopping_patience=10, early_stopping_threshold=0.001
     )
 
     trainer = Trainer(
@@ -124,6 +129,7 @@ def create_model(
     dataset_name: str,
     learning_rate: float,
     num_epochs: int = 5,
+    random_token_selection: bool = False,
     do_evaluation: bool = True,
 ):
     """
@@ -143,7 +149,7 @@ def create_model(
     if use_gated_attention:
         model_name += "_gated"
 
-    model = build_model(model_type, use_lora, use_gated_attention)
+    model = build_model(model_type, use_lora, use_gated_attention, random_token_selection)
     model.config.pad_token_id = model.config.eos_token_id
 
     tokenizer = AutoTokenizer.from_pretrained(model_type)
@@ -157,6 +163,7 @@ def create_model(
         num_epochs,
         resume_from_checkpoint=False,
         learning_rate=learning_rate,
+        random_token_selection=random_token_selection,
     )
 
 
@@ -173,16 +180,31 @@ if __name__ == "__main__":
     gated = {
         "use_lora": False,
         "use_gated_attention": True,
-        "model_type": GPT2,
+        "model_type": GPT2_MEDIUM,
         "dataset_name": BILLSUM,
-        "num_epochs": 4,
+        "num_epochs": 5,
         "learning_rate": 5e-5,
+    }
+
+    gated_random = {
+        "use_lora": False,
+        "use_gated_attention": True,
+        "model_type": GPT2_MEDIUM,
+        "dataset_name": BILLSUM,
+        "num_epochs": 5,
+        "learning_rate": 5e-5,
+        "random_token_selection": True,
     }
 
     exps_to_run = [
         # original,
+        # gated_random,
         gated,
     ]
 
     for exp in exps_to_run:
         create_model(**exp)
+
+    """
+    resume check points 쓰기 (gated not random)
+    """
