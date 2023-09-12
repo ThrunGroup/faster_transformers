@@ -4,23 +4,24 @@ import torch
 from torch import nn
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
 
-if torch.cuda.is_available():
-    device = "cuda:0"
-else:
-    device = "cpu"
-
 
 class Router(nn.Module):
     def __init__(self, embed_dim, num_heads):
         super().__init__()
         self.router = nn.Sequential(
             nn.Linear(embed_dim, num_heads),  # (B, T, H)
-            nn.Softmax(dim=1),
+            nn.LayerNorm(num_heads),
         )
-        self.batch_norm = nn.BatchNorm1d(num_heads)
+        self.noisy_router = nn.Linear(embed_dim, num_heads)
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x):
+        # noise_stddev = F.softplus(self.noisy_router(x)) + 5e-2
         x = self.router(x)  # (B, T, H)
+        # Only apply noise if the model is in training mode
+        if self.training:
+            x = x + torch.randn_like(x) * torch.std(x, dim=1, keepdim=True)
+        x = self.softmax(x)
         x = x.permute(0, 2, 1)  # (B, H, T)
         return x
 
@@ -32,16 +33,18 @@ class GatedAttention(GPT2Attention):
         is_cross_attention=False,
         layer_idx=None,
         num_generalists: int = 0,
+        random_router: bool = False,
     ):
         super().__init__(
             config, is_cross_attention=is_cross_attention, layer_idx=layer_idx
         )
         self.config = config
+        self.layer_idx = layer_idx
         self.num_generalists = num_generalists
         self.router = Router(
             self.embed_dim, self.num_heads - self.num_generalists
-        ).to(device)
-        self.softmax = nn.Softmax(dim=-1)
+        )
+        self.random_router = random_router
 
     def merge_heads(self, tensor, T, K, top_k_indices, top_k_probs):
         if K == T:
@@ -62,17 +65,21 @@ class GatedAttention(GPT2Attention):
             T,
             self.head_dim,
             dtype=tensor.dtype,
-            device=device,
+            device=tensor.device,
         )
         indices = top_k_indices.unsqueeze(-1).expand(
             -1, -1, -1, self.head_dim
         )  # (B, H, K, c)
-        if self.layer_idx <= self.config.n_layer // 4:
+
+        print(self.layer_idx, self.layer_idx == 0)
+        if self.layer_idx == 1 or self.random_router:
+            print(self.layer_idx)
             logits_per_head = tensor
         else:
             logits_per_head = (
                 top_k_probs.unsqueeze(-1).to(tensor.dtype) * tensor
             )
+
         logits.scatter_(
             2, indices, logits_per_head
         )  # (B, H, K, c) -> (B, H, T, c)
@@ -96,9 +103,7 @@ class GatedAttention(GPT2Attention):
         top_k_indices, indices_ = torch.sort(top_k.indices, dim=-1)
         top_k_probs = torch.gather(top_k.values * K, -1, indices_)
 
-        hidden_states = hidden_states.view(
-            B, T, K, self.num_heads, self.head_dim
-        )
+        hidden_states = hidden_states.view(B, T, self.num_heads, self.head_dim)
         hidden_states = torch.gather(
             hidden_states,  # (B, T, H, c),
             1,
@@ -123,12 +128,10 @@ class GatedAttention(GPT2Attention):
         B, T, C = hidden_states.shape  # (Batch size, Num tokens, Embd dim)
 
         # Diminishing token selection
-        if self.layer_idx <= self.config.n_layer // 4:
-            K = T
-        elif self.layer_idx <= self.config.n_layer // 4 * 2:
-            K = min(max(int(T / 4), 6), T)
-        else:
-            K = min(max(int(T / 6), 6), T)
+        K = min(
+            max(int(T / (self.layer_idx - self.config.n_layer // 12 + 3)), 6),
+            T,
+        )
 
         # Route the tokens to each head
         hidden_states, top_k_indices, top_k_probs = self._route_tokens(
@@ -152,7 +155,7 @@ class GatedAttention(GPT2Attention):
 
         # put the head logits together
         attn_output = self.merge_heads(
-            attn_output, T, top_k_indices, top_k_probs
+            attn_output, T, K, top_k_indices, top_k_probs
         )
         attn_output = self.c_proj(attn_output)
         attn_output = self.resid_dropout(attn_output)
@@ -160,13 +163,19 @@ class GatedAttention(GPT2Attention):
         # HuggingFace's implementation of GPT2 requires
         # at least two outputs from the attention layer
         outputs = (attn_output, None)
+
+        if self.router.router[0].weight.grad:
+            print(self.layer_idx)
+
         return outputs  # a, present, (attentions)
 
 
-def apply_gated_attention(model, config):
+def apply_gated_attention(model, config, random_router):
     # Iterate through blocks and replace self-attention layers
     for i, block in enumerate(model.transformer.h):
-        new_attention = GatedAttention(config, layer_idx=i).to(device)
+        new_attention = GatedAttention(
+            config, layer_idx=i, random_router=random_router
+        )
         new_attention.c_attn.weight = block.attn.c_attn.weight
         new_attention.c_attn.bias = block.attn.c_attn.bias
         new_attention.c_proj.weight = block.attn.c_proj.weight
@@ -175,11 +184,8 @@ def apply_gated_attention(model, config):
 
 
 def freeze_model(model):
-    blocks_to_train = [f"h.{i}." for i in list(range(6, 12))] + ["score"]
-    layers_to_train = ["c_proj", "router", "ln_f"] + blocks_to_train
-
     # Freeze the specified layers
+    print("Freezing the model except the router layers")
     for name, param in model.named_parameters():
-        do_train = any([layer in name for layer in layers_to_train])
-        if not do_train:
+        if not "router" in name:
             param.requires_grad = False

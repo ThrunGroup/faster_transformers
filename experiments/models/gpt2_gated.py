@@ -1,13 +1,8 @@
 from typing import Optional, Tuple, Union
-
 import torch
 from torch import nn
+import torch.nn.functional as F
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
-
-if torch.cuda.is_available():
-    device = "cuda:0"
-else:
-    device = "cpu"
 
 
 class Router(nn.Module):
@@ -15,12 +10,18 @@ class Router(nn.Module):
         super().__init__()
         self.router = nn.Sequential(
             nn.Linear(embed_dim, num_heads),  # (B, T, H)
-            nn.Softmax(dim=1),
+            nn.LayerNorm(num_heads),
         )
-        self.batch_norm = nn.BatchNorm1d(num_heads)
+        self.noisy_router = nn.Linear(embed_dim, num_heads)
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x):
+        # noise_stddev = F.softplus(self.noisy_router(x)) + 5e-2
         x = self.router(x)  # (B, T, H)
+        # Only apply noise if the model is in training mode
+        if self.training:
+            x = x + torch.randn_like(x) * torch.std(x, dim=1, keepdim=True)
+        x = self.softmax(x)
         x = x.permute(0, 2, 1)  # (B, H, T)
         return x
 
@@ -31,6 +32,7 @@ class GatedAttention(GPT2Attention):
         config,
         is_cross_attention=False,
         layer_idx=None,
+        random_router: bool = False,
         num_generalists: int = 0,
     ):
         super().__init__(
@@ -40,7 +42,7 @@ class GatedAttention(GPT2Attention):
         self.num_generalists = num_generalists
         self.router = Router(
             self.embed_dim, self.num_heads - self.num_generalists
-        ).to(device)
+        )
         self.softmax = nn.Softmax(dim=-1)
 
     def _merge_heads(self, tensor, T, top_k_indices, top_k_probs):
@@ -51,12 +53,13 @@ class GatedAttention(GPT2Attention):
             T,
             self.head_dim,
             dtype=tensor.dtype,
-            device=device,
+            device=tensor.device,
         )
         indices = top_k_indices.unsqueeze(-1).expand(
             -1, -1, -1, self.head_dim
         )  # (B, H, K, c)
-        if self.layer_idx <= self.config.n_layer // 4:
+        if self.layer_idx == 0:
+            # False and self.layer_idx <= self.config.n_layer // 4:
             logits_per_head = tensor
         else:
             logits_per_head = (
@@ -87,12 +90,16 @@ class GatedAttention(GPT2Attention):
         # It emits softmax outputs of shape (B, H, T).
 
         # Diminishing token selection
-        if self.layer_idx <= self.config.n_layer // 4:
-            K = T
-        elif self.layer_idx <= self.config.n_layer // 4 * 2:
-            K = min(max(int(T / 4), 6), T)
-        else:
-            K = min(max(int(T / 6), 6), T)
+        # if self.layer_idx <= self.config.n_layer // 4:
+        #     K = T
+        # elif self.layer_idx <= self.config.n_layer // 4 * 2:
+        #     K = min(max(int(T / 4), 6), T)
+        # else:
+        #     K = min(max(int(T / 6), 6), T)
+        K = min(
+            max(int(T / (self.layer_idx - self.config.n_layer // 12 + 3)), 6),
+            T,
+        )
 
         # G is the number of generalists
         router = self.router(hidden_states)  # (B, H, T)
@@ -152,13 +159,26 @@ class GatedAttention(GPT2Attention):
         # HuggingFace's implementation of GPT2 requires
         # at least two outputs from the attention layer
         outputs = (attn_output, None)
+
+        print(list(self.router.router.named_parameters()))
+        for name, param in self.router.router.named_parameters():
+            print("HEY?")
+            print(name, param.grad)
+
+        # if self.router.router[0].weight.grad:
+        #     print(self.layer_idx)
+        # if self.layer_idx == 0:
+        #     print("c attn: ", self.c_attn.weight)
+        #     print("c attn: ", self.c_attn.weight.grad)
         return outputs  # a, present, (attentions)
 
 
-def apply_gated_attention(model, config):
+def apply_gated_attention(model, config, random_router):
     # Iterate through blocks and replace self-attention layers
     for i, block in enumerate(model.transformer.h):
-        new_attention = GatedAttention(config, layer_idx=i).to(device)
+        new_attention = GatedAttention(
+            config, layer_idx=i, random_router=random_router
+        )
         new_attention.c_attn.weight = block.attn.c_attn.weight
         new_attention.c_attn.bias = block.attn.c_attn.bias
         new_attention.c_proj.weight = block.attn.c_proj.weight

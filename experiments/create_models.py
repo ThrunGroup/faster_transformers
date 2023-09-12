@@ -5,7 +5,9 @@ from transformers import (
     EarlyStoppingCallback,
     GPT2ForSequenceClassification,
     AutoTokenizer,
+    TrainerCallback,
 )
+import wandb
 
 from data.get_dataset import get_dataset
 from evaluate_models import evaluate_model
@@ -37,6 +39,7 @@ def finetune(
     resume_from_checkpoint: bool = False,
     learning_rate: float = 0.001,
     do_evaluation: bool = True,
+    run_name: str = None,
 ):
     """
     Finetune the model on a dataset
@@ -58,6 +61,13 @@ def finetune(
     current_dir = os.path.dirname(os.path.abspath(__file__))
     checkpoint_path = os.path.join(current_dir, "checkpoints", model_name)
 
+    class PrintGradientsCallback(TrainerCallback):
+        def on_step_end(self, args, state, control, **kwargs):
+            model = kwargs["model"]
+            for name, param in model.named_parameters():
+                # if "router" in name:
+                print(f"Gradient of {name} is {param.grad}")
+
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
@@ -66,28 +76,26 @@ def finetune(
         save_strategy="steps",
         learning_rate=learning_rate,
         warmup_steps=500,
-        per_device_train_batch_size=2,
-        per_device_eval_batch_size=32,  # 32 for MED, XL, 64 for SMALL
-        weight_decay=0.01,
-        # optim="adamw_bnb_8bit",
-        # bf16=True,
-        # torch_compile=True,
-        # optim="adamw_torch_fused",
+        per_device_train_batch_size=12,
+        per_device_eval_batch_size=64,  # 32 for MED, XL, 64 for SMALL
+        weight_decay=0.005,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
         save_total_limit=1,
         load_best_model_at_end=True,
-        # report_to="wandb",
-        run_name=model_name + "_" + dataset_name,
+        report_to="wandb",
+        run_name=run_name,
         # for memory issues
         gradient_accumulation_steps=2,
         # gradient_checkpointing=True,
-        # fp16=True,
+        fp16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
         early_stopping_patience=5, early_stopping_threshold=0.001
     )
+
+    gradient_logger = PrintGradientsCallback()
 
     trainer = Trainer(
         model=model,
@@ -124,7 +132,10 @@ def create_model(
     dataset_name: str,
     learning_rate: float,
     num_epochs: int = 5,
+    run_name: str = None,
+    random_router: bool = False,
     do_evaluation: bool = True,
+    freeze_layers: bool = False,
 ):
     """
     Load a naive pretrained model from HuggingFace, apply the accelerator to FC layers,
@@ -142,8 +153,26 @@ def create_model(
         model_name += "_lora"
     if use_gated_attention:
         model_name += "_gated"
+    run_name = model_name + "_" + dataset_name + "_" + run_name
 
-    model = build_model(model_type, use_lora, use_gated_attention)
+    wandb.init(
+        project="gated_attention_billsum",
+        name=run_name,
+        config={
+            "K": "T / (self.layer_idx - self.config.n_layer // 12 + 3)), 6)",
+            "random_router": random_router,
+            "model_name": model_name,
+            "dataset_name": dataset_name,
+        },
+    )
+
+    model = build_model(
+        model_type,
+        use_lora,
+        use_gated_attention,
+        random_router,
+        freeze_layers=freeze_layers,
+    )
     model.config.pad_token_id = model.config.eos_token_id
 
     tokenizer = AutoTokenizer.from_pretrained(model_type)
@@ -155,6 +184,7 @@ def create_model(
         tokenizer,
         dataset_name,
         num_epochs,
+        run_name=run_name,
         resume_from_checkpoint=False,
         learning_rate=learning_rate,
     )
@@ -166,22 +196,37 @@ if __name__ == "__main__":
         "use_gated_attention": False,
         "model_type": GPT2_MEDIUM,
         "dataset_name": BILLSUM,
-        "num_epochs": 4,
-        "learning_rate": 5e-5,
+        "num_epochs": 6,
+        "learning_rate": 1e-4,
+        "run_name": "original",
     }
 
     gated = {
         "use_lora": False,
         "use_gated_attention": True,
-        "model_type": GPT2,
+        "model_type": GPT2_MEDIUM,
         "dataset_name": BILLSUM,
-        "num_epochs": 4,
-        "learning_rate": 5e-5,
+        "num_epochs": 7,
+        "learning_rate": 1e-4,
+        "run_name": "_noise",
+        "freeze_layers": False,
+    }
+
+    gated_random = {
+        "use_lora": False,
+        "use_gated_attention": True,
+        "model_type": GPT2_MEDIUM,
+        "dataset_name": BILLSUM,
+        "num_epochs": 6,
+        "learning_rate": 1e-4,
+        "random_router": True,
+        "run_name": "random_higher_lr",
     }
 
     exps_to_run = [
         # original,
         gated,
+        # gated_random,
     ]
 
     for exp in exps_to_run:
