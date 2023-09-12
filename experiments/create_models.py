@@ -238,7 +238,7 @@ if __name__ == "__main__":
     }
 
     exps_to_run = [
-        original,
+        # original,
         # gated_random,
         # gated_freeze,
         oracle,
