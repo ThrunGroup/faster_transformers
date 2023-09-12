@@ -47,6 +47,7 @@ class OracleAttention(GPT2Attention):
 
         # Diminishing token selection
         T = query.size()[-2]
+        # self.K = max(int(T/10), 10)
         if self.layer_idx <= self.config.n_layer // 4:
             self.K = T
         elif self.layer_idx <= self.config.n_layer // 4 * 2:

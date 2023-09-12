@@ -49,7 +49,7 @@ def finetune(
     resume_from_checkpoint: bool = False,
     learning_rate: float = 0.001,
     do_evaluation: bool = True,
-    push_to_hub: bool = True,
+    push_to_hub: bool = False,
 ):
     """
     Finetune the model on a dataset
@@ -82,7 +82,7 @@ def finetune(
         save_strategy="steps",
         learning_rate=learning_rate,
         warmup_steps=500,
-        per_device_train_batch_size=2,
+        per_device_train_batch_size=4,
         per_device_eval_batch_size=32,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
         # optim="adamw_bnb_8bit",
