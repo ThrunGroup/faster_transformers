@@ -307,13 +307,13 @@ problem_type:
   value: null
 _name_or_path:
   desc: null
-  value: gpt2
+  value: gpt2_mare
 transformers_version:
   desc: null
   value: 4.26.1
 model_type:
   desc: null
-  value: gpt2
+  value: gpt2_mare
 n_ctx:
   desc: null
   value: 1024

@@ -9,11 +9,11 @@ from .dataset import Dataset
 
 class Billsum(Dataset):
     def __init__(
-        self,
-        tokenizer,
-        model,
-        metrics: str = "rouge",
-        prefix: str = "summarize: ",
+            self,
+            tokenizer,
+            model,
+            metrics: str = "rouge",
+            prefix: str = "summarize: ",
     ):
         """
         :param tokenizer: Tokenizer to tokenize the inputs
@@ -44,7 +44,7 @@ class Billsum(Dataset):
             # If preprocessed data does not exist, load and preprocess
             dataset = load_dataset(
                 "billsum",
-                split="train[:16]",
+                split="train[:32]",
             )
             dataset = dataset.train_test_split(test_size=0.1)
             tokenized_dataset = dataset.map(self.preprocess, batched=True)

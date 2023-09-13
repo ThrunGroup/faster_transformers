@@ -1,15 +1,15 @@
 import torch
 from transformers import (
     GPT2Config,
-    GPT2ForSequenceClassification,
     GPT2LMHeadModel,
 )
 from peft import get_peft_model, LoraConfig, TaskType
 
-# from .gpt2_gated import apply_gated_attention
-from .gpt2_gated_faster import apply_gated_attention
+from experiments.models.gpt2_mare.controller import apply_mare_attention
+from experiments.models.gpt2_gated import apply_gated_attention
+
 # from .gpt2_gated_no_scatter import apply_gated_attention
-from utils.constants import GPT2, GPT2_MEDIUM
+from utils.constants import GPT2_MEDIUM
 
 if torch.cuda.is_available():
     device = "cuda:0"
@@ -17,12 +17,21 @@ else:
     device = "cpu"
 
 
-def build_model(model_name: str, use_lora: bool, use_gated_attention: bool, random_token_selection: bool = False):
+def build_model(
+        model_name: str,
+        use_lora: bool,
+        use_mare_attention: bool,
+        random_token_selection: bool = False,
+        num_generalists: int = 0,
+):
     config = GPT2Config.from_pretrained(model_name)
     model = GPT2LMHeadModel.from_pretrained(model_name, config=config)
 
-    if use_gated_attention:
-        apply_gated_attention(model, config, random_token_selection)
+    if use_mare_attention:
+        # apply_mare_attention(
+        apply_gated_attention(
+            model, config, random_token_selection, num_generalists
+        )
 
     if use_lora:
         peft_config = LoraConfig(
@@ -40,20 +49,20 @@ def build_model(model_name: str, use_lora: bool, use_gated_attention: bool, rand
 
 if __name__ == "__main__":
     model_name = GPT2_MEDIUM
-    base = build_model(model_name, use_lora=True, use_gated_attention=False)
+    base = build_model(model_name, use_lora=True, use_mare_attention=False)
     lora_base = build_model(
-        model_name, use_lora=True, use_gated_attention=False
+        model_name, use_lora=True, use_mare_attention=False
     )
-    gated = build_model(model_name, use_lora=True, use_gated_attention=False)
+    gated = build_model(model_name, use_lora=True, use_mare_attention=False)
     lora_gated = build_model(
-        model_name, use_lora=True, use_gated_attention=False
+        model_name, use_lora=True, use_mare_attention=False
     )
 
     for b, lb, g, lg in zip(
-        base.transformer.h,
-        lora_base.transformer.h,
-        gated.transformer.h,
-        lora_gated.transformer.h,
+            base.transformer.h,
+            lora_base.transformer.h,
+            gated.transformer.h,
+            lora_gated.transformer.h,
     ):
         match1 = torch.allclose(b.attn.c_attn.weight, lb.attn.c_attn.weight)
         match2 = torch.allclose(b.attn.c_attn.weight, g.attn.c_attn.weight)

@@ -308,13 +308,13 @@ problem_type:
   value: null
 _name_or_path:
   desc: null
-  value: gpt2-xl
+  value: gpt2_mare-xl
 transformers_version:
   desc: null
   value: 4.26.1
 model_type:
   desc: null
-  value: gpt2
+  value: gpt2_mare
 n_ctx:
   desc: null
   value: 1024
@@ -323,7 +323,7 @@ output_past:
   value: true
 output_dir:
   desc: null
-  value: /home/lukeleeai/faster_transformers/experiments/checkpoints/gpt2-xl
+  value: /home/lukeleeai/faster_transformers/experiments/checkpoints/gpt2_mare-xl
 overwrite_output_dir:
   desc: null
   value: false
@@ -500,7 +500,7 @@ past_index:
   value: -1
 run_name:
   desc: null
-  value: gpt2-xl_billsum
+  value: gpt2_mare-xl_billsum
 disable_tqdm:
   desc: null
   value: false

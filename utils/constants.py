@@ -38,7 +38,7 @@ EXAMPLE_INPUT = "Hello, my name is"
 BILLSUM = "billsum"
 WIKITEXT2 = "wikitext-2-raw-v1"
 SQUAD = "squad"
-OPENWEBTEXT = 'openwebtext'
+OPENWEBTEXT = "openwebtext"
 SST2 = "sst2"
 SAMSUM = "samsum"
 

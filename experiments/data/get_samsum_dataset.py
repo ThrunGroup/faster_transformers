@@ -1,5 +1,9 @@
-from transformers import DataCollatorForLanguageModeling, AutoTokenizer, \
-    GPT2Model, GPT2Config
+from transformers import (
+    DataCollatorForLanguageModeling,
+    AutoTokenizer,
+    GPT2Model,
+    GPT2Config,
+)
 import evaluate
 import numpy as np
 from datasets import load_dataset
@@ -19,20 +23,22 @@ class Concatenator(object):
         }
 
         total_length = len(
-            concatenated_samples[list(concatenated_samples.keys())[0]])
+            concatenated_samples[list(concatenated_samples.keys())[0]]
+        )
 
         if total_length >= self.chunk_size:
             chunk_num = total_length // self.chunk_size
             result = {
                 k: [
-                    v[i: i + self.chunk_size]
-                    for i in
-                    range(0, chunk_num * self.chunk_size, self.chunk_size)
+                    v[i : i + self.chunk_size]
+                    for i in range(
+                        0, chunk_num * self.chunk_size, self.chunk_size
+                    )
                 ]
                 for k, v in concatenated_samples.items()
             }
             self.residual = {
-                k: v[(chunk_num * self.chunk_size):]
+                k: v[(chunk_num * self.chunk_size) :]
                 for k, v in concatenated_samples.items()
             }
         else:
@@ -54,12 +60,13 @@ class Samsum(Dataset):
         """
         super().__init__(tokenizer, model)
         self.tokenizer = tokenizer
-        self.metrics = evaluate.load(metrics)  # Load the metrics to be used by compute_metrics
+        self.metrics = evaluate.load(
+            metrics
+        )  # Load the metrics to be used by compute_metrics
         self.prompt = (
             f"Summarize this dialog:\n{{dialog}}\n---\nSummary:\n"
             f"{{summary}}{{eos_token}}"
         )
-
 
     def get_tokenized_dataset(self):
         """
@@ -67,8 +74,9 @@ class Samsum(Dataset):
         :return: tokenized dataset, data collator, and compute_metrics function
         """
         dataset = load_dataset("samsum", split="train")
-        dataset = dataset.map(self.apply_prompt_template,
-                              remove_columns=list(dataset.features))
+        dataset = dataset.map(
+            self.apply_prompt_template, remove_columns=list(dataset.features)
+        )
         dataset = dataset.map(
             lambda sample: self.tokenizer(sample["text"]),
             batched=True,
@@ -84,8 +92,7 @@ class Samsum(Dataset):
         and converting them into a format that can be consumed by the model.
         """
         data_collator = DataCollatorForLanguageModeling(
-            tokenizer=self.tokenizer,
-            mlm=False
+            tokenizer=self.tokenizer, mlm=False
         )
         return data_collator
 
@@ -107,23 +114,29 @@ class Samsum(Dataset):
         }
 
     def preprocess(self, examples):
-        inputs = self.tokenizer(examples["prompt"],
-                                padding=True,
-                                truncation=True,)
-        summaries = self.tokenizer(examples["summary"],
-                                   padding=True,
-                                   truncation=True,
-                                   )
+        inputs = self.tokenizer(
+            examples["prompt"],
+            padding=True,
+            truncation=True,
+        )
+        summaries = self.tokenizer(
+            examples["summary"],
+            padding=True,
+            truncation=True,
+        )
         # inputs["labels"] = summaries["input_ids"]
         return inputs
 
     def compute_metrics(self, eval_pred):
         predictions, labels = eval_pred
 
-        predictions = self.tokenizer.batch_decode(predictions, skip_special_tokens=True)
+        predictions = self.tokenizer.batch_decode(
+            predictions, skip_special_tokens=True
+        )
         labels = self.tokenizer.batch_decode(labels, skip_special_tokens=True)
-        results = self.metrics.compute(predictions=predictions,
-                                       references=labels)
+        results = self.metrics.compute(
+            predictions=predictions, references=labels
+        )
 
         rouge2 = results["rouge2"].mid.fmeasure
         rougeL = results["rougeL"].mid.fmeasure
@@ -132,9 +145,10 @@ class Samsum(Dataset):
 
 
 if __name__ == "__main__":
-    tokenizer = AutoTokenizer.from_pretrained("gpt2")
+    tokenizer = AutoTokenizer.from_pretrained("gpt2_mare")
     tokenizer.pad_token = tokenizer.eos_token
-    config = GPT2Config.from_pretrained("gpt2")
-    dataset = Samsum(tokenizer, GPT2Model.from_pretrained("gpt2",
-                                                          config=config))
+    config = GPT2Config.from_pretrained("gpt2_mare")
+    dataset = Samsum(
+        tokenizer, GPT2Model.from_pretrained("gpt2_mare", config=config)
+    )
     dataset.get_tokenized_dataset()
