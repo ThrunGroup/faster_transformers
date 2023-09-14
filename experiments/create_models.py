@@ -136,6 +136,7 @@ def create_model(
     random_router: bool = False,
     do_evaluation: bool = True,
     freeze_layers: bool = False,
+    resume_from_checkpoint: bool = False,
 ):
     """
     Load a naive pretrained model from HuggingFace, apply the accelerator to FC layers,
@@ -185,7 +186,7 @@ def create_model(
         dataset_name,
         num_epochs,
         run_name=run_name,
-        resume_from_checkpoint=False,
+        resume_from_checkpoint=resume_from_checkpoint,
         learning_rate=learning_rate,
     )
 
@@ -206,10 +207,11 @@ if __name__ == "__main__":
         "use_gated_attention": True,
         "model_type": GPT2_MEDIUM,
         "dataset_name": BILLSUM,
-        "num_epochs": 7,
+        "num_epochs": 10,
         "learning_rate": 1e-4,
-        "run_name": "_noise",
-        "freeze_layers": False,
+        "run_name": "_deeper_router",
+        "freeze_layers": True,
+        "resume_from_checkpoint": True,
     }
 
     gated_random = {

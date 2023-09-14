@@ -9,6 +9,8 @@ class Router(nn.Module):
     def __init__(self, embed_dim, num_heads):
         super().__init__()
         self.router = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim),  # (B, T, H)
+            nn.LayerNorm(embed_dim),
             nn.Linear(embed_dim, num_heads),  # (B, T, H)
             nn.LayerNorm(num_heads),
         )
@@ -71,9 +73,7 @@ class GatedAttention(GPT2Attention):
             -1, -1, -1, self.head_dim
         )  # (B, H, K, c)
 
-        print(self.layer_idx, self.layer_idx == 0)
         if self.layer_idx == 1 or self.random_router:
-            print(self.layer_idx)
             logits_per_head = tensor
         else:
             logits_per_head = (
@@ -164,8 +164,8 @@ class GatedAttention(GPT2Attention):
         # at least two outputs from the attention layer
         outputs = (attn_output, None)
 
-        if self.router.router[0].weight.grad:
-            print(self.layer_idx)
+        # if self.router.router[0].weight.grad:
+        #     print(self.layer_idx)
 
         return outputs  # a, present, (attentions)
 

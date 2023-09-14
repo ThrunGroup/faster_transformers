@@ -6,9 +6,9 @@ from transformers import (
 )
 from peft import get_peft_model, LoraConfig, TaskType
 
-from .gpt2_gated import apply_gated_attention
+# from .gpt2_gated import apply_gated_attention
 
-# from .gpt2_gated_faster import apply_gated_attention, freeze_model
+from .gpt2_gated_faster import apply_gated_attention, freeze_model
 
 # from .gpt2_gated_no_scatter import apply_gated_attention
 from utils.constants import GPT2, GPT2_MEDIUM
@@ -32,8 +32,8 @@ def build_model(
     if use_gated_attention:
         apply_gated_attention(model, config, random_router)
 
-    # if freeze_layers:
-    #     freeze_model(model)
+    if freeze_layers:
+        freeze_model(model)
 
     if use_lora:
         peft_config = LoraConfig(

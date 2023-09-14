@@ -43,7 +43,6 @@ class GatedAttention(GPT2Attention):
         self.router = Router(
             self.embed_dim, self.num_heads - self.num_generalists
         )
-        self.softmax = nn.Softmax(dim=-1)
 
     def _merge_heads(self, tensor, T, top_k_indices, top_k_probs):
         B, H, K, c = tensor.shape
@@ -160,10 +159,9 @@ class GatedAttention(GPT2Attention):
         # at least two outputs from the attention layer
         outputs = (attn_output, None)
 
-        print(list(self.router.router.named_parameters()))
-        for name, param in self.router.router.named_parameters():
-            print("HEY?")
-            print(name, param.grad)
+        # with torch.cuda.device(1):
+        #     for name, param in self.router.router.named_parameters():
+        #         print(name, param.grad)
 
         # if self.router.router[0].weight.grad:
         #     print(self.layer_idx)
@@ -187,11 +185,8 @@ def apply_gated_attention(model, config, random_router):
 
 
 def freeze_model(model):
-    blocks_to_train = [f"h.{i}." for i in list(range(6, 12))] + ["score"]
-    layers_to_train = ["c_proj", "router", "ln_f"] + blocks_to_train
-
     # Freeze the specified layers
+    print("Freezing the model except the router layers")
     for name, param in model.named_parameters():
-        do_train = any([layer in name for layer in layers_to_train])
-        if not do_train:
+        if not "router" in name:
             param.requires_grad = False
