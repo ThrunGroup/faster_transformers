@@ -1,7 +1,7 @@
 from torch import nn
 from transformers.pytorch_utils import Conv1D
 
-from .model import MAREAttention
+from .model_half_token_rounders import MAREAttention
 
 
 def inject_pretrained_weights(

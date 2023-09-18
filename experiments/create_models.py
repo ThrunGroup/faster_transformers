@@ -188,10 +188,10 @@ if __name__ == "__main__":
         "use_mare_attention": True,
         "model_type": GPT2_MEDIUM,
         "dataset_name": BILLSUM,
-        "num_epochs": 6,
+        "num_epochs": 5,
         "learning_rate": 5e-5,
         "num_generalists": 2,
-        "run_name": "ar2_1/7_norm_by_sqrt7_random_router",
+        "run_name": "halfar2_1/5_norm_by_sqrt2.5",
     }
 
     gated = {

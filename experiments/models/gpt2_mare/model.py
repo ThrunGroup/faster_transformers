@@ -26,7 +26,6 @@ class MAREAttention(GPT2Attention):
 
         self.router = Router(self.embed_dim, self.num_experts)
         self.random_token_selection = random_token_selection
-        self.sqrt7 = torch.tensor(np.sqrt(7))
 
     def merge_heads(
         self, g_attn_output, e_attn_output, T, top_k_indices, top_k_probs
@@ -48,8 +47,11 @@ class MAREAttention(GPT2Attention):
         indices = top_k_indices.unsqueeze(-1).expand(
             -1, -1, -1, self.head_dim
         )  # (B, H, K, c)
-        e_logits_per_head = (e_attn_output) * self.sqrt7
-        # top_k_probs.unsqueeze(-1).to(e_attn_output.dtype) *
+        e_logits_per_head = (
+            top_k_probs.unsqueeze(-1).to(e_attn_output.dtype)
+            * (e_attn_output)
+            * np.sqrt(5)
+        )
 
         e_logits.scatter_(
             2, indices, e_logits_per_head
@@ -120,7 +122,7 @@ class MAREAttention(GPT2Attention):
         #     max(int(T / (self.layer_idx - self.config.n_layer // 12 + 3)), 6),
         #     T,
         # )
-        K = min(max(T // 7, 12), T)
+        K = min(max(T // 5, 12), T)
 
         # Route the tokens to each head
         (
