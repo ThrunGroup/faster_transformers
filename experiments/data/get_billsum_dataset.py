@@ -1,4 +1,4 @@
-from transformers import DataCollatorForSeq2Seq
+from transformers import DataCollatorForSeq2Seq, AutoTokenizer
 import evaluate
 import numpy as np
 from datasets import load_dataset
@@ -9,11 +9,11 @@ from .dataset import Dataset
 
 class Billsum(Dataset):
     def __init__(
-            self,
-            tokenizer,
-            model,
-            metrics: str = "rouge",
-            prefix: str = "summarize: ",
+        self,
+        tokenizer,
+        model,
+        metrics: str = "rouge",
+        prefix: str = "summarize: ",
     ):
         """
         :param tokenizer: Tokenizer to tokenize the inputs
@@ -32,31 +32,31 @@ class Billsum(Dataset):
         Load and build a simple summarization dataset
         :return: tokenized dataset, data collator, and compute_metrics function
         """
-        try:
-            # Try to load preprocessed data
-            with open("tokenized_train_dataset.pkl", "rb") as f:
-                train_dataset = pickle.load(f)
-            with open("tokenized_test_dataset.pkl", "rb") as f:
-                test_dataset = pickle.load(f)
-            print("Loaded preprocessed data from disk.")
+        # try:
+        #     # Try to load preprocessed data
+        #     with open("tokenized_train_dataset.pkl", "rb") as f:
+        #         train_dataset = pickle.load(f)
+        #     with open("tokenized_test_dataset.pkl", "rb") as f:
+        #         test_dataset = pickle.load(f)
+        #     print("Loaded preprocessed data from disk.")
 
-        except FileNotFoundError:
-            # If preprocessed data does not exist, load and preprocess
-            dataset = load_dataset(
-                "billsum",
-                split="train",
-            )
-            dataset = dataset.train_test_split(test_size=0.1)
-            tokenized_dataset = dataset.map(self.preprocess, batched=True)
-            train_dataset = tokenized_dataset["train"]
-            test_dataset = tokenized_dataset["test"]
+        # except FileNotFoundError:
+        # If preprocessed data does not exist, load and preprocess
+        dataset = load_dataset(
+            "billsum",
+            split="train",
+        )
+        dataset = dataset.train_test_split(test_size=0.1)
+        tokenized_dataset = dataset.map(self.preprocess, batched=True)
+        train_dataset = tokenized_dataset["train"]
+        test_dataset = tokenized_dataset["test"]
 
-            # Save the preprocessed data
-            with open("tokenized_train_dataset.pkl", "wb") as f:
-                pickle.dump(train_dataset, f)
-            with open("tokenized_test_dataset.pkl", "wb") as f:
-                pickle.dump(test_dataset, f)
-            print("Preprocessed and saved data to disk.")
+        # Save the preprocessed data
+        # with open("tokenized_train_dataset.pkl", "wb") as f:
+        #     pickle.dump(train_dataset, f)
+        # with open("tokenized_test_dataset.pkl", "wb") as f:
+        #     pickle.dump(test_dataset, f)
+        # print("Preprocessed and saved data to disk.")
 
         return train_dataset, test_dataset
 
@@ -102,6 +102,9 @@ class Billsum(Dataset):
             max_length=512,
             truncation=True,
         )
+
+        for a, b in zip(model_inputs["input_ids"], labels["input_ids"]):
+            print(len(a), len(b))
 
         model_inputs["labels"] = labels["input_ids"]
 

@@ -55,14 +55,12 @@ def finetune(
     dataset = get_dataset(dataset_name, tokenizer, model)
     train_dataset, test_dataset = dataset.get_tokenized_dataset()
     data_collator = dataset.get_data_collator()
-    compute_metrics = dataset.get_compute_metrics()
+    # compute_metrics = dataset.get_compute_metrics()
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     checkpoint_path = os.path.join(current_dir, "checkpoints", model_name)
 
-    wandb.init(
-        project="gated_attention_billsum_mare_vs_full_expert", name=run_name
-    )
+    wandb.init(project="samsum_mare_vs_full_expert", name=run_name)
 
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
@@ -72,8 +70,8 @@ def finetune(
         save_strategy="steps",
         learning_rate=learning_rate,
         warmup_steps=500,
-        per_device_train_batch_size=12,  # 32 for SMALL, 12 for MED
-        per_device_eval_batch_size=32,  # 32 for MED, XL, 64 for SMALL
+        per_device_train_batch_size=24,  # 32 for SMALL, 12 for MED
+        per_device_eval_batch_size=64,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -120,16 +118,17 @@ def finetune(
 
 
 def create_model(
-    use_mare_attention: bool,
-    use_lora: bool,
     model_type: str,
     dataset_name: str,
     learning_rate: float,
     num_epochs: int = 5,
     random_token_selection: bool = False,
     run_name: str = "",
-    num_generalists: int = 0,
+    use_mare_lora: bool = False,
+    use_mare_attention: bool = False,
+    use_lora: bool = False,
     do_evaluation: bool = True,
+    **kwargs,
 ):
     """
     Load a naive pretrained model from HuggingFace, apply the accelerator to FC layers,
@@ -150,10 +149,11 @@ def create_model(
 
     model = build_model(
         model_type,
-        use_lora,
-        use_mare_attention,
-        random_token_selection,
-        num_generalists,
+        use_mare_lora=use_mare_lora,
+        use_lora=use_lora,
+        use_mare_attention=use_mare_attention,
+        random_token_selection=random_token_selection,
+        **kwargs,
     )
     model.config.pad_token_id = model.config.eos_token_id
 
@@ -174,41 +174,49 @@ def create_model(
 
 
 if __name__ == "__main__":
-    original = {
-        "use_lora": False,
-        "use_mare_attention": False,
-        "model_type": GPT2,
-        "dataset_name": BILLSUM,
-        "num_epochs": 4,
+    common_args = {
+        "model_type": GPT2_MEDIUM,
+        "dataset_name": SAMSUM,
+        "num_epochs": 6,
         "learning_rate": 5e-5,
+    }
+
+    original = {
+        "run_name": "baseline",
     }
 
     mare = {
-        "use_lora": False,
         "use_mare_attention": True,
-        "model_type": GPT2_MEDIUM,
-        "dataset_name": BILLSUM,
-        "num_epochs": 5,
-        "learning_rate": 5e-5,
         "num_generalists": 2,
-        "run_name": "halfar2_1/5_norm_by_sqrt2.5",
+        "run_name": "ar2_1/7",
     }
 
-    gated = {
-        "use_lora": False,
+    moe = {
         "use_mare_attention": True,
-        "model_type": GPT2,
-        "dataset_name": BILLSUM,
-        "num_epochs": 6,
-        "learning_rate": 5e-5,
         "num_generalists": 0,
+        "run_name": "ar0_1/4",
+    }
+
+    moelora = {
+        "use_mare_lora": True,
+        "run_name": "marelora_rank4_ar0_ex8_1/4",
+        "num_generalists": 0,
+        "num_experts": 8,
+    }
+
+    marelora = {
+        "use_mare_lora": True,
+        "run_name": "marelora_rank4_ar1_ex_4_1/4",
+        "num_generalists": 1,
+        "num_experts": 4,
     }
 
     exps_to_run = [
         # original,
-        mare,
-        # gated,
+        # mare,
+        moelora,
+        marelora,
     ]
 
     for exp in exps_to_run:
-        create_model(**exp)
+        create_model(**common_args, **exp)

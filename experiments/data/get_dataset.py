@@ -2,7 +2,7 @@ from .get_billsum_dataset import Billsum
 from .get_squad_dataset import SQuAD
 from .get_openwebtext_dataset import OpenWebText
 from .get_sst2_dataset import SST2_Dataset
-from .get_samsum_dataset import Samsum
+from .get_samsum_dataset_ import Samsum
 from utils.constants import BILLSUM, SQUAD, OPENWEBTEXT, SST2, SAMSUM
 
 
