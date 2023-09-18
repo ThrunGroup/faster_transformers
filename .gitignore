@@ -2,3 +2,4 @@
 experiments/checkpoints
 wandb
 **/__pycache__/
+*.pkl
