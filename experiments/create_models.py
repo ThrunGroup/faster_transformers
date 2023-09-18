@@ -3,9 +3,9 @@ from transformers import (
     Trainer,
     TrainingArguments,
     EarlyStoppingCallback,
-    GPT2ForSequenceClassification,
     AutoTokenizer,
 )
+import wandb
 
 from data.get_dataset import get_dataset
 from evaluate_models import evaluate_model
@@ -29,15 +29,16 @@ from utils.constants import (
 
 
 def finetune(
-        model_name: str,
-        model,
-        tokenizer,
-        dataset_name: str,
-        num_epochs: int = 10,
-        resume_from_checkpoint: bool = False,
-        random_token_selection: bool = False,
-        learning_rate: float = 0.001,
-        do_evaluation: bool = True,
+    model_name: str,
+    model,
+    tokenizer,
+    dataset_name: str,
+    num_epochs: int = 10,
+    resume_from_checkpoint: bool = False,
+    random_token_selection: bool = False,
+    run_name: str = "",
+    learning_rate: float = 0.001,
+    do_evaluation: bool = True,
 ):
     """
     Finetune the model on a dataset
@@ -59,9 +60,9 @@ def finetune(
     current_dir = os.path.dirname(os.path.abspath(__file__))
     checkpoint_path = os.path.join(current_dir, "checkpoints", model_name)
 
-    run_name = model_name + "_" + dataset_name
-    if random_token_selection:
-        run_name += "_random"
+    wandb.init(
+        project="gated_attention_billsum_mare_vs_full_expert", name=run_name
+    )
 
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
@@ -71,23 +72,19 @@ def finetune(
         save_strategy="steps",
         learning_rate=learning_rate,
         warmup_steps=500,
-        per_device_train_batch_size=1,  # 32 for SMALL, 12 for MED
-        per_device_eval_batch_size=1,  # 32 for MED, XL, 64 for SMALL
+        per_device_train_batch_size=12,  # 32 for SMALL, 12 for MED
+        per_device_eval_batch_size=32,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
-        # optim="adamw_bnb_8bit",
-        # bf16=True,
-        # torch_compile=True,
-        # optim="adamw_torch_fused",
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
         save_total_limit=1,
         load_best_model_at_end=True,
-        # report_to="wandb",
-        # run_name=run_name,
+        report_to="wandb",
+        run_name=run_name,
         # for memory issues
         # gradient_accumulation_steps=2,
         # gradient_checkpointing=True,
-        # fp16=True,
+        fp16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -123,15 +120,16 @@ def finetune(
 
 
 def create_model(
-        use_mare_attention: bool,
-        use_lora: bool,
-        model_type: str,
-        dataset_name: str,
-        learning_rate: float,
-        num_epochs: int = 5,
-        random_token_selection: bool = False,
-        num_generalists: int = 0,
-        do_evaluation: bool = True,
+    use_mare_attention: bool,
+    use_lora: bool,
+    model_type: str,
+    dataset_name: str,
+    learning_rate: float,
+    num_epochs: int = 5,
+    random_token_selection: bool = False,
+    run_name: str = "",
+    num_generalists: int = 0,
+    do_evaluation: bool = True,
 ):
     """
     Load a naive pretrained model from HuggingFace, apply the accelerator to FC layers,
@@ -170,6 +168,7 @@ def create_model(
         num_epochs,
         resume_from_checkpoint=False,
         learning_rate=learning_rate,
+        run_name=run_name,
         random_token_selection=random_token_selection,
     )
 
@@ -178,10 +177,21 @@ if __name__ == "__main__":
     original = {
         "use_lora": False,
         "use_mare_attention": False,
-        "model_type": GPT2_MEDIUM,
+        "model_type": GPT2,
         "dataset_name": BILLSUM,
         "num_epochs": 4,
         "learning_rate": 5e-5,
+    }
+
+    mare = {
+        "use_lora": False,
+        "use_mare_attention": True,
+        "model_type": GPT2_MEDIUM,
+        "dataset_name": BILLSUM,
+        "num_epochs": 6,
+        "learning_rate": 5e-5,
+        "num_generalists": 2,
+        "run_name": "ar2_1/7_norm_by_sqrt7_random_router",
     }
 
     gated = {
@@ -189,25 +199,15 @@ if __name__ == "__main__":
         "use_mare_attention": True,
         "model_type": GPT2,
         "dataset_name": BILLSUM,
-        "num_epochs": 5,
+        "num_epochs": 6,
         "learning_rate": 5e-5,
-        "num_generalists": 4,
-    }
-
-    gated_random = {
-        "use_lora": False,
-        "use_mare_attention": True,
-        "model_type": GPT2_MEDIUM,
-        "dataset_name": BILLSUM,
-        "num_epochs": 5,
-        "learning_rate": 5e-5,
-        "random_token_selection": True,
+        "num_generalists": 0,
     }
 
     exps_to_run = [
         # original,
-        # gated_random,
-        gated,
+        mare,
+        # gated,
     ]
 
     for exp in exps_to_run:

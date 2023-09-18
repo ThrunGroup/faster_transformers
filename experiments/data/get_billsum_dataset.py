@@ -44,7 +44,7 @@ class Billsum(Dataset):
             # If preprocessed data does not exist, load and preprocess
             dataset = load_dataset(
                 "billsum",
-                split="train[:32]",
+                split="train",
             )
             dataset = dataset.train_test_split(test_size=0.1)
             tokenized_dataset = dataset.map(self.preprocess, batched=True)

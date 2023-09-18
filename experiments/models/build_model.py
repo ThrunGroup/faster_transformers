@@ -18,18 +18,20 @@ else:
 
 
 def build_model(
-        model_name: str,
-        use_lora: bool,
-        use_mare_attention: bool,
-        random_token_selection: bool = False,
-        num_generalists: int = 0,
+    model_name: str,
+    use_lora: bool,
+    use_mare_attention: bool,
+    random_token_selection: bool = False,
+    num_generalists: int = 0,
 ):
     config = GPT2Config.from_pretrained(model_name)
     model = GPT2LMHeadModel.from_pretrained(model_name, config=config)
 
     if use_mare_attention:
-        # apply_mare_attention(
-        apply_gated_attention(
+        function_to_apply = (
+            apply_mare_attention if num_generalists else apply_gated_attention
+        )
+        function_to_apply(
             model, config, random_token_selection, num_generalists
         )
 
@@ -59,10 +61,10 @@ if __name__ == "__main__":
     )
 
     for b, lb, g, lg in zip(
-            base.transformer.h,
-            lora_base.transformer.h,
-            gated.transformer.h,
-            lora_gated.transformer.h,
+        base.transformer.h,
+        lora_base.transformer.h,
+        gated.transformer.h,
+        lora_gated.transformer.h,
     ):
         match1 = torch.allclose(b.attn.c_attn.weight, lb.attn.c_attn.weight)
         match2 = torch.allclose(b.attn.c_attn.weight, g.attn.c_attn.weight)

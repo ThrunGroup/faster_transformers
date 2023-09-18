@@ -27,12 +27,12 @@ class Router(nn.Module):
 
 class GatedAttention(GPT2Attention):
     def __init__(
-            self,
-            config,
-            is_cross_attention=False,
-            layer_idx=None,
-            num_generalists: int = 0,
-            random_token_selection: bool = False,
+        self,
+        config,
+        is_cross_attention=False,
+        layer_idx=None,
+        num_generalists: int = 0,
+        random_token_selection: bool = False,
     ):
         super().__init__(
             config, is_cross_attention=is_cross_attention, layer_idx=layer_idx
@@ -73,7 +73,7 @@ class GatedAttention(GPT2Attention):
             logits_per_head = tensor
         else:
             logits_per_head = (
-                    top_k_probs.unsqueeze(-1).to(tensor.dtype) * tensor
+                top_k_probs.unsqueeze(-1).to(tensor.dtype) * tensor
             )
         logits.scatter_(
             2, indices, logits_per_head
@@ -103,30 +103,27 @@ class GatedAttention(GPT2Attention):
             hidden_states,  # (B, T, H, c),
             1,
             top_k_indices.permute(0, 2, 1)
-                .unsqueeze(-1)
-                .expand(-1, -1, -1, self.head_dim),  # (B, K, H, c)
+            .unsqueeze(-1)
+            .expand(-1, -1, -1, self.head_dim),  # (B, K, H, c)
         ).view(B, K, C)
         return hidden_states, top_k_indices, top_k_probs
 
     def forward(
-            self,
-            hidden_states: Optional[Tuple[torch.FloatTensor]],
-            layer_past: Optional[Tuple[torch.Tensor]] = None,
-            attention_mask: Optional[torch.FloatTensor] = None,
-            head_mask: Optional[torch.FloatTensor] = None,
-            encoder_hidden_states: Optional[torch.Tensor] = None,
-            encoder_attention_mask: Optional[torch.FloatTensor] = None,
-            use_cache: Optional[bool] = False,
-            output_attentions: Optional[bool] = False,
+        self,
+        hidden_states: Optional[Tuple[torch.FloatTensor]],
+        layer_past: Optional[Tuple[torch.Tensor]] = None,
+        attention_mask: Optional[torch.FloatTensor] = None,
+        head_mask: Optional[torch.FloatTensor] = None,
+        encoder_hidden_states: Optional[torch.Tensor] = None,
+        encoder_attention_mask: Optional[torch.FloatTensor] = None,
+        use_cache: Optional[bool] = False,
+        output_attentions: Optional[bool] = False,
     ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]], ...]:
         # select the top k tokens for each head
         B, T, C = hidden_states.shape  # (Batch size, Num tokens, Embd dim)
 
         # Diminishing token selection
-        K = min(
-            max(int(T / (self.layer_idx - self.config.n_layer // 12 + 3)), 6),
-            T,
-        )
+        K = min(max(T // 6, 12), T)
         # if self.layer_idx <= self.config.n_layer // 12:
         #     K = T
         # else:
@@ -182,7 +179,10 @@ class GatedAttention(GPT2Attention):
 
 
 def apply_gated_attention(
-        model, config, random_token_selection, num_generalists
+    model,
+    config,
+    random_token_selection,
+    num_generalists: int = 0,
 ):
     # Iterate through blocks and replace self-attention layers
     for i, block in enumerate(model.transformer.h):

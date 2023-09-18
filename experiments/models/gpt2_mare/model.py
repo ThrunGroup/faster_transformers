@@ -1,5 +1,6 @@
 from typing import Optional, Tuple, Union
 import torch
+import numpy as np
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
 
 from experiments.models.router import Router
@@ -7,12 +8,12 @@ from experiments.models.router import Router
 
 class MAREAttention(GPT2Attention):
     def __init__(
-            self,
-            config,
-            is_cross_attention=False,
-            layer_idx=None,
-            random_token_selection: bool = False,
-            num_generalists: int = 0,
+        self,
+        config,
+        is_cross_attention=False,
+        layer_idx=None,
+        random_token_selection: bool = False,
+        num_generalists: int = 0,
     ):
         super().__init__(
             config, is_cross_attention=is_cross_attention, layer_idx=layer_idx
@@ -25,9 +26,10 @@ class MAREAttention(GPT2Attention):
 
         self.router = Router(self.embed_dim, self.num_experts)
         self.random_token_selection = random_token_selection
+        self.sqrt7 = torch.tensor(np.sqrt(7))
 
     def merge_heads(
-            self, g_attn_output, e_attn_output, T, top_k_indices, top_k_probs
+        self, g_attn_output, e_attn_output, T, top_k_indices, top_k_probs
     ):
         B, _, K, c = e_attn_output.shape
 
@@ -46,10 +48,9 @@ class MAREAttention(GPT2Attention):
         indices = top_k_indices.unsqueeze(-1).expand(
             -1, -1, -1, self.head_dim
         )  # (B, H, K, c)
-        e_logits_per_head = (
-                top_k_probs.unsqueeze(-1).to(
-                    e_attn_output.dtype) * e_attn_output
-        )
+        e_logits_per_head = (e_attn_output) * self.sqrt7
+        # top_k_probs.unsqueeze(-1).to(e_attn_output.dtype) *
+
         e_logits.scatter_(
             2, indices, e_logits_per_head
         )  # (B, E, K, c) -> (B, E, T, c)
@@ -67,10 +68,10 @@ class MAREAttention(GPT2Attention):
         # extract hidden states for generalists
         generalist_hidden_states = (
             hidden_states.view(B, T, self.num_heads, self.head_dim)[
-            :, :, : self.num_generalists, :
+                :, :, : self.num_generalists, :
             ]
-                .contiguous()
-                .view(B, T, -1)
+            .contiguous()
+            .view(B, T, -1)
         )
 
         # E is the number of experts
@@ -84,13 +85,13 @@ class MAREAttention(GPT2Attention):
         # pick top k tokens for each Expert head
         expert_hidden_states = hidden_states.view(
             B, T, self.num_heads, self.head_dim
-        )[:, :, self.num_generalists:, :]
+        )[:, :, self.num_generalists :, :]
         expert_hidden_states = torch.gather(
             expert_hidden_states,  # (B, T, E, c),
             1,
             top_k_indices.permute(0, 2, 1)
-                .unsqueeze(-1)
-                .expand(-1, -1, -1, self.head_dim),  # (B, K, E, c)
+            .unsqueeze(-1)
+            .expand(-1, -1, -1, self.head_dim),  # (B, K, E, c)
         ).view(B, K, -1)
 
         return (
@@ -101,15 +102,15 @@ class MAREAttention(GPT2Attention):
         )
 
     def forward(
-            self,
-            hidden_states: Optional[Tuple[torch.FloatTensor]],
-            layer_past: Optional[Tuple[torch.Tensor]] = None,
-            attention_mask: Optional[torch.FloatTensor] = None,
-            head_mask: Optional[torch.FloatTensor] = None,
-            encoder_hidden_states: Optional[torch.Tensor] = None,
-            encoder_attention_mask: Optional[torch.FloatTensor] = None,
-            use_cache: Optional[bool] = False,
-            output_attentions: Optional[bool] = False,
+        self,
+        hidden_states: Optional[Tuple[torch.FloatTensor]],
+        layer_past: Optional[Tuple[torch.Tensor]] = None,
+        attention_mask: Optional[torch.FloatTensor] = None,
+        head_mask: Optional[torch.FloatTensor] = None,
+        encoder_hidden_states: Optional[torch.Tensor] = None,
+        encoder_attention_mask: Optional[torch.FloatTensor] = None,
+        use_cache: Optional[bool] = False,
+        output_attentions: Optional[bool] = False,
     ) -> Tuple[Union[torch.Tensor, Tuple[torch.Tensor]], ...]:
         # select the top k tokens for each head
         B, T, C = hidden_states.shape  # (Batch size, Num tokens, Embd dim)
@@ -119,7 +120,7 @@ class MAREAttention(GPT2Attention):
         #     max(int(T / (self.layer_idx - self.config.n_layer // 12 + 3)), 6),
         #     T,
         # )
-        K = T // 10
+        K = min(max(T // 7, 12), T)
 
         # Route the tokens to each head
         (
@@ -173,21 +174,26 @@ class MAREAttention(GPT2Attention):
 
         if layer_past is not None:
             (
-                past_generalist_kv,
-                past_expert_kv,
+                past_generalist_k,
+                past_generalist_v,
+                past_expert_k,
+                past_expert_v,
             ) = layer_past
             generalist_key = torch.cat(
-                (past_generalist_kv[0], generalist_key), dim=-2
+                (past_generalist_k, generalist_key), dim=-2
             )
             generalist_value = torch.cat(
-                (past_generalist_kv[1], generalist_value), dim=-2
+                (past_generalist_v, generalist_value), dim=-2
             )
-            expert_key = torch.cat((past_expert_kv[0], expert_key), dim=-2)
-            expert_value = torch.cat((past_expert_kv[1], expert_value), dim=-2)
+            expert_key = torch.cat((past_expert_k, expert_key), dim=-2)
+            expert_value = torch.cat((past_expert_v, expert_value), dim=-2)
+
         if use_cache is True:
             present = (
-                (generalist_key, generalist_value),
-                (expert_key, expert_value),
+                generalist_key,
+                generalist_value,
+                expert_key,
+                expert_value,
             )
         else:
             present = None

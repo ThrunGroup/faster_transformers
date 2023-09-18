@@ -79,4 +79,3 @@ def apply_mare_attention(
             new_attention, block, config, num_generalists
         )
         block.attn = new_attention
-        model.transformer.h[i] = new_attention
