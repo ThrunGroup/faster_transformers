@@ -37,7 +37,7 @@ def build_model(
 
     if use_mare_lora:
         apply_mare_lora(model, config, num_generalists, num_experts)
-        # freeze_model(model)
+        freeze_model(model)
 
     return model
 

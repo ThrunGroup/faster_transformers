@@ -60,7 +60,11 @@ def finetune(
     current_dir = os.path.dirname(os.path.abspath(__file__))
     checkpoint_path = os.path.join(current_dir, "checkpoints", model_name)
 
-    wandb.init(project="samsum_mare_vs_full_expert", name=run_name)
+    wandb_run = wandb.init(
+        project="gated_attention_billsum_mare_vs_full_expert",
+        name=run_name,
+        reinit=True,
+    )
 
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
@@ -70,8 +74,8 @@ def finetune(
         save_strategy="steps",
         learning_rate=learning_rate,
         warmup_steps=500,
-        per_device_train_batch_size=24,  # 32 for SMALL, 12 for MED
-        per_device_eval_batch_size=64,  # 32 for MED, XL, 64 for SMALL
+        per_device_train_batch_size=8,  # 32 for SMALL, 12 for MED
+        per_device_eval_batch_size=24,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -115,6 +119,8 @@ def finetune(
             test_dataset=test_dataset,
             trainer=trainer,
         )
+
+    wandb_run.finish()
 
 
 def create_model(
@@ -176,8 +182,8 @@ def create_model(
 if __name__ == "__main__":
     common_args = {
         "model_type": GPT2_MEDIUM,
-        "dataset_name": SAMSUM,
-        "num_epochs": 6,
+        "dataset_name": BILLSUM,
+        "num_epochs": 5,
         "learning_rate": 5e-5,
     }
 
@@ -197,25 +203,49 @@ if __name__ == "__main__":
         "run_name": "ar0_1/4",
     }
 
-    moelora = {
+    lora = {
+        "use_mare_lora": True,
+        "run_name": "lora_rank4_ar1",
+        "num_generalists": 1,
+        "num_experts": 0,
+    }
+
+    moelora1 = {
         "use_mare_lora": True,
         "run_name": "marelora_rank4_ar0_ex8_1/4",
         "num_generalists": 0,
         "num_experts": 8,
     }
 
-    marelora = {
+    marelora1 = {
         "use_mare_lora": True,
         "run_name": "marelora_rank4_ar1_ex_4_1/4",
         "num_generalists": 1,
         "num_experts": 4,
     }
 
+    moelora2 = {
+        "use_mare_lora": True,
+        "run_name": "marelora_rank4_ar0_ex16_1/4",
+        "num_generalists": 0,
+        "num_experts": 16,
+    }
+
+    marelora2 = {
+        "use_mare_lora": True,
+        "run_name": "marelora_rank4_ar2_ex_8_1/4",
+        "num_generalists": 2,
+        "num_experts": 8,
+    }
+
     exps_to_run = [
         # original,
         # mare,
-        moelora,
-        marelora,
+        # lora,
+        moelora1,
+        marelora1,
+        moelora2,
+        # marelora2,
     ]
 
     for exp in exps_to_run:

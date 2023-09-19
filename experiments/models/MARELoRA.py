@@ -103,7 +103,7 @@ class Linear(nn.Linear, LoRALayer):
             nn.init.kaiming_uniform_(self.lora_all_rounder_A, a=math.sqrt(5))
             nn.init.zeros_(self.lora_all_rounder_B)
 
-        if hasattr(self, "lora_expert_A"):
+        if hasattr(self, "lora_experts_A"):
             # initialize A the same way as the default for nn.Linear and B to zero
             nn.init.kaiming_uniform_(self.lora_experts_A, a=math.sqrt(5))
             nn.init.zeros_(self.lora_experts_B)
@@ -126,10 +126,9 @@ class Linear(nn.Linear, LoRALayer):
             if self.merge_weights and not self.merged:
                 # Merge the weights and mark it
                 if self.r > 0:
-                    self.weight.data += (
-                        T(self.lora_all_rounder_B @ self.lora_all_rounder_A)
-                        + T(self.lora_experts_B @ self.lora_experts_A)
-                    ) * self.scaling
+                    self.weight.data += T(
+                        self.lora_all_rounder_B @ self.lora_all_rounder_A
+                    ) + T(self.lora_experts_B @ self.lora_experts_A)
                 self.merged = True
 
     def moe_forward(self, x: torch.Tensor):
@@ -141,7 +140,7 @@ class Linear(nn.Linear, LoRALayer):
         top_k = torch.topk(router, k=K, dim=1)  # (B, K, E)
         top_k_indices, indices_ = torch.sort(top_k.indices, dim=-1)
         top_k_indices = top_k_indices.unsqueeze(-1)
-        top_k_probs = torch.gather(top_k.values * K, -1, indices_)
+        top_k_probs = torch.gather(top_k.values, -1, indices_)
 
         # x: (B, T, C) -> (B, T, E, C) -> (B, K, E, C) -> (B, K, E * C)
         x = torch.gather(
@@ -157,11 +156,17 @@ class Linear(nn.Linear, LoRALayer):
             x
             @ self.lora_experts_A.transpose(0, 1)  # (E*C, r)
             @ self.lora_experts_B.transpose(0, 1)  # (r, E*D)
-        )
-        # * top_k_probs.permute()  # (B, K, E*D)
+        ) * top_k_probs.unsqueeze(-1).expand(
+            -1, -1, -1, self.out_features
+        ).contiguous().view(
+            B, K, -1
+        )  # (B, K, E*D)
         expert_logits = expert_logits.view(
             B, K, self.num_experts, self.out_features
         )
+
+        if self.num_all_rounders:
+            expert_logits = expert_logits * 4 / self.num_experts
 
         # logits: (B, T, E, C) -> (B, T, C)
         logits = torch.zeros(
@@ -172,13 +177,6 @@ class Linear(nn.Linear, LoRALayer):
             dtype=expert_logits.dtype,
             device=x.device,
         )
-
-        # print(
-        #     "top k: ",
-        #     top_k_indices.expand(-1, -1, -1, self.out_features).shape,
-        # )
-        # print("logits: ", logits.shape)
-        # print("expert logits: ", expert_logits.shape)
 
         logits.scatter_(
             1,

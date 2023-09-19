@@ -30,6 +30,7 @@ def apply_mare_lora(
 
 def freeze_model(model):
     for name, param in model.named_parameters():
+        print(name)
         if "mlp" not in name:
             param.requires_grad = False
 
