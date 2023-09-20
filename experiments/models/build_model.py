@@ -23,6 +23,7 @@ def build_model(
     use_mare_attention: bool = False,
     use_mare_upcycling: bool = False,
     use_lora: bool = False,
+    capacity_factor: int = 0,
     random_token_selection: bool = False,
     num_generalists: int = 0,
     num_experts: int = 0,
@@ -39,7 +40,7 @@ def build_model(
         )
 
     if use_mare_upcycling:
-        apply_mare_upcycling(model, config, num_generalists, num_experts)
+        apply_mare_upcycling(model, config, num_generalists, num_experts, capacity_factor)
 
     if use_mare_lora:
         apply_mare_lora(model, config, num_generalists, num_experts)

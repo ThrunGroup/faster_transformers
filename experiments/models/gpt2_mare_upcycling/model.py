@@ -10,32 +10,37 @@ from experiments.models.router import Router
 
 class MAREMLP(GPT2MLP):
     def __init__(
-        self, intermediate_size, config, num_all_rounders, num_experts
+        self, intermediate_size, config, num_all_rounders, num_experts, capacity_factor
     ):
         super().__init__(intermediate_size, config)
         embed_dim = config.hidden_size
         self.num_mlps = num_all_rounders + num_experts
         self.num_all_rounders = num_all_rounders
         self.num_experts = num_experts
+        self.capacity_factor = capacity_factor
+        
+        if num_all_rounders:
+            self.c_fc_ar = Conv1D(intermediate_size, num_all_rounders * embed_dim)
+            self.c_proj_ar = Conv1D(
+                num_all_rounders * embed_dim, intermediate_size
+            )
+            self.ar_router = Router(embed_dim, num_all_rounders)
 
-        self.c_fc_ar = Conv1D(intermediate_size, num_all_rounders * embed_dim)
-        self.c_fc_ex = Conv1D(intermediate_size, num_experts * embed_dim)
-        self.c_proj_ar = Conv1D(
-            num_all_rounders * embed_dim, intermediate_size
-        )
-        self.c_proj_ex = Conv1D(num_experts * embed_dim, intermediate_size)
+        if num_experts:
+            self.c_fc_ex = Conv1D(intermediate_size, num_experts * embed_dim)
+            self.c_proj_ex = Conv1D(num_experts * embed_dim, intermediate_size)
+            self.ex_router = Router(embed_dim, num_experts)
+
         self.act = ACT2FN[config.activation_function]
         self.dropout = nn.Dropout(config.resid_pdrop)
 
         self.embed_dim = embed_dim
 
-        self.router = Router(embed_dim, num_experts)
 
     def forward(
         self, hidden_states: Optional[Tuple[torch.FloatTensor]]
     ) -> torch.FloatTensor:
         B, T, C = hidden_states.shape
-        K = T // 4
 
         # All-rounders
         if self.num_all_rounders:
@@ -48,12 +53,19 @@ class MAREMLP(GPT2MLP):
             ar_hidden_states = ar_hidden_states.view(
                 B, T, self.num_all_rounders, self.embed_dim
             )  # (B, T, G, C)
+
+            if self.num_all_rounders > 1:
+                ar_router = self.ar_router(hidden_states).unsqueeze(-1)  # (B, T, G, 1)
+                ar_hidden_states = ar_hidden_states * ar_router  # (B, T, G, C)
+
             ar_hidden_states = ar_hidden_states.sum(dim=2)  # (B, T, C)
 
         # Experts
         if self.num_experts:
             ex_hidden_states = hidden_states.repeat(1, 1, self.num_experts)
-            router = self.router(hidden_states)  # (B, T, E)
+
+            router = self.ex_router(hidden_states)  # (B, T, E)
+            K = T * (self.capacity_factor  - self.num_all_rounders) // self.num_experts
             top_k = torch.topk(router, k=K, dim=1)  # (B, K, E)
             top_k_indices = top_k.indices
             top_k_probs = top_k.values
@@ -93,7 +105,9 @@ class MAREMLP(GPT2MLP):
             ex_hidden_states = ex_zeros.sum(dim=2)
 
         if self.num_all_rounders and self.num_experts:
-            hidden_states = ar_hidden_states + ex_hidden_states
+            hidden_states = (
+                ar_hidden_states + ex_hidden_states * (T / K)
+            )
         elif self.num_all_rounders:
             hidden_states = ar_hidden_states
         else:

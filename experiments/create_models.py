@@ -74,8 +74,8 @@ def finetune(
         save_strategy="steps",
         learning_rate=learning_rate,
         warmup_steps=500,
-        per_device_train_batch_size=32,  # 32 for SMALL, 12 for MED
-        per_device_eval_batch_size=64,  # 32 for MED, XL, 64 for SMALL
+        per_device_train_batch_size=12,  # 32 for SMALL, 12 for MED
+        per_device_eval_batch_size=40,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -130,6 +130,7 @@ def create_model(
     num_epochs: int = 5,
     random_token_selection: bool = False,
     run_name: str = "",
+    capacity_factor: int = 0,
     use_mare_lora: bool = False,
     use_mare_attention: bool = False,
     use_lora: bool = False,
@@ -159,6 +160,7 @@ def create_model(
         use_lora=use_lora,
         use_mare_attention=use_mare_attention,
         random_token_selection=random_token_selection,
+        capacity_factor=capacity_factor,
         **kwargs,
     )
     model.config.pad_token_id = model.config.eos_token_id
@@ -194,23 +196,36 @@ if __name__ == "__main__":
 
     # create_model(
     #     use_mare_upcycling=True,
+    #     num_generalists=2,
     #     num_experts=8,
-    #     run_name="moe_ex8_1/4",
+    #     capacity_factor=4,
+    #     run_name="c4_mare_ar1_ex12_1/4",
     #     **common_args,
     # )
 
+    # create_model(
+    #     use_mare_upcycling=True,
+    #     num_generalists=1,
+    #     capacity_factor=2,
+    #     num_experts=4,
+    #     run_name="c2_mare_ar1_ex4_1/4_soft",
+    #     **common_args,
+    # )
+
+    #do
     create_model(
         use_mare_upcycling=True,
-        num_generalists=1,
-        num_experts=4,
-        run_name="mare_ar1_ex4_1/4",
+        capacity_factor=2,
+        num_generalists=2,
+        num_experts=0,
+        run_name="c2_moe_soft_ar2",
         **common_args,
     )
 
     # create_model(
     #     use_mare_upcycling=True,
-    #     num_generalist=1,
-    #     num_experts=4,
+    #     num_generalists=2,
+    #     num_experts=0,
     #     run_name="mare_ar2_ex0",
     #     **common_args,
     # )
