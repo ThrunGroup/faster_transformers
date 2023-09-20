@@ -15,7 +15,7 @@ from utils.constants import (
     SVD,
     # Models
     GPT2,
-    GPT2_MEDIUM,
+    # GPT2_MEDIUM,
     GPT2_XL,
     # Parameters
     NUM_BLOCKS_GPT2,
@@ -181,72 +181,36 @@ def create_model(
 
 if __name__ == "__main__":
     common_args = {
-        "model_type": GPT2_MEDIUM,
+        "model_type": GPT2,
         "dataset_name": BILLSUM,
         "num_epochs": 5,
         "learning_rate": 5e-5,
     }
 
-    original = {
-        "run_name": "baseline",
-    }
+    create_model(
+        run_name="baseline",
+        **common_args,
+    )
 
-    mare = {
-        "use_mare_attention": True,
-        "num_generalists": 2,
-        "run_name": "ar2_1/7",
-    }
+    create_model(
+        use_mare_upcycling=True,
+        num_experts=8,
+        run_name="moe_ex8_1/4",
+        **common_args,
+    )
 
-    moe = {
-        "use_mare_attention": True,
-        "num_generalists": 0,
-        "run_name": "ar0_1/4",
-    }
+    create_model(
+        use_mare_upcycling=True,
+        num_generalist=1,
+        num_experts=4,
+        run_name="mare_ar1_ex4_1/4",
+        **common_args,
+    )
 
-    lora = {
-        "use_mare_lora": True,
-        "run_name": "lora_rank4_ar1",
-        "num_generalists": 1,
-        "num_experts": 0,
-    }
-
-    moelora1 = {
-        "use_mare_lora": True,
-        "run_name": "marelora_rank4_ar0_ex8_1/4",
-        "num_generalists": 0,
-        "num_experts": 8,
-    }
-
-    marelora1 = {
-        "use_mare_lora": True,
-        "run_name": "marelora_rank4_ar1_ex_4_1/4",
-        "num_generalists": 1,
-        "num_experts": 4,
-    }
-
-    moelora2 = {
-        "use_mare_lora": True,
-        "run_name": "marelora_rank4_ar0_ex16_1/4",
-        "num_generalists": 0,
-        "num_experts": 16,
-    }
-
-    marelora2 = {
-        "use_mare_lora": True,
-        "run_name": "marelora_rank4_ar2_ex_8_1/4",
-        "num_generalists": 2,
-        "num_experts": 8,
-    }
-
-    exps_to_run = [
-        # original,
-        # mare,
-        # lora,
-        moelora1,
-        marelora1,
-        moelora2,
-        # marelora2,
-    ]
-
-    for exp in exps_to_run:
-        create_model(**common_args, **exp)
+    create_model(
+        use_mare_upcycling=True,
+        num_generalist=1,
+        num_experts=4,
+        run_name="mare_ar2_ex0",
+        **common_args,
+    )
