@@ -18,9 +18,9 @@ def inject_pretrained_weights(
 
     # Inject the pretrained weights
     new_mlp.c_fc_ar.weight.data = c_fc_weight.repeat(num_all_rounders, 1)
-    new_mlp.c_fc_ar.bias.data = c_fc_bias.repeat(num_all_rounders)
+    new_mlp.c_fc_ar.bias.data = c_fc_bias.repeat(1)
     new_mlp.c_fc_ex.weight.data = c_fc_weight.repeat(num_experts, 1)
-    new_mlp.c_fc_ex.bias.data = c_fc_bias.repeat(num_experts)
+    new_mlp.c_fc_ex.bias.data = c_fc_bias.repeat(1)
     new_mlp.c_proj_ar.weight.data = c_proj_weight.repeat(1, num_all_rounders)
     new_mlp.c_proj_ar.bias.data = c_proj_bias.repeat(num_all_rounders)
     new_mlp.c_proj_ex.weight.data = c_proj_weight.repeat(1, num_experts)

@@ -61,7 +61,7 @@ def finetune(
     checkpoint_path = os.path.join(current_dir, "checkpoints", model_name)
 
     wandb_run = wandb.init(
-        project="gated_attention_billsum_mare_vs_full_expert",
+        project="gpt2_billsum",
         name=run_name,
         reinit=True,
     )
@@ -74,8 +74,8 @@ def finetune(
         save_strategy="steps",
         learning_rate=learning_rate,
         warmup_steps=500,
-        per_device_train_batch_size=8,  # 32 for SMALL, 12 for MED
-        per_device_eval_batch_size=24,  # 32 for MED, XL, 64 for SMALL
+        per_device_train_batch_size=32,  # 32 for SMALL, 12 for MED
+        per_device_eval_batch_size=64,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -187,30 +187,30 @@ if __name__ == "__main__":
         "learning_rate": 5e-5,
     }
 
-    create_model(
-        run_name="baseline",
-        **common_args,
-    )
+    # create_model(
+    #     run_name="baseline",
+    #     **common_args,
+    # )
+
+    # create_model(
+    #     use_mare_upcycling=True,
+    #     num_experts=8,
+    #     run_name="moe_ex8_1/4",
+    #     **common_args,
+    # )
 
     create_model(
         use_mare_upcycling=True,
-        num_experts=8,
-        run_name="moe_ex8_1/4",
-        **common_args,
-    )
-
-    create_model(
-        use_mare_upcycling=True,
-        num_generalist=1,
+        num_generalists=1,
         num_experts=4,
         run_name="mare_ar1_ex4_1/4",
         **common_args,
     )
 
-    create_model(
-        use_mare_upcycling=True,
-        num_generalist=1,
-        num_experts=4,
-        run_name="mare_ar2_ex0",
-        **common_args,
-    )
+    # create_model(
+    #     use_mare_upcycling=True,
+    #     num_generalist=1,
+    #     num_experts=4,
+    #     run_name="mare_ar2_ex0",
+    #     **common_args,
+    # )

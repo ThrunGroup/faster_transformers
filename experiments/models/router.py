@@ -8,9 +8,8 @@ class Router(nn.Module):
             nn.Linear(embed_dim, num_heads),  # (B, T, H)
             nn.Softmax(dim=1),
         )
-        self.batch_norm = nn.BatchNorm1d(num_heads)
 
     def forward(self, x):
         x = self.router(x)  # (B, T, H)
-        x = x.permute(0, 2, 1)  # (B, H, T)
+        # x = x.permute(0, 2, 1)  # (B, H, T)
         return x
