@@ -117,7 +117,7 @@ def finetune(
             trainer=trainer,
         )
 
-    if int(os.environ["LOCAL_RANK"]) == 0:
+    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run.finish()
 
 
