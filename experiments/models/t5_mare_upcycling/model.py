@@ -17,8 +17,7 @@ class MAREMLP(T5DenseActDense):
         super().__init__(config)
         embed_dim = config.d_model
         intermediate_size = config.d_ff
-        print("embed dim: ", embed_dim)
-        print("intermediate_size: ", intermediate_size)
+
         self.num_mlps = num_all_rounders + num_experts
         self.num_all_rounders = num_all_rounders
         self.num_experts = num_experts

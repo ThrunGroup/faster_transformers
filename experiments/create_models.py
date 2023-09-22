@@ -22,6 +22,7 @@ from utils.constants import (
 
 
 def finetune(
+    model_type: str,
     model_name: str,
     model,
     tokenizer,
@@ -62,7 +63,7 @@ def finetune(
 
     if init_wandb:
         wandb_run = wandb.init(
-            project="gpt2_billsum",
+            project="t5_billsum",
             name=run_name,
             reinit=True,
         )
@@ -70,13 +71,13 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
-        eval_steps=100,
-        logging_steps=1,
+        eval_steps=50,
+        logging_steps=10,
         save_strategy="steps",
         learning_rate=5e-5,
         warmup_steps=500,
-        per_device_train_batch_size=32,  # 32 for SMALL, 12 for MED
-        per_device_eval_batch_size=64,  # 32 for MED, XL, 64 for SMALL
+        per_device_train_batch_size=64,  # 32 for SMALL, 12 for MED
+        per_device_eval_batch_size=128,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -85,10 +86,12 @@ def finetune(
         report_to="wandb",
         run_name=run_name,
         # for memory issues
-        # gradient_accumulation_steps=2,
-        # deepspeed="ds_config.json",
-        # gradient_checkpointing=True,
-        # bf16=True,
+        gradient_accumulation_steps=2,
+        deepspeed="ds_config.json",
+        gradient_checkpointing=True,
+        bf16=True,
+        # push_to_hub=True,
+        # fp16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -175,6 +178,7 @@ def create_model(
         tokenizer.pad_token = tokenizer.eos_token
 
     finetune(
+        model_type,
         model_name,
         model,
         tokenizer,
@@ -191,7 +195,7 @@ if __name__ == "__main__":
     common_args = {
         "model_type": T5,
         "dataset_name": BILLSUM,
-        "num_epochs": 5,
+        "num_epochs": 6,
         "learning_rate": 5e-5,
     }
 
@@ -200,29 +204,21 @@ if __name__ == "__main__":
     #     **common_args,
     # )
 
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     num_generalists=2,
-    #     num_experts=8,
-    #     capacity_factor=4,
-    #     run_name="c4_mare_ar1_ex12_1/4",
-    #     **common_args,
-    # )
-
     create_model(
         use_mare_upcycling=True,
         capacity_factor=2,
         num_generalists=1,
-        num_experts=4,
+        num_experts=16,
         run_name="c2_mare_ar1_ex16",
+        apply_to_half_layers=True,
         **common_args,
     )
 
     create_model(
         use_mare_upcycling=True,
-        num_generalists=0,
+        num_generalists=2,
         capacity_factor=2,
-        num_experts=16,
+        num_experts=0,
         run_name="c2_dense_2",
         **common_args,
     )
