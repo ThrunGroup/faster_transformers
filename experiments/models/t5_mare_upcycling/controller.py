@@ -1,4 +1,5 @@
-# from .model import MAREMLP
+import torch
+
 from experiments.models.t5_mare_upcycling.model import MAREMLP
 
 
@@ -17,7 +18,9 @@ def inject_pretrained_weights(
     # Inject the pretrained weights
     if num_all_rounders:
         new_mlp.wi_ar.weight.data = wi.repeat(1, num_all_rounders)
+        new_mlp.wi_ar.weight.data += torch.randn_like(new_mlp.wi_ar.weight) * 2
         new_mlp.wo_ar.weight.data = wo.repeat(num_all_rounders, 1)
+        new_mlp.wo_ar.weight.data += torch.randn_like(new_mlp.wo_ar.weight) * 2
 
     if num_experts:
         new_mlp.wi_ex.weight.data = wi.repeat(1, num_experts)

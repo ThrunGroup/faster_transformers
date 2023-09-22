@@ -71,8 +71,8 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
-        eval_steps=50,
-        logging_steps=10,
+        eval_steps=20,
+        logging_steps=4,
         save_strategy="steps",
         learning_rate=5e-5,
         warmup_steps=500,
@@ -204,15 +204,15 @@ if __name__ == "__main__":
     #     **common_args,
     # )
 
-    create_model(
-        use_mare_upcycling=True,
-        capacity_factor=2,
-        num_generalists=1,
-        num_experts=16,
-        run_name="c2_mare_ar1_ex16",
-        apply_to_half_layers=True,
-        **common_args,
-    )
+    # create_model(
+    #     use_mare_upcycling=True,
+    #     capacity_factor=2,
+    #     num_generalists=1,
+    #     num_experts=16,
+    #     run_name="c2_mare_ar1_ex16",
+    #     apply_to_half_layers=True,
+    #     **common_args,
+    # )
 
     create_model(
         use_mare_upcycling=True,
@@ -223,25 +223,14 @@ if __name__ == "__main__":
         **common_args,
     )
 
-    # do
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     num_generalists=1,
-    #     capacity_factor=2,
-    #     num_experts=2,
-    #     run_name="c2_mare_1ar_ex16_1/32",
-    #     **common_args,
-    # )
-
-    # needs some updates. training is very unstable.
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     capacity_factor=2,
-    #     num_generalists=2,
-    #     num_experts=0,
-    #     run_name="c2_moe_soft_ar2",
-    #     **common_args,
-    # )
+    create_model(
+        use_mare_upcycling=True,
+        capacity_factor=2,
+        num_generalists=0,
+        num_experts=32,
+        run_name="c2_moe_ex32",
+        **common_args,
+    )
 
     # create_model(
     #     use_mare_upcycling=True,
