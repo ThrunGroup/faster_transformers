@@ -74,7 +74,7 @@ def get_dataset(dataset_name: str, model_name: str, tokenizer, model):
         else:
             dataset = load_dataset(dataset_name)
         tokenized_dataset = dataset.map(
-            lambda x: convert_to_t5_format(x, dataset, tokenizer),
+            lambda x: convert_to_t5_format(x, dataset_name, tokenizer),
             remove_columns=dataset.column_names["train"],
         )
         dataset = Dataset(tokenizer, model)
