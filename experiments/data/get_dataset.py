@@ -4,6 +4,7 @@ from .get_squad_dataset import SQuAD
 from .get_openwebtext_dataset import OpenWebText
 from .get_sst2_dataset import SST2_Dataset
 from .get_samsum_dataset_ import Samsum
+from .get_default_dataset import DefaultDataset
 from utils.constants import BILLSUM, SQUAD, OPENWEBTEXT, SST2, SAMSUM, QNLI, COLA
 
 from transformers import (
@@ -77,7 +78,7 @@ def get_dataset(dataset_name: str, model_name: str, tokenizer, model):
             lambda x: convert_to_t5_format(x, dataset_name, tokenizer),
             remove_columns=dataset.column_names["train"],
         )
-        dataset = Dataset(tokenizer, model)
+        dataset = DefaultDataset(tokenizer, model)
 
         def get_tokenized_dataset(self):
             return tokenized_dataset["train"], tokenized_dataset["validation"]
@@ -88,10 +89,20 @@ def get_dataset(dataset_name: str, model_name: str, tokenizer, model):
         def compute_metrics(self):
             return None
 
+        def get_data_collator(self):
+            data_collator = DataCollatorForSeq2Seq(
+                tokenizer=tokenizer,
+                padding=True,
+                max_length=512,
+            )
+            return data_collator
+
         # Override functions defined in class
         dataset.get_tokenized_dataset = get_tokenized_dataset.__get__(dataset, Dataset)
         dataset.preprocess = preprocess.__get__(dataset, Dataset)
         dataset.compute_metrics = compute_metrics.__get__(dataset, Dataset)
+        dataset.get_data_collator = get_data_collator.__get__(dataset, Dataset)
+
 
     else:
         if dataset_name == BILLSUM:
