@@ -129,6 +129,7 @@ def create_model(
     use_mare_lora: bool = False,
     use_mare_attention: bool = False,
     use_lora: bool = False,
+    apply_to_half_layers: bool = False,
     do_evaluation: bool = True,
     **kwargs,
 ):
@@ -156,6 +157,7 @@ def create_model(
         use_mare_attention=use_mare_attention,
         random_token_selection=random_token_selection,
         capacity_factor=capacity_factor,
+        apply_to_half_layers=apply_to_half_layers,
         **kwargs,
     )
     model.config.pad_token_id = model.config.eos_token_id
@@ -200,10 +202,19 @@ if __name__ == "__main__":
 
     create_model(
         use_mare_upcycling=True,
+        capacity_factor=2,
+        num_generalists=1,
+        num_experts=16,
+        run_name="c2_mare_ar1_ex16",
+        **common_args,
+    )
+
+    create_model(
+        use_mare_upcycling=True,
         num_generalists=0,
         capacity_factor=2,
-        num_experts=32,
-        run_name="c2_moe_ex32",
+        num_experts=16,
+        run_name="c2_dense_2",
         **common_args,
     )
 

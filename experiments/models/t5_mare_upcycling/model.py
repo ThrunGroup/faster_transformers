@@ -1,7 +1,6 @@
 import torch
 from torch import nn
 from transformers.models.t5.modeling_t5 import T5DenseActDense
-from transformers.activations import ACT2FN
 from typing import Optional, Tuple
 
 from experiments.models.router import Router
@@ -63,11 +62,11 @@ class MAREMLP(T5DenseActDense):
                 B, T, self.num_all_rounders, self.embed_dim
             )  # (B, T, G, C)
 
-            if self.num_all_rounders > 1:
-                ar_router = self.ar_router(hidden_states).unsqueeze(
-                    -1
-                )  # (B, T, G, 1)
-                ar_hidden_states = ar_hidden_states * ar_router  # (B, T, G, C)
+            # if self.num_all_rounders > 1:
+            ar_router = self.ar_router(hidden_states).unsqueeze(
+                -1
+            )  # (B, T, G, 1)
+            ar_hidden_states = ar_hidden_states * ar_router  # (B, T, G, C)
 
             ar_hidden_states = ar_hidden_states.sum(dim=2)  # (B, T, C)
 

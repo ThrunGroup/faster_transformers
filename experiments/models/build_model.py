@@ -63,6 +63,7 @@ def build_model(
     random_token_selection: bool = False,
     num_generalists: int = 0,
     num_experts: int = 0,
+    apply_to_half_layers: bool = False,
 ):
     config, model = get_model(model_type, dataset_type)
 
@@ -81,7 +82,12 @@ def build_model(
             else apply_mare_upcycling_t5
         )
         function_to_apply(
-            model, config, num_generalists, num_experts, capacity_factor
+            model,
+            config,
+            num_generalists,
+            num_experts,
+            capacity_factor,
+            apply_to_half_layers,
         )
 
     if use_mare_lora:

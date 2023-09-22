@@ -37,6 +37,7 @@ def apply_mare_upcycling_gpt2(
     num_generalists: int = 0,
     num_experts: int = 0,
     capacity_factor: int = 0,
+    apply_to_half_layers: bool = False,
 ):
     print("Applying MARE Upcycling...")
     print(
