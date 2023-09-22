@@ -186,7 +186,7 @@ def create_model(
 if __name__ == "__main__":
     common_args = {
         "model_type": T5,
-        "dataset_name": COLA,
+        "dataset_name": BILLSUM,
         "num_epochs": 5,
         "learning_rate": 5e-5,
     }
