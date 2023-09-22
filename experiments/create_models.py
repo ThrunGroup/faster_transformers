@@ -13,10 +13,13 @@ from models.build_model import build_model
 from utils.constants import (
     # Models
     GPT2,
+    T5,
     # Datasets
     # SST2,
     SAMSUM,
     BILLSUM,
+    SQUAD,
+    QNLI,
 )
 
 
@@ -180,8 +183,8 @@ def create_model(
 
 if __name__ == "__main__":
     common_args = {
-        "model_type": GPT2,
-        "dataset_name": BILLSUM,
+        "model_type": T5,
+        "dataset_name": SQUAD,
         "num_epochs": 5,
         "learning_rate": 5e-5,
     }

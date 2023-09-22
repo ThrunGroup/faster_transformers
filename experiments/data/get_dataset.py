@@ -1,3 +1,4 @@
+from .dataset import Dataset
 from .get_billsum_dataset import Billsum
 from .get_squad_dataset import SQuAD
 from .get_openwebtext_dataset import OpenWebText
@@ -36,7 +37,7 @@ def convert_to_t5_format(example, task, tokenizer):
         )
         target_text = example["answers"]["text"]
     else:
-        raise ValueError("Invalid task")
+        raise ValueError(f"Invalid task ({task})")
     return {
         "input_text": source_text,
         "target_text": target_text,
@@ -62,6 +63,7 @@ def get_dataset(dataset_name: str, model_name: str, tokenizer, model):
     Tokenize a dataset and get additional data collator and metrics necessary for training the models
 
     :param dataset_name: Name of the dataset to build
+    :param model_name: Name of the model
     :param tokenizer: Tokenizer to tokenize the inputs
     :param model: Model to finetune / evaluate
     :return: tokenized dataset, data collator, and compute_metrics function
@@ -71,10 +73,25 @@ def get_dataset(dataset_name: str, model_name: str, tokenizer, model):
             dataset = load_dataset("glue", dataset_name)
         else:
             dataset = load_dataset(dataset_name)
-        dataset = dataset.map(
+        tokenized_dataset = dataset.map(
             lambda x: convert_to_t5_format(x, dataset, tokenizer),
             remove_columns=dataset.column_names["train"],
         )
+        dataset = Dataset(tokenizer, model)
+
+        def get_tokenized_dataset(self):
+            return tokenized_dataset["train"], tokenized_dataset["validation"]
+
+        def preprocess(self):
+            return None
+
+        def compute_metrics(self):
+            return None
+
+        # Override functions defined in class
+        dataset.get_tokenized_dataset = get_tokenized_dataset.__get__(dataset, Dataset)
+        dataset.preprocess = preprocess.__get__(dataset, Dataset)
+        dataset.compute_metrics = compute_metrics.__get__(dataset, Dataset)
 
     else:
         if dataset_name == BILLSUM:
