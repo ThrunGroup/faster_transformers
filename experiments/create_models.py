@@ -60,22 +60,23 @@ def finetune(
     current_dir = os.path.dirname(os.path.abspath(__file__))
     checkpoint_path = os.path.join(current_dir, "checkpoints", model_name)
 
-    wandb_run = wandb.init(
-        project="gpt2_billsum",
-        name=run_name,
-        reinit=True,
-    )
+    if int(os.environ["LOCAL_RANK"]) == 0:
+        wandb_run = wandb.init(
+            project="gpt2_billsum",
+            name=run_name,
+            reinit=True,
+        )
 
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
         eval_steps=100,
-        logging_steps=25,
+        logging_steps=1,
         save_strategy="steps",
-        learning_rate=learning_rate,
+        learning_rate=5e-5,
         warmup_steps=500,
-        per_device_train_batch_size=12,  # 32 for SMALL, 12 for MED
-        per_device_eval_batch_size=40,  # 32 for MED, XL, 64 for SMALL
+        per_device_train_batch_size=64,  # 32 for SMALL, 12 for MED
+        per_device_eval_batch_size=96,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -85,8 +86,9 @@ def finetune(
         run_name=run_name,
         # for memory issues
         # gradient_accumulation_steps=2,
-        # gradient_checkpointing=True,
-        fp16=True,
+        deepspeed="ds_config.json",
+        gradient_checkpointing=True,
+        bf16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -120,7 +122,8 @@ def finetune(
             trainer=trainer,
         )
 
-    wandb_run.finish()
+    if int(os.environ["LOCAL_RANK"]) == 0:
+        wandb_run.finish()
 
 
 def create_model(
@@ -203,24 +206,34 @@ if __name__ == "__main__":
     #     **common_args,
     # )
 
+    create_model(
+        use_mare_upcycling=True,
+        num_generalists=0,
+        capacity_factor=2,
+        num_experts=32,
+        run_name="c2_moe_ex32",
+        **common_args,
+    )
+
+    # do
     # create_model(
     #     use_mare_upcycling=True,
     #     num_generalists=1,
     #     capacity_factor=2,
-    #     num_experts=4,
-    #     run_name="c2_mare_ar1_ex4_1/4_soft",
+    #     num_experts=2,
+    #     run_name="c2_mare_1ar_ex16_1/32",
     #     **common_args,
     # )
 
-    #do
-    create_model(
-        use_mare_upcycling=True,
-        capacity_factor=2,
-        num_generalists=2,
-        num_experts=0,
-        run_name="c2_moe_soft_ar2",
-        **common_args,
-    )
+    # needs some updates. training is very unstable.
+    # create_model(
+    #     use_mare_upcycling=True,
+    #     capacity_factor=2,
+    #     num_generalists=2,
+    #     num_experts=0,
+    #     run_name="c2_moe_soft_ar2",
+    #     **common_args,
+    # )
 
     # create_model(
     #     use_mare_upcycling=True,

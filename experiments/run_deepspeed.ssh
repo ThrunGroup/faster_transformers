@@ -1,0 +1,1 @@
+deepspeed experiments/create_models.py --per_device_train_batch_size 4 --per_device_test_batch_size 32 --fp16
