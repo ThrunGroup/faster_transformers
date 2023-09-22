@@ -42,3 +42,4 @@ chex>=0.1.7
 py7zr
 accelerate
 wandb
+deepspeed
