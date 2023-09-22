@@ -55,7 +55,7 @@ def finetune(
     current_dir = os.path.dirname(os.path.abspath(__file__))
     checkpoint_path = os.path.join(current_dir, "checkpoints", model_name)
 
-    if int(os.environ["LOCAL_RANK"]) == 0:
+    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
             project="gpt2_billsum",
             name=run_name,
