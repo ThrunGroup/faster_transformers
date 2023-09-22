@@ -69,7 +69,7 @@ def get_dataset(dataset_name: str, model_name: str, tokenizer, model):
     :param model: Model to finetune / evaluate
     :return: tokenized dataset, data collator, and compute_metrics function
     """
-    if "t5" in model_name:
+    if "t5" in model_name and dataset_name in [QNLI, SST2, COLA, SQUAD]:
         if dataset_name in [QNLI, SST2, COLA]:
             dataset = load_dataset("glue", dataset_name)
         else:
