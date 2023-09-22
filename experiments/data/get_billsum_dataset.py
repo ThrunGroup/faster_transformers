@@ -34,9 +34,9 @@ class Billsum(Dataset):
         """
         try:
             # Try to load preprocessed data
-            with open("tokenized_train_dataset.pkl", "rb") as f:
+            with open(f"{self.model}_tokenized_train_dataset.pkl", "rb") as f:
                 train_dataset = pickle.load(f)
-            with open("tokenized_test_dataset.pkl", "rb") as f:
+            with open(f"{self.model}_tokenized_test_dataset.pkl", "rb") as f:
                 test_dataset = pickle.load(f)
             print("Loaded preprocessed data from disk.")
 
@@ -52,9 +52,9 @@ class Billsum(Dataset):
             test_dataset = tokenized_dataset["test"]
 
             # Save the preprocessed data
-            with open("tokenized_train_dataset.pkl", "wb") as f:
+            with open(f"{self.model}_tokenized_train_dataset.pkl", "wb") as f:
                 pickle.dump(train_dataset, f)
-            with open("tokenized_test_dataset.pkl", "wb") as f:
+            with open(f"{self.model}_tokenized_test_dataset.pkl", "wb") as f:
                 pickle.dump(test_dataset, f)
             print("Preprocessed and saved data to disk.")
 

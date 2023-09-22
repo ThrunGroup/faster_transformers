@@ -1,6 +1,7 @@
 from transformers import (
     GPT2Config,
     T5Config,
+    GPT2LMHeadModel,
     AutoModelForSeq2SeqLM,
     AutoModelForQuestionAnswering,
     AutoModelForSequenceClassification,
@@ -43,6 +44,8 @@ def get_model(model_type, dataset_type):
     # get model
     if dataset_type in [BILLSUM, SAMSUM]:
         model = AutoModelForSeq2SeqLM
+        if GPT2 in model_type:
+            model = GPT2LMHeadModel
     elif dataset_type in [SQUAD]:
         model = AutoModelForQuestionAnswering
     else:

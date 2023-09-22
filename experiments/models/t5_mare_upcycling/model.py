@@ -17,6 +17,8 @@ class MAREMLP(T5DenseActDense):
         super().__init__(config)
         embed_dim = config.d_model
         intermediate_size = config.d_ff
+        print("embed dim: ", embed_dim)
+        print("intermediate_size: ", intermediate_size)
         self.num_mlps = num_all_rounders + num_experts
         self.num_all_rounders = num_all_rounders
         self.num_experts = num_experts
@@ -24,16 +26,20 @@ class MAREMLP(T5DenseActDense):
 
         if num_all_rounders:
             self.wi_ar = nn.Linear(
-                num_all_rounders * embed_dim, intermediate_size
+                num_all_rounders * embed_dim, intermediate_size, bias=False
             )
             self.wo_ar = nn.Linear(
-                intermediate_size, num_all_rounders * embed_dim
+                intermediate_size, num_all_rounders * embed_dim, bias=False
             )
             self.ar_router = Router(embed_dim, num_all_rounders)
 
         if num_experts:
-            self.wi_ex = nn.Linear(num_experts * embed_dim, intermediate_size)
-            self.wo_ex = nn.Linear(intermediate_size, num_experts * embed_dim)
+            self.wi_ex = nn.Linear(
+                num_experts * embed_dim, intermediate_size, bias=False
+            )
+            self.wo_ex = nn.Linear(
+                intermediate_size, num_experts * embed_dim, bias=False
+            )
             self.ex_router = Router(embed_dim, num_experts)
 
         self.embed_dim = embed_dim
@@ -63,10 +69,10 @@ class MAREMLP(T5DenseActDense):
             )  # (B, T, G, C)
 
             # if self.num_all_rounders > 1:
-            ar_router = self.ar_router(hidden_states).unsqueeze(
-                -1
-            )  # (B, T, G, 1)
-            ar_hidden_states = ar_hidden_states * ar_router  # (B, T, G, C)
+            #     ar_router = self.ar_router(hidden_states).unsqueeze(
+            #         -1
+            #     )  # (B, T, G, 1)
+            #     ar_hidden_states = ar_hidden_states * ar_router  # (B, T, G, C)
 
             ar_hidden_states = ar_hidden_states.sum(dim=2)  # (B, T, C)
 
@@ -131,4 +137,5 @@ class MAREMLP(T5DenseActDense):
             hidden_states = ar_hidden_states
         else:
             hidden_states = ex_hidden_states
+
         return hidden_states

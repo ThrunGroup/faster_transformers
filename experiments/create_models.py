@@ -13,6 +13,7 @@ from models.build_model import build_model
 from utils.constants import (
     # Models
     GPT2,
+    T5,
     # Datasets
     # SST2,
     SAMSUM,
@@ -44,7 +45,8 @@ def finetune(
     :param do_evaluation: Whether to evaluate the model after training and save the metrics
     :returns: Dictionary of evaluation metrics and inference time if `do_evaluation` is true
     """
-    dataset = get_dataset(dataset_name, tokenizer, model)
+    print("Finetuning started...")
+    dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, test_dataset = dataset.get_tokenized_dataset()
     data_collator = dataset.get_data_collator()
     # compute_metrics = dataset.get_compute_metrics()
@@ -52,7 +54,13 @@ def finetune(
     current_dir = os.path.dirname(os.path.abspath(__file__))
     checkpoint_path = os.path.join(current_dir, "checkpoints", model_name)
 
-    if int(os.environ["LOCAL_RANK"]) == 0:
+    init_wandb = True
+    try:
+        init_wandb = int(os.environ["LOCAL_RANK"]) == 0
+    except:
+        pass
+
+    if init_wandb:
         wandb_run = wandb.init(
             project="gpt2_billsum",
             name=run_name,
@@ -67,8 +75,8 @@ def finetune(
         save_strategy="steps",
         learning_rate=5e-5,
         warmup_steps=500,
-        per_device_train_batch_size=64,  # 32 for SMALL, 12 for MED
-        per_device_eval_batch_size=96,  # 32 for MED, XL, 64 for SMALL
+        per_device_train_batch_size=32,  # 32 for SMALL, 12 for MED
+        per_device_eval_batch_size=64,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -78,9 +86,9 @@ def finetune(
         run_name=run_name,
         # for memory issues
         # gradient_accumulation_steps=2,
-        deepspeed="ds_config.json",
-        gradient_checkpointing=True,
-        bf16=True,
+        # deepspeed="ds_config.json",
+        # gradient_checkpointing=True,
+        # bf16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -163,7 +171,8 @@ def create_model(
     model.config.pad_token_id = model.config.eos_token_id
 
     tokenizer = AutoTokenizer.from_pretrained(model_type)
-    tokenizer.pad_token = tokenizer.eos_token
+    if GPT2 in model_type:
+        tokenizer.pad_token = tokenizer.eos_token
 
     finetune(
         model_name,
@@ -180,7 +189,7 @@ def create_model(
 
 if __name__ == "__main__":
     common_args = {
-        "model_type": GPT2,
+        "model_type": T5,
         "dataset_name": BILLSUM,
         "num_epochs": 5,
         "learning_rate": 5e-5,
@@ -204,7 +213,7 @@ if __name__ == "__main__":
         use_mare_upcycling=True,
         capacity_factor=2,
         num_generalists=1,
-        num_experts=16,
+        num_experts=4,
         run_name="c2_mare_ar1_ex16",
         **common_args,
     )

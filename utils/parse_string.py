@@ -1,4 +1,4 @@
-from utils.constants import TRANSFORMER_XL, GPT2, GPT2_MEDIUM
+from utils.constants import GPT2, GPT2_MEDIUM
 
 
 def parse_string(s: str = None):
@@ -28,7 +28,7 @@ def parse_string(s: str = None):
 
 
 def get_model_type(model_name: str = None):
-    model_types = [GPT2_MEDIUM, GPT2, TRANSFORMER_XL]
+    model_types = [GPT2_MEDIUM, GPT2]
 
     for model_type in model_types:
         if model_type in model_name:
