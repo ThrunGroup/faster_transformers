@@ -4,9 +4,14 @@ from .model import MAREMLP
 def inject_pretrained_weights(
     new_mlp,
     original_block,
+    config,
     num_all_rounders: int = 0,
     num_experts: int = 0,
+    random_noise_std: float = 1e-3,
 ):
+    # Parameter list
+    params_list = []
+
     # Multiply the first layer
     c_fc_weight = original_block.mlp.c_fc.weight.data  # (in, out)
     c_fc_bias = original_block.mlp.c_fc.bias.data
@@ -19,17 +24,32 @@ def inject_pretrained_weights(
     if num_all_rounders:
         new_mlp.c_fc_ar.weight.data = c_fc_weight.repeat(num_all_rounders, 1)
         new_mlp.c_fc_ar.bias.data = c_fc_bias.repeat(1)
-        new_mlp.c_proj_ar.weight.data = c_proj_weight.repeat(
-            1, num_all_rounders
-        )
+        new_mlp.c_proj_ar.weight.data = c_proj_weight.repeat(1, num_all_rounders)
         new_mlp.c_proj_ar.bias.data = c_proj_bias.repeat(num_all_rounders)
+        params_list += [
+            new_mlp.c_fc_ar.weight,
+            new_mlp.c_fc_ar.bias,
+            new_mlp.c_proj_ar.weight,
+            new_mlp.c_proj_ar.bias,
+        ]
 
     if num_experts:
         new_mlp.c_fc_ex.weight.data = c_fc_weight.repeat(num_experts, 1)
         new_mlp.c_fc_ex.bias.data = c_fc_bias.repeat(1)
         new_mlp.c_proj_ex.weight.data = c_proj_weight.repeat(1, num_experts)
         new_mlp.c_proj_ex.bias.data = c_proj_bias.repeat(num_experts)
+        params_list += [
+            new_mlp.c_fc_ex.weight,
+            new_mlp.c_fc_ex.bias,
+            new_mlp.c_proj_ex.weight,
+            new_mlp.c_proj_ex.bias,
+        ]
 
+    # Inject randomness on each expert
+    if random_noise_std:
+        for param in params_list:
+            with torch.no_grad():
+                param += torch.normal(mean=0, std=random_noise_std, size=param.shape)
 
 def apply_mare_upcycling_gpt2(
     model,

@@ -44,7 +44,7 @@ def finetune(
     :param do_evaluation: Whether to evaluate the model after training and save the metrics
     :returns: Dictionary of evaluation metrics and inference time if `do_evaluation` is true
     """
-    dataset = get_dataset(dataset_name, tokenizer, model)
+    dataset = get_dataset(dataset_name, model_name, tokenizer, model)
     train_dataset, test_dataset = dataset.get_tokenized_dataset()
     data_collator = dataset.get_data_collator()
     # compute_metrics = dataset.get_compute_metrics()

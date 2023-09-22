@@ -1,14 +1,17 @@
-from transformers import DataCollatorForSeq2Seq, AutoTokenizer
+from transformers import DefaultDataCollator, AutoTokenizer, EvalPrediction
 from datasets import load_dataset
 from sklearn.metrics import accuracy_score, f1_score
+import evaluate
+import torch
 
 from .dataset import Dataset
 
 
 class SQuAD(Dataset):
-    def __init__(self, tokenizer, model):
-        self.tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
-        super().__init__(self.tokenizer, model)
+    def __init__(self, tokenizer, model, metrics="f1"):
+        super().__init__(tokenizer, model)
+        self.metrics = evaluate.load(metrics)
+        self.config = model.config
 
     def get_tokenized_dataset(self):
         """
@@ -17,7 +20,7 @@ class SQuAD(Dataset):
         :param model: Model to finetune / evaluate
         :return: tokenized dataset, data collator, and compute_metrics function
         """
-        squad = load_dataset("squad", split="train[:50]")
+        squad = load_dataset("squad")
         dataset = squad.train_test_split(test_size=0.2)
 
         tokenized_dataset = dataset.map(self.preprocess, batched=True)
@@ -25,18 +28,21 @@ class SQuAD(Dataset):
         return tokenized_dataset
 
     def get_data_collator(self):
-        data_collator = DataCollatorForSeq2Seq(tokenizer=self.tokenizer, model=self.model)
+        data_collator = DefaultDataCollator(tokenizer=self.tokenizer, model=self.model)
         return data_collator
 
     def get_compute_metrics(self):
         return self.compute_metrics
 
-    def compute_metrics(self, eval_pred, eval_labels):
+    def compute_metrics(self, eval_pred: EvalPrediction):
+        logits, labels = eval_pred
+        predictions = torch.argmax(logits, dim=-1)
+
         # Compute accuracy
-        accuracy = accuracy_score(eval_labels, eval_pred.argmax(axis=1))
+        accuracy = accuracy_score(labels, predictions)
 
         # Compute f1 score
-        f1 = f1_score(eval_labels, eval_pred.argmax(axis=1))
+        f1 = f1_score(labels, predictions)
 
         # Return a dictionary of metrics
         return {
@@ -49,7 +55,7 @@ class SQuAD(Dataset):
         inputs = self.tokenizer(
             questions,
             examples["context"],
-            max_length=384,
+            max_length=512,
             truncation="only_second",
             return_offsets_mapping=True,
             padding="max_length",

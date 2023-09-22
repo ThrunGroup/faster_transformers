@@ -4,6 +4,7 @@ from transformers import (
     AutoModelForSeq2SeqLM,
     AutoModelForQuestionAnswering,
     AutoModelForSequenceClassification,
+    T5ForConditionalGeneration,
 )
 import torch
 
@@ -41,7 +42,9 @@ def get_model(model_type, dataset_type):
     config = config.from_pretrained(model_type)
 
     # get model
-    if dataset_type in [BILLSUM, SAMSUM]:
+    if "t5" in model_type:
+        model = T5ForConditionalGeneration
+    elif dataset_type in [BILLSUM, SAMSUM]:
         model = AutoModelForSeq2SeqLM
     elif dataset_type in [SQUAD]:
         model = AutoModelForQuestionAnswering
