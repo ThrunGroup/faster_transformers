@@ -20,6 +20,8 @@ from utils.constants import (
     BILLSUM,
     SQUAD,
     QNLI,
+    SST2,
+    COLA,
 )
 
 
@@ -184,7 +186,7 @@ def create_model(
 if __name__ == "__main__":
     common_args = {
         "model_type": T5,
-        "dataset_name": SQUAD,
+        "dataset_name": COLA,
         "num_epochs": 5,
         "learning_rate": 5e-5,
     }
