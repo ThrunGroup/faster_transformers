@@ -11,17 +11,9 @@ from data.get_dataset import get_dataset
 from evaluate_models import evaluate_model
 from models.build_model import build_model
 from utils.constants import (
-    # Accelerators
-    SVD,
     # Models
     GPT2,
-    # GPT2_MEDIUM,
-    GPT2_XL,
-    # Parameters
-    NUM_BLOCKS_GPT2,
-    NUM_BLOCKS_GPT2_MEDIUM,
     # Datasets
-    # BILLSUM,
     # SST2,
     SAMSUM,
     BILLSUM,
@@ -159,8 +151,8 @@ def create_model(
 
     model = build_model(
         model_type,
+        dataset_name,
         use_mare_lora=use_mare_lora,
-        use_lora=use_lora,
         use_mare_attention=use_mare_attention,
         random_token_selection=random_token_selection,
         capacity_factor=capacity_factor,
