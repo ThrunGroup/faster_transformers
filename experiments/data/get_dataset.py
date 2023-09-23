@@ -25,8 +25,6 @@ from transformers import (
 )
 from datasets import load_dataset
 
-import torch
-
 
 def convert_to_t5_format(example, task, tokenizer):
     if task == "qnli":
@@ -109,7 +107,7 @@ def get_dataset(dataset_name: str, model_type: str, tokenizer, model):
             data_collator = DataCollatorForSeq2Seq(
                 tokenizer=tokenizer,
                 padding=True,
-                max_length=512,
+                max_length=384,
             )
             return data_collator
 

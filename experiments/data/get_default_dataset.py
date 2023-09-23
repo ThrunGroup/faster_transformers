@@ -7,8 +7,8 @@ from .dataset import Dataset
 
 
 class DefaultDataset(Dataset):
-    def __init__(self, tokenizer, model=None):
-        super().__init__(tokenizer, model)
+    def __init__(self, tokenizer, model=None, model_type: str = ""):
+        super().__init__(tokenizer, model, model_type)
 
     def get_tokenized_dataset(self):
         return None

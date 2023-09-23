@@ -1,10 +1,11 @@
 from transformers import (
     GPT2Config,
+    GPT2LMHeadModel,
     T5Config,
+    T5ForQuestionAnswering,
     AutoModelForSeq2SeqLM,
     AutoModelForQuestionAnswering,
     AutoModelForSequenceClassification,
-    T5ForConditionalGeneration,
 )
 import torch
 
@@ -42,16 +43,18 @@ def get_model(model_type, dataset_type):
     config = config.from_pretrained(model_type)
 
     # get model
-    if "t5" in model_type:
-        model = T5ForConditionalGeneration
-    elif dataset_type in [BILLSUM, SAMSUM]:
+    if dataset_type in [BILLSUM, SAMSUM]:
         model = AutoModelForSeq2SeqLM
+        if GPT2 in model_type:
+            model = GPT2LMHeadModel
     elif dataset_type in [SQUAD]:
         model = AutoModelForQuestionAnswering
+        # if "t5" in model_type:
+        #     model = T5ForQuestionAnswering
     else:
         # GLUE
         model = AutoModelForSequenceClassification
-    model = model.from_pretrained(model_type, config=config)
+    model = model.from_pretrained(model_type)
 
     return config, model
 
