@@ -1,6 +1,7 @@
-from transformers import DataCollatorForSeq2Seq, AutoTokenizer
+from transformers import DataCollatorForSeq2Seq
 import evaluate
 import numpy as np
+import torch
 from datasets import load_dataset
 import pickle
 
@@ -60,17 +61,13 @@ class Billsum(Dataset):
 
         return train_dataset, test_dataset
 
-    # def get_tokenized_dataset(self):
-    # """
-    # Load and build a simple summarization dataset
-    # :return: tokenized dataset, data collator, and compute_metrics function
-    # """
-    # dataset = load_dataset("billsum", split="train",)
-    # dataset = dataset.train_test_split(test_size=0.1)
-
-    # tokenized_dataset = dataset.map(self.preprocess, batched=True)
-
-    # return tokenized_dataset["train"], tokenized_dataset["test"]
+    def preprocess_logits_for_metrics(self, logits, labels):
+        """
+        Original Trainer may have a memory leak.
+        This is a workaround to avoid storing too many tensors that are not needed.
+        """
+        pred_ids = torch.argmax(logits[0], dim=-1)
+        return pred_ids, labels
 
     def get_data_collator(self):
         """
@@ -107,9 +104,10 @@ class Billsum(Dataset):
 
         return model_inputs
 
-    def compute_metrics(self, eval_pred):
-        predictions, labels = eval_pred
-        predictions = np.argmax(predictions, axis=-1)
+    def compute_metrics(self, pred):
+        labels = pred.label_ids
+        predictions = pred.predictions[0]
+        # predictions = np.argmax(predictions, axis=-1)
         decoded_preds = self.tokenizer.batch_decode(
             predictions, skip_special_tokens=True
         )

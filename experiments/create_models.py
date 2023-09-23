@@ -50,7 +50,8 @@ def finetune(
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, test_dataset = dataset.get_tokenized_dataset()
     data_collator = dataset.get_data_collator()
-    # compute_metrics = dataset.get_compute_metrics()
+    compute_metrics = dataset.get_compute_metrics()
+    preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     checkpoint_path = os.path.join(current_dir, "checkpoints", model_name)
@@ -69,15 +70,15 @@ def finetune(
         )
 
     training_args = TrainingArguments(
-        output_dir=checkpoint_path,
+        output_dir=model_name + "_" + run_name,
         evaluation_strategy="steps",
-        eval_steps=20,
-        logging_steps=4,
+        eval_steps=50,
+        logging_steps=10,
         save_strategy="steps",
         learning_rate=5e-5,
         warmup_steps=500,
-        per_device_train_batch_size=64,  # 32 for SMALL, 12 for MED
-        per_device_eval_batch_size=128,  # 32 for MED, XL, 64 for SMALL
+        per_device_train_batch_size=32,  # 32 for SMALL, 12 for MED
+        per_device_eval_batch_size=144,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -90,7 +91,7 @@ def finetune(
         deepspeed="ds_config.json",
         gradient_checkpointing=True,
         bf16=True,
-        # push_to_hub=True,
+        push_to_hub=True,
         # fp16=True,
     )
 
@@ -105,7 +106,8 @@ def finetune(
         eval_dataset=test_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        # compute_metrics=compute_metrics,
+        compute_metrics=compute_metrics,
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         callbacks=[early_stopping],
     )
 
@@ -155,11 +157,7 @@ def create_model(
     :return: Dictionary of evaluation logs if `do_evaluation` is true
     """
     # Build a Gated Attention model
-    model_name = model_type
-    if use_lora:
-        model_name += "_lora"
-    if use_mare_attention:
-        model_name += "_gated"
+    model_name = model_type + "_" + run_name
 
     model = build_model(
         model_type,
@@ -220,17 +218,18 @@ if __name__ == "__main__":
         capacity_factor=2,
         num_experts=0,
         run_name="c2_dense_2",
+        apply_to_half_layers=True,
         **common_args,
     )
 
-    create_model(
-        use_mare_upcycling=True,
-        capacity_factor=2,
-        num_generalists=0,
-        num_experts=32,
-        run_name="c2_moe_ex32",
-        **common_args,
-    )
+    # create_model(
+    #     use_mare_upcycling=True,
+    #     capacity_factor=2,
+    #     num_generalists=0,
+    #     num_experts=32,
+    #     run_name="c2_moe_ex32",
+    #     **common_args,
+    # )
 
     # create_model(
     #     use_mare_upcycling=True,
