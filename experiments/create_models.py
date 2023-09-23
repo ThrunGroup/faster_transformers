@@ -207,14 +207,14 @@ if __name__ == "__main__":
     #     **common_args,
     # )
 
-    create_model(
-        use_mare_upcycling=True,
-        capacity_factor=2,
-        num_generalists=1,
-        num_experts=8,
-        run_name="cola_c2_mare_ar1_ex8",
-        **common_args,
-    )
+    # create_model(
+    #     use_mare_upcycling=True,
+    #     capacity_factor=2,
+    #     num_generalists=1,
+    #     num_experts=8,
+    #     run_name="cola_c2_mare_ar1_ex8",
+    #     **common_args,
+    # )
     create_model(
         use_mare_upcycling=True,
         capacity_factor=2,
