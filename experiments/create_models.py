@@ -97,7 +97,7 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
-        eval_steps=10,
+        eval_steps=5,
         logging_steps=1,
         save_strategy="steps",
         learning_rate=5e-5,
@@ -225,6 +225,31 @@ if __name__ == "__main__":
         "num_epochs": 5,
         "learning_rate": 5e-5,
     }
+    create_model(
+        use_mare_upcycling=True,
+        num_generalists=0,
+        capacity_factor=2,
+        num_experts=16,
+        run_name="cola_c2_mare_ex16",
+        **common_args,
+    )
+
+    create_model(
+        use_mare_upcycling=True,
+        capacity_factor=2,
+        num_generalists=1,
+        num_experts=8,
+        run_name="cola_c2_mare_ar1_ex8",
+        **common_args,
+    )
+    create_model(
+        use_mare_upcycling=True,
+        capacity_factor=2,
+        num_generalists=2,
+        num_experts=0,
+        run_name="cola_c2_mare_ar2",
+        **common_args,
+    )
 
     # create_model(
     #     run_name="baseline",
