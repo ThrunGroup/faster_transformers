@@ -26,6 +26,7 @@ from utils.constants import (
 
 
 def finetune(
+    model_type: str,
     model_name: str,
     model,
     tokenizer,
@@ -49,7 +50,7 @@ def finetune(
     :param do_evaluation: Whether to evaluate the model after training and save the metrics
     :returns: Dictionary of evaluation metrics and inference time if `do_evaluation` is true
     """
-    dataset = get_dataset(dataset_name, model_name, tokenizer, model)
+    dataset = get_dataset(dataset_name, model_type, tokenizer, model)
     train_dataset, test_dataset = dataset.get_tokenized_dataset()
     data_collator = dataset.get_data_collator()
     # compute_metrics = dataset.get_compute_metrics()
@@ -82,8 +83,8 @@ def finetune(
         report_to="wandb",
         run_name=run_name,
         # for memory issues
-        # gradient_accumulation_steps=2,
-        # deepspeed="ds_config.json",
+        gradient_accumulation_steps=2,
+        deepspeed="ds_config.json",
         gradient_checkpointing=True,
         bf16=True,
     )
@@ -171,6 +172,7 @@ def create_model(
     tokenizer.pad_token = tokenizer.eos_token
 
     finetune(
+        model_type,
         model_name,
         model,
         tokenizer,
@@ -186,7 +188,7 @@ def create_model(
 if __name__ == "__main__":
     common_args = {
         "model_type": T5,
-        "dataset_name": BILLSUM,
+        "dataset_name": SQUAD,
         "num_epochs": 5,
         "learning_rate": 5e-5,
     }
@@ -209,19 +211,19 @@ if __name__ == "__main__":
         use_mare_upcycling=True,
         capacity_factor=2,
         num_generalists=1,
-        num_experts=16,
+        num_experts=4,
         run_name="c2_mare_ar1_ex16",
         **common_args,
     )
 
-    create_model(
-        use_mare_upcycling=True,
-        num_generalists=0,
-        capacity_factor=2,
-        num_experts=16,
-        run_name="c2_dense_2",
-        **common_args,
-    )
+    # create_model(
+    #     use_mare_upcycling=True,
+    #     num_generalists=0,
+    #     capacity_factor=2,
+    #     num_experts=16,
+    #     run_name="c2_dense_2",
+    #     **common_args,
+    # )
 
     # do
     # create_model(

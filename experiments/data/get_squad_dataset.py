@@ -8,8 +8,8 @@ from .dataset import Dataset
 
 
 class SQuAD(Dataset):
-    def __init__(self, tokenizer, model, metrics="f1"):
-        super().__init__(tokenizer, model)
+    def __init__(self, tokenizer, model, model_type, metrics="f1"):
+        super().__init__(tokenizer, model, model_type)
         self.metrics = evaluate.load(metrics)
         self.config = model.config
 
@@ -28,7 +28,9 @@ class SQuAD(Dataset):
         return tokenized_dataset
 
     def get_data_collator(self):
-        data_collator = DefaultDataCollator(tokenizer=self.tokenizer, model=self.model)
+        data_collator = DefaultDataCollator(
+            tokenizer=self.tokenizer, model=self.model
+        )
         return data_collator
 
     def get_compute_metrics(self):
@@ -45,10 +47,7 @@ class SQuAD(Dataset):
         f1 = f1_score(labels, predictions)
 
         # Return a dictionary of metrics
-        return {
-            'accuracy': accuracy,
-            'f1': f1
-        }
+        return {"accuracy": accuracy, "f1": f1}
 
     def preprocess(self, examples):
         questions = [q.strip() for q in examples["question"]]
@@ -82,7 +81,10 @@ class SQuAD(Dataset):
             context_end = idx - 1
 
             # If the answer is not fully inside the context, label it (0, 0)
-            if offset[context_start][0] > end_char or offset[context_end][1] < start_char:
+            if (
+                offset[context_start][0] > end_char
+                or offset[context_end][1] < start_char
+            ):
                 start_positions.append(0)
                 end_positions.append(0)
             else:

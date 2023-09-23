@@ -12,6 +12,7 @@ class Billsum(Dataset):
         self,
         tokenizer,
         model,
+        model_type: str,
         metrics: str = "rouge",
         prefix: str = "summarize: ",
     ):
@@ -21,7 +22,7 @@ class Billsum(Dataset):
         :param metrics: Metrics to evaluate the model
         :param prefix: Prefix to the inputs to start the summarization task
         """
-        super().__init__(tokenizer, model)
+        super().__init__(tokenizer, model, model_type)
         self.metrics = evaluate.load(
             metrics
         )  # Load the metrics to be used by compute_metrics
@@ -34,9 +35,13 @@ class Billsum(Dataset):
         """
         try:
             # Try to load preprocessed data
-            with open(f"{self.model}_tokenized_train_dataset.pkl", "rb") as f:
+            with open(
+                f"{self.model_type}_tokenized_train_dataset.pkl", "rb"
+            ) as f:
                 train_dataset = pickle.load(f)
-            with open(f"{self.model}_tokenized_test_dataset.pkl", "rb") as f:
+            with open(
+                f"{self.model_type}_tokenized_test_dataset.pkl", "rb"
+            ) as f:
                 test_dataset = pickle.load(f)
             print("Loaded preprocessed data from disk.")
 
@@ -52,9 +57,13 @@ class Billsum(Dataset):
             test_dataset = tokenized_dataset["test"]
 
             # Save the preprocessed data
-            with open(f"{self.model}_tokenized_train_dataset.pkl", "wb") as f:
+            with open(
+                f"{self.model_type}_tokenized_train_dataset.pkl", "wb"
+            ) as f:
                 pickle.dump(train_dataset, f)
-            with open(f"{self.model}_tokenized_test_dataset.pkl", "wb") as f:
+            with open(
+                f"{self.model_type}_tokenized_test_dataset.pkl", "wb"
+            ) as f:
                 pickle.dump(test_dataset, f)
             print("Preprocessed and saved data to disk.")
 
