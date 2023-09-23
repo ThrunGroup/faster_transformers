@@ -20,7 +20,7 @@ def inject_pretrained_weights(
         new_mlp.wi_ar.weight.data = wi.repeat(1, num_all_rounders)
         new_mlp.wo_ar.weight.data = wo.repeat(num_all_rounders, 1)
 
-        if num_all_rounders > 2:
+        if num_all_rounders >= 2:
             new_mlp.wi_ar.weight.data += torch.normal(0, 1/torch.sqrt(new_mlp.wi_ar.weight.shape[1]), new_mlp.wi_ar.weight) * 2
             new_mlp.wo_ar.weight.data += torch.normal(0, 1/torch.sqrt(new_mlp.wo_ar.weight.shape[1]), new_mlp.wo_ar.weight) * 2
 

@@ -66,7 +66,7 @@ def finetune(
             reinit=True,
         )
 
-    metric = evaluate.load("accuracy")
+    metric = evaluate.load("glue", dataset_name)
 
     def compute_metrics(eval_preds):
         preds, labels = eval_preds
@@ -206,7 +206,7 @@ def create_model(
 if __name__ == "__main__":
     common_args = {
         "model_type": T5,
-        "dataset_name": COLA,
+        "dataset_name": SQUAD,
         "num_epochs": 5,
         "learning_rate": 5e-5,
     }
@@ -227,6 +227,15 @@ if __name__ == "__main__":
 
     create_model(
         use_mare_upcycling=True,
+        num_generalists=0,
+        capacity_factor=2,
+        num_experts=16,
+        run_name="cola_c2_mare_ex16",
+        **common_args,
+    )
+
+    create_model(
+        use_mare_upcycling=True,
         capacity_factor=2,
         num_generalists=1,
         num_experts=8,
@@ -239,15 +248,6 @@ if __name__ == "__main__":
         num_generalists=2,
         num_experts=0,
         run_name="cola_c2_mare_ar2",
-        **common_args,
-    )
-
-    create_model(
-        use_mare_upcycling=True,
-        num_generalists=0,
-        capacity_factor=2,
-        num_experts=16,
-        run_name="cola_c2_mare_ex16",
         **common_args,
     )
 
