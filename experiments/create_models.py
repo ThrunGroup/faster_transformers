@@ -101,7 +101,7 @@ def finetune(
         # for memory issues
         gradient_accumulation_steps=8,
         deepspeed="ds_config.json",
-        gradient_checkpointing=False,
+        gradient_checkpointing=True,
         # fp16=True,
     )
 
