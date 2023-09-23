@@ -108,7 +108,8 @@ def get_dataset(dataset_name: str, model_type: str, tokenizer, model):
         def get_data_collator(self):
             data_collator = DataCollatorForSeq2Seq(
                 tokenizer=tokenizer,
-                padding=True,
+                # padding=True, # Adaptive to batch's longest sequence length
+                padding = "max_length",
                 max_length=512,
             )
             return data_collator

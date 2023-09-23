@@ -188,7 +188,7 @@ def create_model(
 if __name__ == "__main__":
     common_args = {
         "model_type": T5,
-        "dataset_name": SQUAD,
+        "dataset_name": COLA,
         "num_epochs": 5,
         "learning_rate": 5e-5,
     }
@@ -211,8 +211,16 @@ if __name__ == "__main__":
         use_mare_upcycling=True,
         capacity_factor=2,
         num_generalists=1,
-        num_experts=4,
-        run_name="c2_mare_ar1_ex16",
+        num_experts=8,
+        run_name="cola_c2_mare_ar1_ex8",
+        **common_args,
+    )
+    create_model(
+        use_mare_upcycling=True,
+        capacity_factor=2,
+        num_generalists=2,
+        num_experts=0,
+        run_name="cola_c2_mare_ar2",
         **common_args,
     )
 
