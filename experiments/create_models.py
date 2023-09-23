@@ -84,7 +84,7 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
-        eval_steps=100,
+        eval_steps=10,
         logging_steps=1,
         save_strategy="steps",
         learning_rate=5e-5,
