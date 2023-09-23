@@ -30,7 +30,7 @@ class MAREMLP(T5DenseActDense):
             self.wo_ar = nn.Linear(
                 intermediate_size, num_all_rounders * embed_dim, bias=False
             )
-            self.ar_router = Router(embed_dim, num_all_rounders)
+            # self.ar_router = Router(embed_dim, num_all_rounders)
 
         if num_experts:
             self.wi_ex = nn.Linear(
