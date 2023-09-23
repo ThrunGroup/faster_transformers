@@ -85,7 +85,7 @@ def finetune(
         # preds = preds[:, :-1].reshape(-1)
         labels = labels[:, :].reshape(-1)
         preds = preds[:, :].reshape(-1)
-        valid_token_mask = labels != 0  # Create a mask of valid (non-padding) tokens
+        valid_token_mask = labels != -100  # Create a mask of valid (non-padding) tokens
         labels = labels[valid_token_mask]
         preds = preds[valid_token_mask]
         if metric.name in ["accuracy", "exact_match"]:

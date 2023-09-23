@@ -31,14 +31,9 @@ import torch
 def convert_to_t5_format(example, task, tokenizer):
     if task == "qnli":
         source_text = (
-            "question: "
-            + example["question"]
-            + " context: "
-            + example["sentence"]
+            "question: " + example["question"] + " context: " + example["sentence"]
         )
-        target_text = (
-            "entailment" if example["label"] == 1 else "not_entailment"
-        )
+        target_text = "entailment" if example["label"] == 1 else "not_entailment"
     elif task == "sst2":
         source_text = example["sentence"]
         target_text = "positive" if example["label"] == 1 else "negative"
@@ -47,14 +42,20 @@ def convert_to_t5_format(example, task, tokenizer):
         target_text = "acceptable" if example["label"] == 1 else "unacceptable"
     elif task == "squad":
         source_text = (
-            "question: "
-            + example["question"]
-            + " context: "
-            + example["context"]
+            "question: " + example["question"] + " context: " + example["context"]
         )
         target_text = example["answers"]["text"]
     else:
         raise ValueError(f"Invalid task ({task})")
+    target_tokenized = tokenizer(
+        target_text,
+        return_tensors="pt",
+        truncation=True,
+        padding="max_length",
+        max_length=128,
+    )
+    labels = target_tokenized.input_ids[0]
+    labels[labels == tokenizer.pad_token_id] = -100
     return {
         "input_text": source_text,
         "target_text": target_text,
@@ -65,13 +66,9 @@ def convert_to_t5_format(example, task, tokenizer):
             padding="max_length",
             max_length=512,
         ).input_ids[0],
-        "labels": tokenizer(
-            target_text,
-            return_tensors="pt",
-            truncation=True,
-            padding="max_length",
-            max_length=128,
-        ).input_ids[0],
+        "labels": labels,
+        "labels_attention_mask": target_tokenized.attention_mask[0],
+        "decoder_attention_mask": target_tokenized.attention_mask[0],
     }
 
 
@@ -115,9 +112,7 @@ def get_dataset(dataset_name: str, model_type: str, tokenizer, model):
             return data_collator
 
         # Override functions defined in class
-        dataset.get_tokenized_dataset = get_tokenized_dataset.__get__(
-            dataset, Dataset
-        )
+        dataset.get_tokenized_dataset = get_tokenized_dataset.__get__(dataset, Dataset)
         dataset.preprocess = preprocess.__get__(dataset, Dataset)
         dataset.compute_metrics = compute_metrics.__get__(dataset, Dataset)
         dataset.get_data_collator = get_data_collator.__get__(dataset, Dataset)
