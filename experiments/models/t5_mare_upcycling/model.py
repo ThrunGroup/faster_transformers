@@ -30,7 +30,7 @@ class MAREMLP(T5DenseActDense):
             self.wo_ar = nn.Linear(
                 intermediate_size, num_all_rounders * embed_dim, bias=False
             )
-            self.ar_router = Router(embed_dim, num_all_rounders)
+            # self.ar_router = Router(embed_dim, num_all_rounders)
 
         if num_experts:
             self.wi_ex = nn.Linear(
@@ -39,7 +39,10 @@ class MAREMLP(T5DenseActDense):
             self.wo_ex = nn.Linear(
                 intermediate_size, num_experts * embed_dim, bias=False
             )
-            self.ex_router = Router(embed_dim, num_experts)
+            self.ex_router = Router(
+                embed_dim,
+                num_experts,
+            )
 
         self.embed_dim = embed_dim
 
@@ -77,8 +80,6 @@ class MAREMLP(T5DenseActDense):
 
         # Experts
         if self.num_experts:
-            ex_hidden_states = hidden_states.repeat(1, 1, self.num_experts)
-
             router = self.ex_router(hidden_states)  # (B, T, E)
             K = (
                 T
@@ -90,6 +91,7 @@ class MAREMLP(T5DenseActDense):
             top_k_probs = top_k.values
 
             # x: (B, T, E, C) -> (B, K, E, C) -> (B, K, E * C)
+            ex_hidden_states = hidden_states.repeat(1, 1, self.num_experts)
             ex_hidden_states = torch.gather(
                 ex_hidden_states.view(
                     B, T, self.num_experts, -1

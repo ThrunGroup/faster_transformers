@@ -29,10 +29,9 @@ def finetune(
     dataset_name: str,
     num_epochs: int = 10,
     resume_from_checkpoint: bool = False,
-    random_token_selection: bool = False,
     run_name: str = "",
-    learning_rate: float = 0.001,
     do_evaluation: bool = True,
+    config=None,
 ):
     """
     Finetune the model on a dataset
@@ -53,9 +52,6 @@ def finetune(
     compute_metrics = dataset.get_compute_metrics()
     preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
 
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    checkpoint_path = os.path.join(current_dir, "checkpoints", model_name)
-
     init_wandb = True
     try:
         init_wandb = int(os.environ["LOCAL_RANK"]) == 0
@@ -67,18 +63,17 @@ def finetune(
             project="t5_billsum",
             name=run_name,
             reinit=True,
+            config=config,
         )
 
     training_args = TrainingArguments(
-        output_dir=model_name + "_" + run_name,
+        output_dir=model_name,
         evaluation_strategy="steps",
-        eval_steps=50,
+        eval_steps=100,
         logging_steps=10,
         save_strategy="steps",
         learning_rate=5e-5,
         warmup_steps=500,
-        per_device_train_batch_size=32,  # 32 for SMALL, 12 for MED
-        per_device_eval_batch_size=144,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -89,10 +84,11 @@ def finetune(
         # for memory issues
         gradient_accumulation_steps=2,
         deepspeed="ds_config.json",
-        gradient_checkpointing=True,
+        per_device_train_batch_size=config["train_batch_size"],
+        per_device_eval_batch_size=config["test_batch_size"],
+        gradient_checkpointing=config["gradient_checkpointing"],
         bf16=True,
         push_to_hub=True,
-        # fp16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -134,14 +130,12 @@ def finetune(
 def create_model(
     model_type: str,
     dataset_name: str,
-    learning_rate: float,
     num_epochs: int = 5,
-    random_token_selection: bool = False,
+    # random_token_selection: bool = False,
     run_name: str = "",
     capacity_factor: int = 0,
     use_mare_lora: bool = False,
     use_mare_attention: bool = False,
-    use_lora: bool = False,
     apply_to_half_layers: bool = False,
     do_evaluation: bool = True,
     **kwargs,
@@ -158,13 +152,14 @@ def create_model(
     """
     # Build a Gated Attention model
     model_name = model_type + "_" + run_name
+    # captures the method parameters and model_name as a dictionary
+    config = locals()
 
     model = build_model(
         model_type,
         dataset_name,
         use_mare_lora=use_mare_lora,
         use_mare_attention=use_mare_attention,
-        random_token_selection=random_token_selection,
         capacity_factor=capacity_factor,
         apply_to_half_layers=apply_to_half_layers,
         **kwargs,
@@ -183,9 +178,8 @@ def create_model(
         dataset_name,
         num_epochs,
         resume_from_checkpoint=False,
-        learning_rate=learning_rate,
         run_name=run_name,
-        random_token_selection=random_token_selection,
+        config=config,
     )
 
 
@@ -194,47 +188,44 @@ if __name__ == "__main__":
         "model_type": T5,
         "dataset_name": BILLSUM,
         "num_epochs": 6,
-        "learning_rate": 5e-5,
+        "train_batch_size": 16,
+        "test_batch_size": 32,
+        "gradient_checkpointing": True,
     }
 
+    # Original dense
     # create_model(
     #     run_name="baseline",
     #     **common_args,
     # )
 
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     capacity_factor=2,
-    #     num_generalists=1,
-    #     num_experts=16,
-    #     run_name="c2_mare_ar1_ex16",
-    #     apply_to_half_layers=True,
-    #     **common_args,
-    # )
-
+    # MARE without experts
     create_model(
         use_mare_upcycling=True,
         num_generalists=2,
         capacity_factor=2,
         num_experts=0,
-        run_name="c2_dense_2",
+        run_name="c2_dense_2_half",
         apply_to_half_layers=True,
         **common_args,
     )
 
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     capacity_factor=2,
-    #     num_generalists=0,
-    #     num_experts=32,
-    #     run_name="c2_moe_ex32",
-    #     **common_args,
-    # )
+    # MARE
+    create_model(
+        use_mare_upcycling=True,
+        capacity_factor=2,
+        num_generalists=1,
+        num_experts=16,
+        run_name="c2_mare_ar1_ex8_half",
+        apply_to_half_layers=True,
+        **common_args,
+    )
 
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     num_generalists=2,
-    #     num_experts=0,
-    #     run_name="mare_ar2_ex0",
-    #     **common_args,
-    # )
+    # MARE without ARs
+    create_model(
+        use_mare_upcycling=True,
+        num_generalists=2,
+        num_experts=0,
+        run_name="moe_ex8",
+        **common_args,
+    )
