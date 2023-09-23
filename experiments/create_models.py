@@ -65,8 +65,12 @@ def finetune(
             name=run_name,
             reinit=True,
         )
-
-    metric = evaluate.load("glue", "squad")
+    if dataset_name in [QNLI, SST2, COLA]:
+        metric = evaluate.load("glue", dataset_name)
+    elif dataset_name == SQUAD:
+        metric = evaluate.load(SQUAD)
+    else:
+        metric = None
 
     def compute_metrics(eval_preds):
         preds, labels = eval_preds
