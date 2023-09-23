@@ -88,7 +88,7 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         learning_rate=5e-5,
-        warmup_steps=500,
+        warmup_steps=5,
         per_device_train_batch_size=32,  # 32 for SMALL, 12 for MED
         per_device_eval_batch_size=32,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
