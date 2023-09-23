@@ -66,7 +66,7 @@ def finetune(
             reinit=True,
         )
 
-    metric = evaluate.load("glue", dataset_name)
+    metric = evaluate.load("glue", "squad")
 
     def compute_metrics(eval_preds):
         preds, labels = eval_preds
