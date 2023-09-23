@@ -84,9 +84,9 @@ def finetune(
         run_name=run_name,
         # for memory issues
         gradient_accumulation_steps=2,
-        deepspeed="ds_config.json",
+        # deepspeed="ds_config.json",
         gradient_checkpointing=True,
-        bf16=True,
+        # bf16=True,
     )
 
     early_stopping = EarlyStoppingCallback(

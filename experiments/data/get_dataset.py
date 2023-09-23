@@ -94,7 +94,7 @@ def get_dataset(dataset_name: str, model_type: str, tokenizer, model):
             lambda x: convert_to_t5_format(x, dataset_name, tokenizer),
             remove_columns=dataset.column_names["train"],
         )
-        dataset = DefaultDataset(tokenizer, model)
+        dataset = DefaultDataset(tokenizer, model, model_type)
 
         def get_tokenized_dataset(self):
             return tokenized_dataset["train"], tokenized_dataset["validation"]
