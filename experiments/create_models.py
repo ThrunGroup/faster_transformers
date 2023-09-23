@@ -89,10 +89,10 @@ def finetune(
         labels = labels[valid_token_mask]
         preds = preds[valid_token_mask]
         if metric.name in ["accuracy", "exact_match"]:
-            decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
-            decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+            preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
+            labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
         # print(len(labels),"\n", len(preds))
-        return metric.compute(predictions=decoded_preds, references=decoded_labels)
+        return metric.compute(predictions=preds, references=labels)
 
     def preprocess_logits_for_metrics(logits, labels):
         # print(len(logits), logits[0].shape, logits[1].shape, labels.shape)
