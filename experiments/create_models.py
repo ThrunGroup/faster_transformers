@@ -102,7 +102,7 @@ def finetune(
         gradient_accumulation_steps=8,
         deepspeed="ds_config.json",
         gradient_checkpointing=False,
-        fp16=True,
+        # fp16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
