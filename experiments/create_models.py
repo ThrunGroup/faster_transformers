@@ -66,11 +66,11 @@ def finetune(
             reinit=True,
         )
 
-    metric = evaluate.load("f1")
+    metric = evaluate.load("accuracy")
 
     def compute_metrics(eval_preds):
         preds, labels = eval_preds
-        print(preds.shape, labels.shape)
+        # print(preds.shape, labels.shape)
         # preds have the same shape as the labels, after the argmax(-1) has been calculated
         # by preprocess_logits_for_metrics but we need to shift the labels
         labels = labels[:, 1:].reshape(-1)
