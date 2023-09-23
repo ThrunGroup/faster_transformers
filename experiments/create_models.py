@@ -6,6 +6,7 @@ from transformers import (
     AutoTokenizer,
 )
 import wandb
+import evaluate
 
 from data.get_dataset import get_dataset
 from evaluate_models import evaluate_model
@@ -65,6 +66,21 @@ def finetune(
             reinit=True,
         )
 
+    metric = evaluate.load("f1")
+
+    def compute_metrics(eval_preds):
+        preds, labels = eval_preds
+        print(preds.shape, labels.shape)
+        # preds have the same shape as the labels, after the argmax(-1) has been calculated
+        # by preprocess_logits_for_metrics but we need to shift the labels
+        labels = labels[:, 1:].reshape(-1)
+        preds = preds[:, :-1].reshape(-1)
+        return metric.compute(predictions=preds, references=labels)
+
+    def preprocess_logits_for_metrics(logits, labels):
+        # print(len(logits), logits[0].shape, logits[1].shape, labels.shape)
+        return logits[0].argmax(dim=-1)
+
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
@@ -73,8 +89,8 @@ def finetune(
         save_strategy="steps",
         learning_rate=5e-5,
         warmup_steps=500,
-        per_device_train_batch_size=16,  # 32 for SMALL, 12 for MED
-        per_device_eval_batch_size=16,  # 32 for MED, XL, 64 for SMALL
+        per_device_train_batch_size=64,  # 32 for SMALL, 12 for MED
+        per_device_eval_batch_size=64,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -85,8 +101,8 @@ def finetune(
         # for memory issues
         gradient_accumulation_steps=8,
         deepspeed="ds_config.json",
-        gradient_checkpointing=True,
-        # bf16=True,
+        gradient_checkpointing=False,
+        fp16=True,
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -102,6 +118,8 @@ def finetune(
         data_collator=data_collator,
         # compute_metrics=compute_metrics,
         callbacks=[early_stopping],
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        compute_metrics=compute_metrics,
     )
 
     print("\n*********************")
@@ -207,14 +225,14 @@ if __name__ == "__main__":
     #     **common_args,
     # )
 
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     capacity_factor=2,
-    #     num_generalists=1,
-    #     num_experts=8,
-    #     run_name="cola_c2_mare_ar1_ex8",
-    #     **common_args,
-    # )
+    create_model(
+        use_mare_upcycling=True,
+        capacity_factor=2,
+        num_generalists=1,
+        num_experts=8,
+        run_name="cola_c2_mare_ar1_ex8",
+        **common_args,
+    )
     create_model(
         use_mare_upcycling=True,
         capacity_factor=2,
@@ -224,14 +242,14 @@ if __name__ == "__main__":
         **common_args,
     )
 
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     num_generalists=0,
-    #     capacity_factor=2,
-    #     num_experts=16,
-    #     run_name="c2_dense_2",
-    #     **common_args,
-    # )
+    create_model(
+        use_mare_upcycling=True,
+        num_generalists=0,
+        capacity_factor=2,
+        num_experts=16,
+        run_name="cola_c2_mare_ex16",
+        **common_args,
+    )
 
     # do
     # create_model(
