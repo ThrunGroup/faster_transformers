@@ -77,8 +77,6 @@ class MAREMLP(T5DenseActDense):
 
         # Experts
         if self.num_experts:
-            ex_hidden_states = hidden_states.repeat(1, 1, self.num_experts)
-
             router = self.ex_router(hidden_states)  # (B, T, E)
             K = (
                 T
@@ -90,6 +88,7 @@ class MAREMLP(T5DenseActDense):
             top_k_probs = top_k.values
 
             # x: (B, T, E, C) -> (B, K, E, C) -> (B, K, E * C)
+            ex_hidden_states = hidden_states.repeat(1, 1, self.num_experts)
             ex_hidden_states = torch.gather(
                 ex_hidden_states.view(
                     B, T, self.num_experts, -1

@@ -65,10 +65,14 @@ def finetune(
             name=run_name,
             reinit=True,
         )
-    if dataset_name in [QNLI, SST2, COLA]:
-        metric = evaluate.load("glue", dataset_name)
+    if dataset_name == COLA:
+        metric = evaluate.load("exact_match")
+    elif dataset_name == SST2:
+        metric = evaluate.load("accuracy")
+    elif dataset_name == QNLI:
+        metric = evaluate.load("accuracy")
     elif dataset_name == SQUAD:
-        metric = evaluate.load(SQUAD)
+        metric = evaluate.load("exact_match")
     else:
         metric = None
 
@@ -77,9 +81,14 @@ def finetune(
         # print(preds.shape, labels.shape)
         # preds have the same shape as the labels, after the argmax(-1) has been calculated
         # by preprocess_logits_for_metrics but we need to shift the labels
-        labels = labels[:, 1:].reshape(-1)
-        preds = preds[:, :-1].reshape(-1)
-        return metric.compute(predictions=preds, references=labels)
+        # labels = labels[:, 1:].reshape(-1)
+        # preds = preds[:, :-1].reshape(-1)
+        labels = labels[:, :].reshape(-1)
+        preds = preds[:, :].reshape(-1)
+        decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
+        decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+        # print(len(labels),"\n", len(preds))
+        return metric.compute(predictions=decoded_preds, references=decoded_labels)
 
     def preprocess_logits_for_metrics(logits, labels):
         # print(len(logits), logits[0].shape, logits[1].shape, labels.shape)
@@ -210,7 +219,7 @@ def create_model(
 if __name__ == "__main__":
     common_args = {
         "model_type": T5,
-        "dataset_name": SQUAD,
+        "dataset_name": COLA,
         "num_epochs": 5,
         "learning_rate": 5e-5,
     }
