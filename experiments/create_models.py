@@ -85,8 +85,9 @@ def finetune(
         # preds = preds[:, :-1].reshape(-1)
         labels = labels[:, :].reshape(-1)
         preds = preds[:, :].reshape(-1)
-        decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
-        decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+        if metric.name in ["accuracy", "exact_match"]:
+            decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
+            decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
         # print(len(labels),"\n", len(preds))
         return metric.compute(predictions=decoded_preds, references=decoded_labels)
 
@@ -97,7 +98,7 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
-        eval_steps=5,
+        eval_steps=10,
         logging_steps=1,
         save_strategy="steps",
         learning_rate=5e-5,
@@ -217,39 +218,41 @@ def create_model(
 
 
 if __name__ == "__main__":
-    dataset_type = COLA
-    model_type = T5
-    common_args = {
-        "model_type": T5,
-        "dataset_name": COLA,
-        "num_epochs": 5,
-        "learning_rate": 5e-5,
-    }
-    create_model(
-        use_mare_upcycling=True,
-        num_generalists=0,
-        capacity_factor=2,
-        num_experts=16,
-        run_name="cola_c2_mare_ex16",
-        **common_args,
-    )
+    dataset_types = [SQUAD] #COLA, QNLI, SST2, SQUAD]
+    model_types = [T5]
+    for model_type in model_types:
+        for dataset_type in dataset_types:
+            common_args = {
+                "model_type": model_type,
+                "dataset_name": dataset_type,
+                "num_epochs": 5,
+                "learning_rate": 5e-5,
+            }
+            create_model(
+                use_mare_upcycling=True,
+                num_generalists=0,
+                capacity_factor=2,
+                num_experts=16,
+                run_name="cola_c2_mare_ex16",
+                **common_args,
+            )
 
-    create_model(
-        use_mare_upcycling=True,
-        capacity_factor=2,
-        num_generalists=1,
-        num_experts=8,
-        run_name="cola_c2_mare_ar1_ex8",
-        **common_args,
-    )
-    create_model(
-        use_mare_upcycling=True,
-        capacity_factor=2,
-        num_generalists=2,
-        num_experts=0,
-        run_name="cola_c2_mare_ar2",
-        **common_args,
-    )
+            create_model(
+                use_mare_upcycling=True,
+                capacity_factor=2,
+                num_generalists=1,
+                num_experts=8,
+                run_name="cola_c2_mare_ar1_ex8",
+                **common_args,
+            )
+            create_model(
+                use_mare_upcycling=True,
+                capacity_factor=2,
+                num_generalists=2,
+                num_experts=0,
+                run_name="cola_c2_mare_ar2",
+                **common_args,
+            )
 
     # create_model(
     #     run_name="baseline",
