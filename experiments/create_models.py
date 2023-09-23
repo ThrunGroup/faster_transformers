@@ -83,8 +83,8 @@ def finetune(
         report_to="wandb",
         run_name=run_name,
         # for memory issues
-        gradient_accumulation_steps=2,
-        # deepspeed="ds_config.json",
+        gradient_accumulation_steps=8,
+        deepspeed="ds_config.json",
         gradient_checkpointing=True,
         # bf16=True,
     )
