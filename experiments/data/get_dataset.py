@@ -34,19 +34,27 @@ def convert_to_t5_format(example, task, tokenizer):
             "question: " + example["question"] + " context: " + example["sentence"]
         )
         target_text = "entailment" if example["label"] == 1 else "not_entailment"
+        labels = ["entailment", "not_entailment"]
     elif task == "sst2":
         source_text = example["sentence"]
         target_text = "positive" if example["label"] == 1 else "negative"
+        labels = ["positive", "negative"]
     elif task == "cola":
         source_text = example["sentence"]
         target_text = "acceptable" if example["label"] == 1 else "unacceptable"
+        labels = ["acceptable", "unacceptable"]
     elif task == "squad":
         source_text = (
             "question: " + example["question"] + " context: " + example["context"]
         )
         target_text = example["answers"]["text"]
+        labels = []
     else:
         raise ValueError(f"Invalid task ({task})")
+
+    special_tokens_dict = {"additional_special_tokens": labels}
+    tokenizer.add_special_tokens(special_tokens_dict)
+
     target_tokenized = tokenizer(
         target_text,
         return_tensors="pt",
@@ -91,6 +99,9 @@ def get_dataset(dataset_name: str, model_type: str, tokenizer, model):
             lambda x: convert_to_t5_format(x, dataset_name, tokenizer),
             remove_columns=dataset.column_names["train"],
         )
+        model.resize_token_embeddings(
+            len(tokenizer)
+        )  # Resize model vocab after adding labels(e.g. entailment) to vocab
         dataset = DefaultDataset(tokenizer, model, model_type)
 
         def get_tokenized_dataset(self):
