@@ -6,7 +6,7 @@ from transformers import (
     AutoModelForQuestionAnswering,
     AutoModelForSequenceClassification,
 )
-import torch
+
 
 from experiments.models.gpt2_mare.controller import apply_mare_attention
 from experiments.models.gpt2_peft_mare.controller import (

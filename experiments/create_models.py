@@ -69,11 +69,11 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=model_name,
         evaluation_strategy="steps",
-        eval_steps=100,
+        eval_steps=250,
         logging_steps=10,
         save_strategy="steps",
         learning_rate=5e-5,
-        warmup_steps=500,
+        warmup_steps=400,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -236,7 +236,7 @@ if __name__ == "__main__":
         capacity_factor=2,
         num_generalists=1,
         num_experts=8,
-        run_name="c2_mare_ar1_ex8_half_from_ft_dense_with_sort_noise",
+        run_name="c2_mare_ar1_ex8_half_from_ft_dense_with_sort_noise_scaler",
         apply_to_half_layers=True,
         **common_args,
     )
