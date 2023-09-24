@@ -55,9 +55,6 @@ def convert_to_t5_format(example, task, tokenizer):
     else:
         raise ValueError(f"Invalid task ({task})")
 
-    special_tokens_dict = {"additional_special_tokens": labels}
-    tokenizer.add_special_tokens(special_tokens_dict)
-
     target_tokenized = tokenizer(
         target_text,
         return_tensors="pt",
