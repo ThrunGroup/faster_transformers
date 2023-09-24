@@ -65,6 +65,7 @@ def convert_to_t5_format(example, task, tokenizer):
     )
     labels = target_tokenized.input_ids[0]
     labels[labels == tokenizer.pad_token_id] = -100
+    labels[labels == tokenizer.eos_token_id] = -100
     return {
         "input_text": source_text,
         "target_text": target_text,
