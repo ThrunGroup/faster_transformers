@@ -34,7 +34,12 @@ def inject_pretrained_weights(
 
     if num_experts:
         new_mlp.wi_ex.weight.data = wi.repeat(1, num_experts)
+        new_shape = new_mlp.wi_ex.weight.shape
+        new_mlp.wi_ex.weight.data += torch.randn(new_shape) / np.sqrt(new_shape[1])
+
         new_mlp.wo_ex.weight.data = wo.repeat(num_experts, 1)
+        new_shape = new_mlp.wo_ex.weight.shape
+        new_mlp.wo_ex.weight.data += torch.randn(new_shape) / np.sqrt(new_shape[1])
 
     del new_mlp.wi
     del new_mlp.wo

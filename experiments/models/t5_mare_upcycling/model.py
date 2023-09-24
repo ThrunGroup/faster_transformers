@@ -39,9 +39,15 @@ class MAREMLP(T5DenseActDense):
             self.wo_ex = nn.Linear(
                 intermediate_size, num_experts * embed_dim, bias=False
             )
-            self.ex_router = Router(embed_dim, num_experts)
+            self.ex_router = Router(
+                embed_dim,
+                num_experts,
+            )
 
         self.embed_dim = embed_dim
+        # self.scales = nn.Parameter(torch.ones(8))
+        self.ar_scales = nn.Parameter(torch.ones(8))
+        self.ex_scales = nn.Parameter(torch.ones(self.num_experts * 2))
 
     def forward(
         self, hidden_states: Optional[Tuple[torch.FloatTensor]]
@@ -84,8 +90,8 @@ class MAREMLP(T5DenseActDense):
                 // self.num_experts
             )
             top_k = torch.topk(router, k=K, dim=1)  # (B, K, E)
-            top_k_indices = top_k.indices
-            top_k_probs = top_k.values
+            top_k_indices, indices_ = torch.sort(top_k.indices, dim=1)
+            top_k_probs = torch.gather(top_k.values, 1, indices_)
 
             # x: (B, T, E, C) -> (B, K, E, C) -> (B, K, E * C)
             ex_hidden_states = hidden_states.repeat(1, 1, self.num_experts)
@@ -125,12 +131,19 @@ class MAREMLP(T5DenseActDense):
                 1,
                 top_k_indices.unsqueeze(-1).expand(-1, -1, -1, self.embed_dim),
                 ex_hidden_states.view(B, K, self.num_experts, -1)
-                * top_k_probs.unsqueeze(-1),
+                * top_k_probs.unsqueeze(-1)
+                * self.ex_scales[: self.num_experts].view(1, 1, -1, 1),
             )
             ex_hidden_states = ex_zeros.sum(dim=2)
 
         if self.num_all_rounders and self.num_experts:
-            hidden_states = ar_hidden_states + ex_hidden_states * (T / K)
+            # hidden_states = (
+            #     self.scales[0] * ar_hidden_states
+            #     + self.scales[1] * ex_hidden_states
+            # )
+            hidden_states = (
+                self.ar_scales[0] * ar_hidden_states + ex_hidden_states * (1-self.ar_scales[0])
+            )
         elif self.num_all_rounders:
             hidden_states = ar_hidden_states
         else:

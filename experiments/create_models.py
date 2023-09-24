@@ -88,11 +88,9 @@ def finetune(
         valid_token_mask = labels != -100  # Create a mask of valid (non-padding) tokens
         labels = labels[valid_token_mask]
         preds = preds[valid_token_mask]
-        if metric.name in ["accuracy", "exact_match"]:
+        if metric.name in ["exact_match"]:
             preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
             labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-        print(preds[:5], labels[:5])
-        # print(len(labels),"\n", len(preds))
         return metric.compute(predictions=preds, references=labels)
 
     def preprocess_logits_for_metrics(logits, labels):
@@ -232,23 +230,23 @@ if __name__ == "__main__":
                 "num_epochs": 5,
                 "learning_rate": 5e-5,
             }
-            # create_model(
-            #     use_mare_upcycling=True,
-            #     num_generalists=0,
-            #     capacity_factor=2,
-            #     num_experts=16,
-            #     run_name=f"{dataset_type}_c2_mare_ex16",
-            #     **common_args,
-            # )
-            #
-            # create_model(
-            #     use_mare_upcycling=True,
-            #     capacity_factor=2,
-            #     num_generalists=1,
-            #     num_experts=8,
-            #     run_name=f"{dataset_type}_c2_mare_ar1_ex8",
-            #     **common_args,
-            # )
+            create_model(
+                use_mare_upcycling=True,
+                num_generalists=0,
+                capacity_factor=2,
+                num_experts=16,
+                run_name=f"{dataset_type}_c2_mare_ex16",
+                **common_args,
+            )
+
+            create_model(
+                use_mare_upcycling=True,
+                capacity_factor=2,
+                num_generalists=1,
+                num_experts=8,
+                run_name=f"{dataset_type}_c2_mare_ar1_ex8",
+                **common_args,
+            )
             create_model(
                 use_mare_upcycling=True,
                 capacity_factor=2,
