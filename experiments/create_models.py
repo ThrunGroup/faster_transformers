@@ -246,7 +246,7 @@ def create_model(
 
 
 if __name__ == "__main__":
-    dataset_types = [QNLI] #COLA, QNLI, SST2, SQUAD]
+    dataset_types = [COLA] #COLA, QNLI, SST2, SQUAD]
     model_types = [T5]
     for model_type in model_types:
         for dataset_type in dataset_types:

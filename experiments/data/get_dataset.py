@@ -35,23 +35,23 @@ def convert_to_t5_format(example, task, tokenizer):
         )
         # target_text = "entailment" if example["label"] == 1 else "not_entailment"
         target_text = "<unused0>" if example["label"] == 1 else "<unused1>"
-        labels = ["entailment", "not_entailment"]
+        # labels = ["entailment", "not_entailment"]
     elif task == "sst2":
         source_text = example["sentence"]
         # target_text = "positive" if example["label"] == 1 else "negative"
         target_text = "<unused0>" if example["label"] == 1 else "<unused1>"
-        labels = ["positive", "negative"]
+        # labels = ["positive", "negative"]
     elif task == "cola":
         source_text = example["sentence"]
         # target_text = "acceptable" if example["label"] == 1 else "unacceptable"
         target_text = "<unused0>" if example["label"] == 1 else "<unused1>"
-        labels = ["acceptable", "unacceptable"]
+        # labels = ["acceptable", "unacceptable"]
     elif task == "squad":
         source_text = (
             "question: " + example["question"] + " context: " + example["context"]
         )
         target_text = example["answers"]["text"]
-        labels = []
+        # labels = []
     else:
         raise ValueError(f"Invalid task ({task})")
 
