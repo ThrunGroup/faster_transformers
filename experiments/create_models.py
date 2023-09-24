@@ -91,6 +91,7 @@ def finetune(
         if metric.name in ["accuracy", "exact_match"]:
             preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
             labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+        print(preds, labels)
         # print(len(labels),"\n", len(preds))
         return metric.compute(predictions=preds, references=labels)
 
