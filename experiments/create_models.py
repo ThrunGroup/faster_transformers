@@ -77,7 +77,7 @@ def finetune(
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
-            project="gpt2_billsum",
+            project=f"{model_type}_{dataset_type}",
             name=run_name,
             reinit=True,
         )

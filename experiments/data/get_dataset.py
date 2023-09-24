@@ -93,12 +93,13 @@ def get_dataset(dataset_name: str, model_type: str, tokenizer, model):
     """
     if "t5" in model_type and dataset_name in [QNLI, SST2, COLA, SQUAD]:
         if dataset_name in [QNLI, SST2, COLA]:
-            dataset = load_dataset("glue", dataset_name, download_mode='force_redownload')
+            dataset = load_dataset("glue", dataset_name)
         else:
             dataset = load_dataset(dataset_name)
         tokenized_dataset = dataset.map(
             lambda x: convert_to_t5_format(x, dataset_name, tokenizer),
             remove_columns=dataset.column_names["train"],
+            load_from_cache_file=False,
         )
         # model.resize_token_embeddings(
         #     len(tokenizer)
