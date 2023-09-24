@@ -24,7 +24,7 @@ def inject_pretrained_weights(
             new_mlp.wi_ar.weight.data += (
                 torch.normal(
                     0,
-                    1 / torch.sqrt(new_mlp.wi_ar.weight.shape[1]),
+                    1 / int(new_mlp.wi_ar.weight.shape[1]),
                     size=new_mlp.wi_ar.weight.shape,
                 )
                 * 2
@@ -32,7 +32,7 @@ def inject_pretrained_weights(
             new_mlp.wo_ar.weight.data += (
                 torch.normal(
                     0,
-                    1 / torch.sqrt(new_mlp.wo_ar.weight.shape[1]),
+                    1 / int(new_mlp.wo_ar.weight.shape[1]),
                     size=new_mlp.wo_ar.weight.shape,
                 )
                 * 2
