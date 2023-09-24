@@ -21,8 +21,22 @@ def inject_pretrained_weights(
         new_mlp.wo_ar.weight.data = wo.repeat(num_all_rounders, 1)
 
         if num_all_rounders >= 2:
-            new_mlp.wi_ar.weight.data += torch.normal(0, 1/torch.sqrt(new_mlp.wi_ar.weight.shape[1]), new_mlp.wi_ar.weight) * 2
-            new_mlp.wo_ar.weight.data += torch.normal(0, 1/torch.sqrt(new_mlp.wo_ar.weight.shape[1]), new_mlp.wo_ar.weight) * 2
+            new_mlp.wi_ar.weight.data += (
+                torch.normal(
+                    0,
+                    1 / torch.sqrt(new_mlp.wi_ar.weight.shape[1]),
+                    size=new_mlp.wi_ar.weight.shape,
+                )
+                * 2
+            )
+            new_mlp.wo_ar.weight.data += (
+                torch.normal(
+                    0,
+                    1 / torch.sqrt(new_mlp.wo_ar.weight.shape[1]),
+                    size=new_mlp.wo_ar.weight.shape,
+                )
+                * 2
+            )
 
     if num_experts:
         new_mlp.wi_ex.weight.data = wi.repeat(1, num_experts)
@@ -43,11 +57,7 @@ def apply_mare_upcycling_t5(
     print("Applying MARE Upcycling to T5...")
     print(
         "Original num params: ",
-        sum(
-            p.numel()
-            for name, p in model.named_parameters()
-            if p.requires_grad
-        ),
+        sum(p.numel() for name, p in model.named_parameters() if p.requires_grad),
     )
 
     # Iterate through blocks and replace self-attention layers
@@ -80,9 +90,5 @@ def apply_mare_upcycling_t5(
 
     print(
         "Changed num params: ",
-        sum(
-            p.numel()
-            for name, p in model.named_parameters()
-            if p.requires_grad
-        ),
+        sum(p.numel() for name, p in model.named_parameters() if p.requires_grad),
     )
