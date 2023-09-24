@@ -23,6 +23,8 @@ class MAREMLP(T5DenseActDense):
         self.num_all_rounders = num_all_rounders
         self.num_experts = num_experts
         self.capacity_factor = capacity_factor
+        self.p = torch.nn.Parameter(torch.tensor([1/2]))  # Coefficient of linear combination of all rounders
+        # and experts
 
         if num_all_rounders:
             self.wi_ar = nn.Linear(
@@ -134,7 +136,7 @@ class MAREMLP(T5DenseActDense):
             ex_hidden_states = ex_zeros.sum(dim=2)
 
         if self.num_all_rounders and self.num_experts:
-            hidden_states = ar_hidden_states + ex_hidden_states * (T / K)
+            hidden_states = ar_hidden_states * self.p + ex_hidden_states * (1-self.p)
         elif self.num_all_rounders:
             hidden_states = ar_hidden_states
         else:
