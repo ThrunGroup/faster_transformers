@@ -31,20 +31,21 @@ import torch
 def convert_to_t5_format(example, task, tokenizer):
     if task == "qnli":
         source_text = (
-            "question: " + example["question"] + " context: " + example["sentence"]
+                "context: " + example["sentence"] + " question: " + example[
+            "question"] + " entailment: does the context entail the question?"
         )
         # target_text = "entailment" if example["label"] == 1 else "not_entailment"
-        target_text = "<unused0>" if example["label"] == 1 else "<unused1>"
+        target_text = "yes" if example["label"] == 1 else "no"
         # labels = ["entailment", "not_entailment"]
     elif task == "sst2":
-        source_text = example["sentence"]
+        source_text = "sentiment: " + example["sentence"] + " positive or negative?"
         # target_text = "positive" if example["label"] == 1 else "negative"
-        target_text = "<unused0>" if example["label"] == 1 else "<unused1>"
+        target_text = "yes" if example["label"] == 1 else "no"
         # labels = ["positive", "negative"]
     elif task == "cola":
-        source_text = example["sentence"]
+        source_text = "grammar: " + example["sentence"] + " acceptable or unacceptable?"
         # target_text = "acceptable" if example["label"] == 1 else "unacceptable"
-        target_text = "<unused0>" if example["label"] == 1 else "<unused1>"
+        target_text = "yes" if example["label"] == 1 else "no"
         # labels = ["acceptable", "unacceptable"]
     elif task == "squad":
         source_text = (
@@ -92,7 +93,7 @@ def get_dataset(dataset_name: str, model_type: str, tokenizer, model):
     """
     if "t5" in model_type and dataset_name in [QNLI, SST2, COLA, SQUAD]:
         if dataset_name in [QNLI, SST2, COLA]:
-            dataset = load_dataset("glue", dataset_name)
+            dataset = load_dataset("glue", dataset_name, download_mode='force_redownload')
         else:
             dataset = load_dataset(dataset_name)
         tokenized_dataset = dataset.map(
