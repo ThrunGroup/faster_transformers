@@ -46,8 +46,7 @@ class MAREMLP(T5DenseActDense):
             )
 
         self.embed_dim = embed_dim
-
-        self.scaler = nn.Sequential(nn.Linear(self.embed_dim, 1), nn.Sigmoid()) 
+        self.scales = nn.Parameter(torch.ones(8))
 
     def forward(
         self, hidden_states: Optional[Tuple[torch.FloatTensor]]
@@ -136,8 +135,8 @@ class MAREMLP(T5DenseActDense):
             ex_hidden_states = ex_zeros.sum(dim=2)
 
         if self.num_all_rounders and self.num_experts:
-            scale = self.scaler(hidden_states)
-            hidden_states = ar_hidden_states * scale + ex_hidden_states * (1 - scale)
+            hidden_states = self.scales[0] + ar_hidden_states + self.scales[1] * ex_hidden_states
+            # hidden_states = ar_hidden_states
         elif self.num_all_rounders:
             hidden_states = ar_hidden_states
         else:
