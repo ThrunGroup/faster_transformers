@@ -7,6 +7,8 @@ from transformers import (
 )
 import wandb
 import evaluate
+import gc
+import torch
 
 from data.get_dataset import get_dataset
 from evaluate_models import evaluate_model
@@ -78,7 +80,6 @@ def finetune(
 
     def compute_metrics(eval_preds):
         preds, labels = eval_preds
-        # print(preds.shape, labels.shape)
         # preds have the same shape as the labels, after the argmax(-1) has been calculated
         # by preprocess_logits_for_metrics but we need to shift the labels
         # labels = labels[:, 1:].reshape(-1)
@@ -91,6 +92,8 @@ def finetune(
         if metric.name in ["exact_match"]:
             preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
             labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+        print(f"preds: {tokenizer.batch_decode(preds, skip_special_tokens=True)[:10]}"
+              f"labels: {tokenizer.batch_decode(labels, skip_special_tokens=True)[:10]}")
         return metric.compute(predictions=preds, references=labels)
 
     def preprocess_logits_for_metrics(logits, labels):
@@ -100,7 +103,7 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
-        eval_steps=10,
+        eval_steps=1,
         logging_steps=1,
         save_strategy="steps",
         learning_rate=5e-5,
@@ -156,6 +159,11 @@ def finetune(
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run.finish()
+
+    del trainer
+    gc.collect()
+    torch.cuda.empty_cache()
+    gc.collect()
 
 
 def create_model(
