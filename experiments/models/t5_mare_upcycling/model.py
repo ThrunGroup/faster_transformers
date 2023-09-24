@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from transformers.models.t5.modeling_t5 import T5DenseActDense
 from typing import Optional, Tuple
+import numpy as np
 
 from experiments.models.router import Router
 
@@ -87,8 +88,8 @@ class MAREMLP(T5DenseActDense):
                 // self.num_experts
             )
             top_k = torch.topk(router, k=K, dim=1)  # (B, K, E)
-            top_k_indices = top_k.indices
-            top_k_probs = top_k.values
+            top_k_indices, indices_ = torch.sort(top_k.indices, dim=1)
+            top_k_probs = torch.gather(top_k.values, 1, indices_)
 
             # x: (B, T, E, C) -> (B, K, E, C) -> (B, K, E * C)
             ex_hidden_states = hidden_states.repeat(1, 1, self.num_experts)

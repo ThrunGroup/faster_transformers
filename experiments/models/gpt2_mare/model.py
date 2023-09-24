@@ -78,11 +78,11 @@ class MAREAttention(GPT2Attention):
 
         # E is the number of experts
         router = self.router(hidden_states)  # (B, E, T)
-        top_k = torch.topk(router, k=K, sorted=False)  # (B, E, K)
+        top_k = torch.topk(router, k=K, dim=1, sorted=False)  # (B, E, K)
         # TODO (@luke): Investigate why topk sometimes outputs an arbitrary
         #  sequence and remove the following sorting
-        top_k_indices, indices_ = torch.sort(top_k.indices, dim=-1)
-        top_k_probs = torch.gather(top_k.values * K, -1, indices_)
+        top_k_indices, indices_ = torch.sort(top_k.indices, dim=1)
+        top_k_probs = torch.gather(top_k.values, 1, indices_)
 
         # pick top k tokens for each Expert head
         expert_hidden_states = hidden_states.view(
