@@ -64,6 +64,7 @@ def convert_to_t5_format(example, task, tokenizer):
     )
     labels = target_tokenized.input_ids[0]
     labels[labels == tokenizer.pad_token_id] = -100
+    print(source_text[:10], target_text[:10],)
     return {
         "input_text": source_text,
         "target_text": target_text,
@@ -99,9 +100,9 @@ def get_dataset(dataset_name: str, model_type: str, tokenizer, model):
             lambda x: convert_to_t5_format(x, dataset_name, tokenizer),
             remove_columns=dataset.column_names["train"],
         )
-        model.resize_token_embeddings(
-            len(tokenizer)
-        )  # Resize model vocab after adding labels(e.g. entailment) to vocab
+        # model.resize_token_embeddings(
+        #     len(tokenizer)
+        # )  # Resize model vocab after adding labels(e.g. entailment) to vocab
         dataset = DefaultDataset(tokenizer, model, model_type)
 
         def get_tokenized_dataset(self):
