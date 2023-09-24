@@ -103,6 +103,8 @@ def finetune(
         valid_token_mask = labels != -100  # Create a mask of valid (non-padding) tokens
         labels = labels[valid_token_mask]
         preds = preds[valid_token_mask]
+        print(f"preds: {tokenizer.batch_decode(preds, skip_special_tokens=True)[:10]}"
+              f"labels: {tokenizer.batch_decode(labels, skip_special_tokens=True)[:10]}")
         if metric.name in ["exact_match"]:
             preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
             labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
@@ -246,7 +248,7 @@ def create_model(
 
 
 if __name__ == "__main__":
-    dataset_types = [COLA] #COLA, QNLI, SST2, SQUAD]
+    dataset_types = [COLA, QNLI, SST2, SQUAD]
     model_types = [T5]
     for model_type in model_types:
         for dataset_type in dataset_types:
