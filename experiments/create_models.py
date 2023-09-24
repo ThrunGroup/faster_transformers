@@ -203,7 +203,8 @@ def create_model(
     model.config.pad_token_id = model.config.eos_token_id
 
     tokenizer = AutoTokenizer.from_pretrained(model_type)
-    tokenizer.pad_token = tokenizer.eos_token
+    if GPT2 in model_type:
+        tokenizer.pad_token = tokenizer.eos_token
 
     finetune(
         model_type,
@@ -220,7 +221,7 @@ def create_model(
 
 
 if __name__ == "__main__":
-    dataset_types = [COLA, QNLI, SST2, SQUAD]
+    dataset_types = [QNLI] #COLA, QNLI, SST2, SQUAD]
     model_types = [T5]
     for model_type in model_types:
         for dataset_type in dataset_types:
