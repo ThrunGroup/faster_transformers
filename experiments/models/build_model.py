@@ -51,6 +51,7 @@ def get_model(model_type, dataset_type):
     else:
         # GLUE
         model = AutoModelForSequenceClassification
+    model_type = "lukeleeai/t5-base_baseline"
     model = model.from_pretrained(model_type, config=config)
 
     return config, model
@@ -102,15 +103,17 @@ def build_model(
 
 if __name__ == "__main__":
     model_name = T5
+    model_name = "lukeleeai/t5-base_baseline"
     dataset_type = BILLSUM
 
-    base = build_model(model_name, dataset_type)
+    # base = build_model(model_name, dataset_type)
 
     # base = build_model(model_name)
     mare_upcycling = build_model(
         model_name,
         dataset_type,
         use_mare_upcycling=True,
-        num_experts=4,
-        num_generalists=2,
+        num_experts=8,
+        num_generalists=1,
+        capacity_factor=2,
     )

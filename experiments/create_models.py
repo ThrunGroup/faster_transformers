@@ -136,8 +136,14 @@ def create_model(
     capacity_factor: int = 0,
     use_mare_lora: bool = False,
     use_mare_attention: bool = False,
+    use_mare_upcycling: bool = False,
+    num_generalists: int = 0,
+    num_experts: int = 0,
     apply_to_half_layers: bool = False,
     do_evaluation: bool = True,
+    train_batch_size: int = 0,
+    test_batch_size: int = 0,
+    gradient_checkpointing: bool = False,
     **kwargs,
 ):
     """
@@ -154,15 +160,18 @@ def create_model(
     model_name = model_type + "_" + run_name
     # captures the method parameters and model_name as a dictionary
     config = locals()
+    print(config)
 
     model = build_model(
         model_type,
         dataset_name,
         use_mare_lora=use_mare_lora,
         use_mare_attention=use_mare_attention,
+        use_mare_upcycling=use_mare_upcycling,
+        num_generalists=num_generalists,
+        num_experts=num_experts,
         capacity_factor=capacity_factor,
         apply_to_half_layers=apply_to_half_layers,
-        **kwargs,
     )
     model.config.pad_token_id = model.config.eos_token_id
 
@@ -187,7 +196,7 @@ if __name__ == "__main__":
     common_args = {
         "model_type": T5,
         "dataset_name": BILLSUM,
-        "num_epochs": 6,
+        "num_epochs": 7,
         "train_batch_size": 16,
         "test_batch_size": 32,
         "gradient_checkpointing": True,
@@ -200,32 +209,44 @@ if __name__ == "__main__":
     # )
 
     # MARE without experts
-    create_model(
-        use_mare_upcycling=True,
-        num_generalists=2,
-        capacity_factor=2,
-        num_experts=0,
-        run_name="c2_dense_2_half",
-        apply_to_half_layers=True,
-        **common_args,
-    )
+    # create_model(
+    #     use_mare_upcycling=True,
+    #     num_generalists=2,
+    #     capacity_factor=2,
+    #     num_experts=0,
+    #     run_name="c2_dense_2_half",
+    #     apply_to_half_layers=True,
+    #     **common_args,
+    # )
+
+    # # MARE without ARs
+    # create_model(
+    #     use_mare_upcycling=True,
+    #     capacity_factor=2,
+    #     num_generalists=0,
+    #     num_experts=16,
+    #     run_name="moe_ex16",
+    #     apply_to_half_layers=True,
+    #     **common_args,
+    # )
 
     # MARE
+    # create_model(
+    #     use_mare_upcycling=True,
+    #     capacity_factor=2,
+    #     num_generalists=1,
+    #     num_experts=8,
+    #     run_name="c2_mare_ar1_ex8_half_from_ft_dense",
+    #     apply_to_half_layers=True,
+    #     **common_args,
+    # )
+
     create_model(
         use_mare_upcycling=True,
         capacity_factor=2,
         num_generalists=1,
-        num_experts=16,
-        run_name="c2_mare_ar1_ex8_half",
+        num_experts=4,
+        run_name="c2_mare_ar1_ex4_half_from_ft_dense",
         apply_to_half_layers=True,
-        **common_args,
-    )
-
-    # MARE without ARs
-    create_model(
-        use_mare_upcycling=True,
-        num_generalists=2,
-        num_experts=0,
-        run_name="moe_ex8",
         **common_args,
     )
