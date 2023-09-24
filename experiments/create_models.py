@@ -103,13 +103,9 @@ def finetune(
         valid_token_mask = labels != -100  # Create a mask of valid (non-padding) tokens
         labels = labels[valid_token_mask]
         preds = preds[valid_token_mask]
-        print(f"preds: {preds[:10]}"
-              f"labels: {labels[:10]}")
         if metric.name in ["exact_match"]:
             preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
             labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-        print(f"preds: {tokenizer.batch_decode(preds, skip_special_tokens=True)[:10]}"
-              f"labels: {tokenizer.batch_decode(labels, skip_special_tokens=True)[:10]}")
         return metric.compute(predictions=preds, references=labels)
 
     def preprocess_logits_for_metrics(logits, labels):
@@ -119,13 +115,13 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=checkpoint_path,
         evaluation_strategy="steps",
-        eval_steps=1,
+        eval_steps=10,
         logging_steps=1,
         save_strategy="steps",
         learning_rate=5e-5,
         warmup_steps=5,
-        per_device_train_batch_size=4,  # 32 for SMALL, 12 for MED
-        per_device_eval_batch_size=256,  # 32 for MED, XL, 64 for SMALL
+        per_device_train_batch_size=128,  # 32 for SMALL, 12 for MED
+        per_device_eval_batch_size=128,  # 32 for MED, XL, 64 for SMALL
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -138,6 +134,8 @@ def finetune(
         deepspeed="ds_config.json",
         gradient_checkpointing=True,
         bf16=True,
+        hub_model_id=f"thrunlab/{model_type}_{dataset_type}",
+        push_to_hub=True,
     )
 
     early_stopping = EarlyStoppingCallback(
