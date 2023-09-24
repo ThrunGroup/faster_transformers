@@ -62,7 +62,7 @@ def finetune(
         wandb_run = wandb.init(
             project="t5_billsum",
             name=run_name,
-            reinit=True,
+            # reinit=True,
             config=config,
         )
 
@@ -224,8 +224,8 @@ if __name__ == "__main__":
     #     use_mare_upcycling=True,
     #     capacity_factor=2,
     #     num_generalists=0,
-    #     num_experts=16,
-    #     run_name="moe_ex16",
+    #     num_experts=8,
+    #     run_name="moe_ex8_one_more",
     #     apply_to_half_layers=True,
     #     **common_args,
     # )
@@ -235,8 +235,8 @@ if __name__ == "__main__":
         use_mare_upcycling=True,
         capacity_factor=2,
         num_generalists=1,
-        num_experts=8,
-        run_name="c2_mare_ar1_ex8_half_from_ft_dense_with_sort_noise_scaler",
+        num_experts=7,
+        run_name="mare_ar1_ex7_half_from_ft_scaler_per_expert",
         apply_to_half_layers=True,
         **common_args,
     )
