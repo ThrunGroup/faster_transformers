@@ -1,4 +1,5 @@
 import os
+import subprocess
 from transformers import (
     Trainer,
     TrainingArguments,
@@ -27,6 +28,15 @@ from utils.constants import (
     COLA,
 )
 
+def login_to_huggingface():
+    try:
+        result = subprocess.run(["huggingface-cli", "login"], check=True, text=True)
+        print(result.stdout)
+    except subprocess.CalledProcessError as e:
+        print(f"Error during login: {e}")
+        print(e.stdout)
+        print(e.stderr)
+
 
 def finetune(
     model_type: str,
@@ -40,6 +50,7 @@ def finetune(
     run_name: str = "",
     learning_rate: float = 0.001,
     do_evaluation: bool = True,
+    push_to_hub: bool = False,
 ):
     """
     Finetune the model on a dataset
@@ -60,6 +71,9 @@ def finetune(
 
     current_dir = os.path.dirname(os.path.abspath(__file__))
     checkpoint_path = os.path.join(current_dir, "checkpoints", model_name)
+
+    if push_to_hub:
+        login_to_huggingface()
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
@@ -156,10 +170,13 @@ def finetune(
             test_dataset=test_dataset,
             trainer=trainer,
         )
+    if push_to_hub:
+        trainer.push_to_hub()
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run.finish()
 
+    # Empty out gpu memory
     del trainer
     gc.collect()
     torch.cuda.empty_cache()
