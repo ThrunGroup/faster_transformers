@@ -5,6 +5,8 @@ from transformers import (
     EarlyStoppingCallback,
     AutoTokenizer,
 )
+from torch import nn
+from torch.nn import functional as F
 import wandb
 import evaluate
 import gc
@@ -26,6 +28,18 @@ from utils.constants import (
     SST2,
     COLA,
 )
+
+
+class CustomTrainer(Trainer):
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.pop("labels")
+        # forward pass
+        outputs = model(**inputs)
+
+        logits = outputs.get("logits")[:, 0]
+
+        loss = F.binary_cross_entropy_with_logits(logits, labels.float())
+        return (loss, outputs) if return_outputs else loss
 
 
 def finetune(
@@ -55,7 +69,8 @@ def finetune(
     """
     print("Finetuning started...")
     dataset = get_dataset(dataset_name, tokenizer, model, model_type)
-    train_dataset, test_dataset = dataset.get_tokenized_dataset()
+    train_dataset, val_dataset = dataset.get_tokenized_dataset()
+
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
     preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
@@ -64,15 +79,15 @@ def finetune(
         wandb_run = wandb.init(
             project=f"{model_type}_{dataset_type}",
             name=run_name,
-            # reinit=True,
+            reinit=True,
             config=config,
         )
 
     training_args = TrainingArguments(
         output_dir=model_name,
         evaluation_strategy="steps",
-        eval_steps=2,
-        logging_steps=1,
+        eval_steps=10,
+        logging_steps=10,
         save_strategy="steps",
         learning_rate=5e-5,
         warmup_steps=1,
@@ -85,12 +100,12 @@ def finetune(
         run_name=run_name,
         # for memory issues
         gradient_accumulation_steps=2,
-        # deepspeed="ds_config.json",
+        deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
-        # bf16=True,
-        hub_model_id=f"thrunlab/{model_type}_{dataset_type}",
+        bf16=True,
+        hub_model_id=f"{model_type}_{dataset_type}_{run_name}",
         push_to_hub=True,
     )
 
@@ -98,15 +113,15 @@ def finetune(
         early_stopping_patience=10, early_stopping_threshold=0.001
     )
 
-    trainer = Trainer(
+    trainer = CustomTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset=test_dataset,
+        eval_dataset=val_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
         callbacks=[early_stopping],
-        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         compute_metrics=compute_metrics,
     )
 
@@ -116,15 +131,15 @@ def finetune(
 
     trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
-    if do_evaluation:
-        return evaluate_model(
-            model_name,
-            dataset_name,
-            model=model,
-            tokenizer=tokenizer,
-            test_dataset=test_dataset,
-            trainer=trainer,
-        )
+    # if do_evaluation:
+    #     return evaluate_model(
+    #         model_name,
+    #         dataset_name,
+    #         model=model,
+    #         tokenizer=tokenizer,
+    #         test_dataset=test_dataset,
+    #         trainer=trainer,
+    #     )
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run.finish()
@@ -181,6 +196,7 @@ def create_model(
         capacity_factor=capacity_factor,
         apply_to_half_layers=apply_to_half_layers,
     )
+
     model.config.pad_token_id = model.config.eos_token_id
 
     tokenizer = AutoTokenizer.from_pretrained(model_type)
@@ -201,41 +217,51 @@ def create_model(
 
 
 if __name__ == "__main__":
-    dataset_types = [COLA, QNLI, SST2]
-    model_types = ["t5-small"]
+    dataset_types = [COLA]  # QNLI, SST2
+    model_types = [T5]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 5,
-                "train_batch_size": 1,
-                "test_batch_size": 1,
+                "num_epochs": 10,
+                "train_batch_size": 32,
+                "test_batch_size": 64,
                 "gradient_checkpointing": True,
             }
+
             create_model(
-                use_mare_upcycling=True,
-                num_generalists=0,
-                capacity_factor=2,
-                num_experts=2,
-                run_name=f"{dataset_type}_c2_mare_ex16",
+                run_name="dense_epochs5",
                 **common_args,
             )
-            #
+
             # create_model(
             #     use_mare_upcycling=True,
             #     capacity_factor=2,
             #     num_generalists=1,
-            #     num_experts=8,
-            #     run_name=f"{dataset_type}_c2_mare_ar1_ex8",
+            #     num_experts=7,
+            #     run_name=f"{dataset_type}_mare_ar1_ex7",
+            #     apply_to_half_layers=True,
             #     **common_args,
             # )
+
             # create_model(
             #     use_mare_upcycling=True,
             #     capacity_factor=2,
-            #     num_generalists=2,
-            #     num_experts=0,
-            #     run_name=f"{dataset_type}_c2_mare_ar2",
+            #     num_generalists=0,
+            #     num_experts=8,
+            #     run_name=f"{dataset_type}_moe_ex8",
+            #     apply_to_half_layers=True,
+            #     **common_args,
+            # )
+
+            # create_model(
+            #     use_mare_upcycling=True,
+            #     capacity_factor=4,
+            #     num_generalists=1,
+            #     num_experts=7,
+            #     run_name=f"{dataset_type}_mare_ar1_ex7",
+            #     apply_to_half_layers=True,
             #     **common_args,
             # )
 
@@ -268,15 +294,15 @@ if __name__ == "__main__":
     # )
 
     # MARE
-    create_model(
-        use_mare_upcycling=True,
-        capacity_factor=2,
-        num_generalists=1,
-        num_experts=7,
-        run_name="mare_ar1_ex7_half_from_ft_scaler_per_expert",
-        apply_to_half_layers=True,
-        **common_args,
-    )
+    # create_model(
+    #     use_mare_upcycling=True,
+    #     capacity_factor=2,
+    #     num_generalists=1,
+    #     num_experts=7,
+    #     run_name="mare_ar1_ex7_half_from_ft_scaler_per_expert",
+    #     apply_to_half_layers=True,
+    #     **common_args,
+    # )
 
     # create_model(
     #     use_mare_upcycling=True,

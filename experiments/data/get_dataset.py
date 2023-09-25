@@ -4,7 +4,9 @@ from .get_squad_dataset import SQuAD
 from .get_openwebtext_dataset import OpenWebText
 from .get_sst2_dataset import SST2_Dataset
 from .get_samsum_dataset_ import Samsum
+from .get_glue_dataset_ import GLUE
 from .get_default_dataset import DefaultDataset
+
 from utils.constants import (
     BILLSUM,
     SQUAD,
@@ -107,7 +109,11 @@ def get_dataset(
     :param model: Model to finetune / evaluate
     :return: tokenized dataset, data collator, and compute_metrics function
     """
-    if "t5" in model_type and dataset_name in [QNLI, SST2, COLA, SQUAD]:
+    if (
+        False
+        and "t5" in model_type
+        and dataset_name in [QNLI, SST2, COLA, SQUAD]
+    ):
         if dataset_name in [QNLI, SST2, COLA]:
             dataset = load_dataset("glue", dataset_name)
         else:
@@ -159,6 +165,10 @@ def get_dataset(
             dataset = SST2_Dataset(tokenizer, model, model_type)
         elif dataset_name == SAMSUM:
             dataset = Samsum(tokenizer, model, model_type)
+        elif dataset_name in [COLA, QNLI, SST2]:
+            dataset = GLUE(
+                tokenizer, model, model_type, dataset_type=dataset_name
+            )
         else:
             assert False, f"No dataset named {dataset_name} available."
 

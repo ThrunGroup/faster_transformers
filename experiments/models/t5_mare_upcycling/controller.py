@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from torch import nn
 
 from experiments.models.t5_mare_upcycling.model import MAREMLP
 
@@ -56,6 +57,7 @@ def apply_mare_upcycling_t5(
     num_experts: int = 0,
     capacity_factor: int = 0,
     apply_to_half_layers: bool = False,
+    is_sequence_classification: bool = False,
 ):
     print("Applying MARE Upcycling to T5...")
     print(
@@ -69,7 +71,9 @@ def apply_mare_upcycling_t5(
 
     # Iterate through blocks and replace self-attention layers
     # for block in [model]
-    for is_decoder, network in enumerate([model.encoder, model.decoder]):
+    for is_decoder, network in enumerate(
+        [model.transformer.encoder, model.transformer.decoder]
+    ):
         for block_idx, block in enumerate(network.block):
             if apply_to_half_layers and block_idx % 2 == 1:
                 # apply MoE to half the layers

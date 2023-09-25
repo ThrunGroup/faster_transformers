@@ -85,11 +85,16 @@ class MAREMLP(T5DenseActDense):
         # Experts
         if self.num_experts:
             router = self.ex_router(hidden_states)  # (B, T, E)
-            K = (
-                T
-                * (self.capacity_factor - self.num_all_rounders)
-                // self.num_experts
+
+            K = max(
+                (
+                    T
+                    * (self.capacity_factor - self.num_all_rounders)
+                    // self.num_experts
+                ),
+                1,
             )
+
             top_k = torch.topk(router, k=K, dim=1)  # (B, K, E)
             top_k_indices, indices_ = torch.sort(top_k.indices, dim=1)
             top_k_probs = torch.gather(top_k.values, 1, indices_)
@@ -138,10 +143,6 @@ class MAREMLP(T5DenseActDense):
             ex_hidden_states = ex_zeros.sum(dim=2)
 
         if self.num_all_rounders and self.num_experts:
-            # hidden_states = (
-            #     self.scales[0] * ar_hidden_states
-            #     + self.scales[1] * ex_hidden_states
-            # )
             hidden_states = (
                 self.ar_scales[0] * ar_hidden_states + ex_hidden_states
             )

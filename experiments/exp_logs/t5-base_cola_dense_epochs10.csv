@@ -1,0 +1,2 @@
+eval_loss,eval_matthews_correlation,eval_runtime,eval_samples_per_second,eval_steps_per_second,epoch,inference_time
+0.4433958828449249,0.5376504488829119,1.5799,541.811,4.431,9.92,1.5825729370117188

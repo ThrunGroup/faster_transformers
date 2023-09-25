@@ -8,6 +8,7 @@ from transformers import (
     T5ForConditionalGeneration,
     T5ForSequenceClassification,
 )
+from torch import nn
 
 
 from experiments.models.gpt2_mare.controller import apply_mare_attention
@@ -48,7 +49,7 @@ def get_model(model_type, dataset_type):
     # get model
     if "t5" in model_type:
         model = T5ForConditionalGeneration
-
+        model = T5ForSequenceClassification
     elif dataset_type in [BILLSUM, SAMSUM]:
         model = AutoModelForSeq2SeqLM
         if GPT2 in model_type:
@@ -58,7 +59,7 @@ def get_model(model_type, dataset_type):
     else:
         # GLUE
         model = AutoModelForSequenceClassification
-    model_type = "lukeleeai/t5-base_baseline"
+    # model_type = "thrunlab/t5-base_cola_moe_e2"
     model = model.from_pretrained(model_type, config=config)
 
     return config, model
@@ -82,11 +83,15 @@ def build_model(
         function_to_apply = (
             apply_mare_attention if num_generalists else apply_gated_attention
         )
-        function_to_apply(model, config, random_token_selection, num_generalists)
+        function_to_apply(
+            model, config, random_token_selection, num_generalists
+        )
 
     if use_mare_upcycling:
         function_to_apply = (
-            apply_mare_upcycling_gpt2 if GPT2 in model_type else apply_mare_upcycling_t5
+            apply_mare_upcycling_gpt2
+            if GPT2 in model_type
+            else apply_mare_upcycling_t5
         )
         function_to_apply(
             model,
@@ -95,11 +100,17 @@ def build_model(
             num_experts,
             capacity_factor,
             apply_to_half_layers,
+            is_sequence_classification=(dataset_type in [COLA]),
         )
 
     if use_mare_lora:
         apply_mare_lora(model, config, num_generalists, num_experts)
         freeze_model(model)
+
+    if dataset_type in [COLA]:
+        model.classification_head = nn.Sequential(
+            nn.Linear(768, 128), nn.GELU(), nn.Linear(128, 8)
+        )
 
     return model
 
