@@ -21,24 +21,29 @@ def inject_pretrained_weights(
         new_mlp.wi_ar.weight.data = wi.repeat(1, num_all_rounders)
         new_mlp.wo_ar.weight.data = wo.repeat(num_all_rounders, 1)
 
-        if num_all_rounders > 1:
-            new_mlp.wi_ar.weight.data += torch.randn_like(
-                new_mlp.wi_ar.weight
-            ) / np.sqrt(new_mlp.wi_ar.weight.shape[1])
-            
-            new_mlp.wo_ar.weight.data += (
-                torch.randn_like(new_mlp.wo_ar.weight)
-                / np.sqrt(new_mlp.wo_ar.weight.shape[1])
-            )
+        if num_all_rounders >= 2:
+            with torch.no_grad():
+                new_mlp.wi_ar.weight.data += torch.randn_like(
+                    new_mlp.wi_ar.weight
+                ) / np.sqrt(new_mlp.wi_ar.weight.shape[1])
+                new_mlp.wo_ar.weight.data += (
+                    torch.randn_like(new_mlp.wo_ar.weight)
+                    * 2
+                    / np.sqrt(new_mlp.wo_ar.weight.shape[1])
+                )
 
     if num_experts:
         new_mlp.wi_ex.weight.data = wi.repeat(1, num_experts)
         new_shape = new_mlp.wi_ex.weight.shape
-        new_mlp.wi_ex.weight.data += torch.randn(new_shape) / np.sqrt(new_shape[1])
+        new_mlp.wi_ex.weight.data += torch.randn(new_shape) / np.sqrt(
+            new_shape[1]
+        )
 
         new_mlp.wo_ex.weight.data = wo.repeat(num_experts, 1)
         new_shape = new_mlp.wo_ex.weight.shape
-        new_mlp.wo_ex.weight.data += torch.randn(new_shape) / np.sqrt(new_shape[1])
+        new_mlp.wo_ex.weight.data += torch.randn(new_shape) / np.sqrt(
+            new_shape[1]
+        )
 
     del new_mlp.wi
     del new_mlp.wo

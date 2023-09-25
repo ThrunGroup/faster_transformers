@@ -7,9 +7,9 @@ from .dataset import Dataset
 
 
 class SST2_Dataset(Dataset):
-    def __init__(self, tokenizer, model=None):
+    def __init__(self, tokenizer, model=None, model_type: str = ""):
         # tokenizer.pad_token = tokenizer.eos_token
-        super().__init__(tokenizer, model)
+        super().__init__(tokenizer, model, model_type)
         self.metric = evaluate.load("accuracy")
 
     def get_tokenized_dataset(self):

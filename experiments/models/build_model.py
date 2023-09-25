@@ -5,6 +5,8 @@ from transformers import (
     AutoModelForSeq2SeqLM,
     AutoModelForQuestionAnswering,
     AutoModelForSequenceClassification,
+    T5ForConditionalGeneration,
+    T5ForSequenceClassification,
 )
 
 
@@ -30,6 +32,8 @@ from utils.constants import (
     SQUAD,
     SST2,
     SAMSUM,
+    QNLI,
+    COLA,
 )
 
 
@@ -42,7 +46,10 @@ def get_model(model_type, dataset_type):
     config = config.from_pretrained(model_type)
 
     # get model
-    if dataset_type in [BILLSUM, SAMSUM]:
+    if "t5" in model_type:
+        model = T5ForConditionalGeneration
+
+    elif dataset_type in [BILLSUM, SAMSUM]:
         model = AutoModelForSeq2SeqLM
         if GPT2 in model_type:
             model = GPT2LMHeadModel
@@ -75,15 +82,11 @@ def build_model(
         function_to_apply = (
             apply_mare_attention if num_generalists else apply_gated_attention
         )
-        function_to_apply(
-            model, config, random_token_selection, num_generalists
-        )
+        function_to_apply(model, config, random_token_selection, num_generalists)
 
     if use_mare_upcycling:
         function_to_apply = (
-            apply_mare_upcycling_gpt2
-            if GPT2 in model_type
-            else apply_mare_upcycling_t5
+            apply_mare_upcycling_gpt2 if GPT2 in model_type else apply_mare_upcycling_t5
         )
         function_to_apply(
             model,

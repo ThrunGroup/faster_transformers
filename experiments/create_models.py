@@ -6,6 +6,9 @@ from transformers import (
     AutoTokenizer,
 )
 import wandb
+import evaluate
+import gc
+import torch
 
 from data.get_dataset import get_dataset
 from evaluate_models import evaluate_model
@@ -18,6 +21,10 @@ from utils.constants import (
     # SST2,
     SAMSUM,
     BILLSUM,
+    SQUAD,
+    QNLI,
+    SST2,
+    COLA,
 )
 
 
@@ -31,6 +38,7 @@ def finetune(
     resume_from_checkpoint: bool = False,
     run_name: str = "",
     do_evaluation: bool = True,
+    push_to_hub: bool = False,
     config=None,
 ):
     """
@@ -46,21 +54,15 @@ def finetune(
     :returns: Dictionary of evaluation metrics and inference time if `do_evaluation` is true
     """
     print("Finetuning started...")
-    dataset = get_dataset(dataset_name, tokenizer, model_type)
+    dataset = get_dataset(dataset_name, tokenizer, model, model_type)
     train_dataset, test_dataset = dataset.get_tokenized_dataset()
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
     preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
 
-    init_wandb = True
-    try:
-        init_wandb = int(os.environ["LOCAL_RANK"]) == 0
-    except:
-        pass
-
-    if init_wandb:
+    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
-            project="t5_billsum",
+            project=f"{model_type}_{dataset_type}",
             name=run_name,
             # reinit=True,
             config=config,
@@ -69,11 +71,11 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=model_name,
         evaluation_strategy="steps",
-        eval_steps=250,
-        logging_steps=10,
+        eval_steps=2,
+        logging_steps=1,
         save_strategy="steps",
         learning_rate=5e-5,
-        warmup_steps=400,
+        warmup_steps=1,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -83,11 +85,12 @@ def finetune(
         run_name=run_name,
         # for memory issues
         gradient_accumulation_steps=2,
-        deepspeed="ds_config.json",
+        # deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
-        bf16=True,
+        # bf16=True,
+        hub_model_id=f"thrunlab/{model_type}_{dataset_type}",
         push_to_hub=True,
     )
 
@@ -102,9 +105,9 @@ def finetune(
         eval_dataset=test_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        compute_metrics=compute_metrics,
-        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         callbacks=[early_stopping],
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        compute_metrics=compute_metrics,
     )
 
     print("\n*********************")
@@ -123,15 +126,21 @@ def finetune(
             trainer=trainer,
         )
 
-    if int(os.environ["LOCAL_RANK"]) == 0:
+    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run.finish()
+
+    # Empty out gpu memory
+    del trainer
+    gc.collect()
+    torch.cuda.empty_cache()
+    gc.collect()
 
 
 def create_model(
     model_type: str,
     dataset_name: str,
     num_epochs: int = 5,
-    # random_token_selection: bool = False,
+    random_token_selection: bool = False,
     run_name: str = "",
     capacity_factor: int = 0,
     use_mare_lora: bool = False,
@@ -160,7 +169,6 @@ def create_model(
     model_name = model_type + "_" + run_name
     # captures the method parameters and model_name as a dictionary
     config = locals()
-    print(config)
 
     model = build_model(
         model_type,
@@ -193,14 +201,43 @@ def create_model(
 
 
 if __name__ == "__main__":
-    common_args = {
-        "model_type": T5,
-        "dataset_name": BILLSUM,
-        "num_epochs": 8,
-        "train_batch_size": 16,
-        "test_batch_size": 32,
-        "gradient_checkpointing": True,
-    }
+    dataset_types = [COLA, QNLI, SST2]
+    model_types = ["t5-small"]
+    for model_type in model_types:
+        for dataset_type in dataset_types:
+            common_args = {
+                "model_type": model_type,
+                "dataset_name": dataset_type,
+                "num_epochs": 5,
+                "train_batch_size": 1,
+                "test_batch_size": 1,
+                "gradient_checkpointing": True,
+            }
+            create_model(
+                use_mare_upcycling=True,
+                num_generalists=0,
+                capacity_factor=2,
+                num_experts=2,
+                run_name=f"{dataset_type}_c2_mare_ex16",
+                **common_args,
+            )
+            #
+            # create_model(
+            #     use_mare_upcycling=True,
+            #     capacity_factor=2,
+            #     num_generalists=1,
+            #     num_experts=8,
+            #     run_name=f"{dataset_type}_c2_mare_ar1_ex8",
+            #     **common_args,
+            # )
+            # create_model(
+            #     use_mare_upcycling=True,
+            #     capacity_factor=2,
+            #     num_generalists=2,
+            #     num_experts=0,
+            #     run_name=f"{dataset_type}_c2_mare_ar2",
+            #     **common_args,
+            # )
 
     # Original dense
     # create_model(
