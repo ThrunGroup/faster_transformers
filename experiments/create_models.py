@@ -78,7 +78,7 @@ def finetune(
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
             project=f"{model_type}_{dataset_type}",
-            name=run_name,
+            name=model_name,
             reinit=True,
             config=config,
         )
@@ -90,14 +90,14 @@ def finetune(
         logging_steps=10,
         save_strategy="steps",
         learning_rate=5e-5,
-        warmup_steps=1,
+        warmup_steps=200,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
         save_total_limit=1,
         load_best_model_at_end=True,
         report_to="wandb",
-        run_name=run_name,
+        run_name=model_name,
         # for memory issues
         gradient_accumulation_steps=2,
         deepspeed="ds_config.json",
@@ -181,7 +181,15 @@ def create_model(
     :return: Dictionary of evaluation logs if `do_evaluation` is true
     """
     # Build a Gated Attention model
-    model_name = model_type + "_" + run_name
+    model_name = f"{model_type}_{dataset_name}"
+    if num_generalists == 1:
+        model_name += f"_mare_ar{num_generalists}_ex{num_experts}"
+    elif num_experts:
+        model_name += f"_moe_ex{num_experts}"
+    else:
+        model_name += f"_dense"
+    model_name += run_name  # optional
+
     # captures the method parameters and model_name as a dictionary
     config = locals()
 
@@ -224,36 +232,34 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 10,
+                "num_epochs": 5,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": True,
             }
 
+            # create_model(
+            #     run_name="dense_epochs5",
+            #     **common_args,
+            # )
+
             create_model(
-                run_name="dense_epochs5",
+                use_mare_upcycling=True,
+                capacity_factor=2,
+                num_generalists=1,
+                num_experts=15,
+                apply_to_half_layers=True,
                 **common_args,
             )
 
-            # create_model(
-            #     use_mare_upcycling=True,
-            #     capacity_factor=2,
-            #     num_generalists=1,
-            #     num_experts=7,
-            #     run_name=f"{dataset_type}_mare_ar1_ex7",
-            #     apply_to_half_layers=True,
-            #     **common_args,
-            # )
-
-            # create_model(
-            #     use_mare_upcycling=True,
-            #     capacity_factor=2,
-            #     num_generalists=0,
-            #     num_experts=8,
-            #     run_name=f"{dataset_type}_moe_ex8",
-            #     apply_to_half_layers=True,
-            #     **common_args,
-            # )
+            create_model(
+                use_mare_upcycling=True,
+                capacity_factor=2,
+                num_generalists=0,
+                num_experts=16,
+                apply_to_half_layers=True,
+                **common_args,
+            )
 
             # create_model(
             #     use_mare_upcycling=True,

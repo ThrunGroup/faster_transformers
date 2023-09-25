@@ -107,9 +107,12 @@ def build_model(
         apply_mare_lora(model, config, num_generalists, num_experts)
         freeze_model(model)
 
-    if dataset_type in [COLA]:
+    if dataset_type in [COLA, QNLI, SST2]:
         model.classification_head = nn.Sequential(
-            nn.Linear(768, 128), nn.GELU(), nn.Linear(128, 8)
+            nn.Linear(config.d_model, config.d_model),
+            nn.GELU(),
+            nn.Dropout(p=0.01),
+            nn.Linear(config.d_model, 8),
         )
 
     return model

@@ -81,7 +81,8 @@ def convert_to_t5_format(example, task, tokenizer):
 
 
 def get_metrics(data_type):
-    return evaluate.load("glue", data_type)
+    return evaluate.load("accuracy")
+    # evaluate.load("glue", data_type)
     if data_type == COLA:
         metric = evaluate.load("matthews_correlation")
     elif data_type == SST2:
