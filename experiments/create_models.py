@@ -246,7 +246,7 @@ def create_model(
 
 
 if __name__ == "__main__":
-    dataset_types = [COLA, QNLI, SST2, SQUAD]
+    dataset_types = [QNLI, SST2, SQUAD, COLA]
     model_types = [T5]
     for model_type in model_types:
         for dataset_type in dataset_types:
@@ -260,8 +260,8 @@ if __name__ == "__main__":
                 use_mare_upcycling=True,
                 num_generalists=0,
                 capacity_factor=2,
-                num_experts=16,
-                run_name=f"{dataset_type}_c2_mare_ex16",
+                num_experts=8,
+                run_name=f"{dataset_type}_c2_mare_ex8",
                 **common_args,
             )
 
@@ -269,8 +269,8 @@ if __name__ == "__main__":
                 use_mare_upcycling=True,
                 capacity_factor=2,
                 num_generalists=1,
-                num_experts=8,
-                run_name=f"{dataset_type}_c2_mare_ar1_ex8",
+                num_experts=7,
+                run_name=f"{dataset_type}_c2_mare_ar1_ex7",
                 **common_args,
             )
             create_model(
