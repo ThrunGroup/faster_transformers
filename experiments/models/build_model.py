@@ -59,8 +59,10 @@ def get_model(model_type, dataset_type):
     else:
         # GLUE
         model = AutoModelForSequenceClassification
-    # model_type = "thrunlab/t5-base_cola_moe_e2"
+    # model_type = "lukeleeai/t5-base_cola_dense_epochs5"
     model = model.from_pretrained(model_type, config=config)
+
+    print(model)
 
     return config, model
 
@@ -108,11 +110,12 @@ def build_model(
         freeze_model(model)
 
     if dataset_type in [COLA, QNLI, SST2]:
-        model.classification_head = nn.Sequential(
-            nn.Linear(config.d_model, config.d_model),
-            nn.GELU(),
-            nn.Dropout(p=0.01),
-            nn.Linear(config.d_model, 8),
+        original_out_proj = model.classification_head.out_proj
+        new_out_proj = nn.Linear(config.d_model, 4)
+        new_out_proj.weight.data = original_out_proj.weight.data.repeat(4, 1)
+        new_out_proj.bias.data = original_out_proj.bias.data.repeat(4)
+        model.classification_head.out_proj = nn.Sequential(
+            new_out_proj, nn.Sigmoid()
         )
 
     return model

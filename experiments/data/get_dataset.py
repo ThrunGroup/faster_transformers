@@ -161,8 +161,6 @@ def get_dataset(
             dataset = SQuAD(tokenizer, model, model_type)
         elif dataset_name == OPENWEBTEXT:
             dataset = OpenWebText(tokenizer, model, model_type)
-        elif dataset_name == SST2:
-            dataset = SST2_Dataset(tokenizer, model, model_type)
         elif dataset_name == SAMSUM:
             dataset = Samsum(tokenizer, model, model_type)
         elif dataset_name in [COLA, QNLI, SST2]:

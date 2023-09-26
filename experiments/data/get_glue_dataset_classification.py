@@ -81,14 +81,21 @@ class GLUE(Dataset):
         )
         return data_collator
 
-    def get_compute_metrics(self, preds):
+    def compute_metrics(self, preds):
         """
         Load the compute_metrics function that is used by the HuggingFace Trainer to
         evaluate the model.
         :return:
         """
         preds, labels = preds
-        preds = preds[0][:, 0]
+        # preds = preds[0].argmax(-1)
+        # print(preds[0].shape)
+        # print(preds[0])
+        print(preds[0].shape, labels.shape)
+        preds = np.array(
+            preds[0][:, 0] > 1 / 2, dtype=float
+        )  # the output is sigmoid
+        # print(preds)
         return self.metrics.compute(predictions=preds, references=labels)
 
     def preprocess(self, example):

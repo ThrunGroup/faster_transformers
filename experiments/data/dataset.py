@@ -15,6 +15,13 @@ class Dataset(ABC):
     def preprocess(self, examples):
         pass
 
+    def get_compute_metrics(self):
+        """
+        Return the compute_metrics function that is used by the HuggingFace Trainer to
+        evaluate the model.
+        """
+        return self.compute_metrics
+
     @abstractmethod
     def compute_metrics(self, logits=None, labels=None):
         pass

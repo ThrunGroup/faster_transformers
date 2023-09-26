@@ -5,15 +5,13 @@ from transformers import (
     EarlyStoppingCallback,
     AutoTokenizer,
 )
-from torch import nn
 from torch.nn import functional as F
 import wandb
-import evaluate
+
 import gc
 import torch
 
 from data.get_dataset import get_dataset
-from evaluate_models import evaluate_model
 from models.build_model import build_model
 from utils.constants import (
     # Models
@@ -21,13 +19,15 @@ from utils.constants import (
     T5,
     # Datasets
     # SST2,
-    SAMSUM,
     BILLSUM,
     SQUAD,
     QNLI,
     SST2,
     COLA,
 )
+
+
+os.environ["MASTER_PORT"] = "29502"
 
 
 class CustomTrainer(Trainer):
@@ -37,8 +37,9 @@ class CustomTrainer(Trainer):
         outputs = model(**inputs)
 
         logits = outputs.get("logits")[:, 0]
+        labels = labels.to(logits.dtype)
 
-        loss = F.binary_cross_entropy_with_logits(logits, labels.float())
+        loss = F.binary_cross_entropy(logits, labels)
         return (loss, outputs) if return_outputs else loss
 
 
@@ -73,7 +74,7 @@ def finetune(
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
-    preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
+    # preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
@@ -87,7 +88,7 @@ def finetune(
         output_dir=model_name,
         evaluation_strategy="steps",
         eval_steps=10,
-        logging_steps=10,
+        logging_steps=5,
         save_strategy="steps",
         learning_rate=5e-5,
         warmup_steps=200,
@@ -105,6 +106,7 @@ def finetune(
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
         bf16=True,
+        ddp_find_unused_parameters=True,
         hub_model_id=f"{model_type}_{dataset_type}_{run_name}",
         push_to_hub=True,
     )
@@ -114,6 +116,7 @@ def finetune(
     )
 
     trainer = CustomTrainer(
+        # trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
@@ -236,16 +239,34 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 4,
+                "num_epochs": 3,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": True,
             }
 
-            # create_model(
-            #     run_name="dense_epochs5",
-            #     **common_args,
-            # )
+            create_model(
+                run_name="dense_epochs5",
+                **common_args,
+            )
+
+            create_model(
+                use_mare_upcycling=True,
+                capacity_factor=2,
+                num_generalists=1,
+                num_experts=7,
+                apply_to_half_layers=True,
+                **common_args,
+            )
+
+            create_model(
+                use_mare_upcycling=True,
+                capacity_factor=2,
+                num_generalists=0,
+                num_experts=8,
+                apply_to_half_layers=True,
+                **common_args,
+            )
 
             create_model(
                 use_mare_upcycling=True,
@@ -264,16 +285,6 @@ if __name__ == "__main__":
                 apply_to_half_layers=True,
                 **common_args,
             )
-
-            # create_model(
-            #     use_mare_upcycling=True,
-            #     capacity_factor=4,
-            #     num_generalists=1,
-            #     num_experts=7,
-            #     run_name=f"{dataset_type}_mare_ar1_ex7",
-            #     apply_to_half_layers=True,
-            #     **common_args,
-            # )
 
     # Original dense
     # create_model(

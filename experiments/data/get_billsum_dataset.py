@@ -88,14 +88,6 @@ class Billsum(Dataset):
         )
         return data_collator
 
-    def get_compute_metrics(self):
-        """
-        Load the compute_metrics function that is used by the HuggingFace Trainer to
-        evaluate the model.
-        :return:
-        """
-        return self.compute_metrics
-
     def preprocess(self, examples):
         inputs = [self.prefix + doc for doc in examples["text"]]
         model_inputs = self.tokenizer(inputs, max_length=512, truncation=True)
