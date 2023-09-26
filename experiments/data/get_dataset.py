@@ -4,7 +4,7 @@ from .get_squad_dataset import SQuAD
 from .get_openwebtext_dataset import OpenWebText
 from .get_sst2_dataset import SST2_Dataset
 from .get_samsum_dataset_ import Samsum
-from .get_glue_dataset_ import GLUE
+from .get_glue_dataset_classification import GLUE
 from .get_default_dataset import DefaultDataset
 
 from utils.constants import (

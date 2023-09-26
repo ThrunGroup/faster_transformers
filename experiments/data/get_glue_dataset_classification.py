@@ -1,0 +1,119 @@
+from transformers import DataCollatorForSeq2Seq, DataCollatorWithPadding
+import evaluate
+import torch
+from datasets import load_dataset
+import numpy as np
+import pickle
+import os
+
+from .dataset import Dataset
+from utils.constants import (
+    QNLI,
+    SST2,
+    COLA,
+)
+
+
+class GLUE(Dataset):
+    def __init__(
+        self,
+        tokenizer,
+        model,
+        model_type: str,
+        dataset_type: str,
+    ):
+        """
+        :param tokenizer: Tokenizer to tokenize the inputs
+        :param model: Model to finetune / evaluate
+        :param metrics: Metrics to evaluate the model
+        :param prefix: Prefix to the inputs to start the summarization task
+        """
+        super().__init__(tokenizer, model, model_type)
+        self.dataset_type = dataset_type
+        self.metrics = evaluate.load("accuracy")
+
+    def get_tokenized_dataset(self):
+        """
+        Load and build a simple summarization dataset
+        :return: tokenized dataset, data collator, and compute_metrics function
+        """
+        try:
+            # Try to load preprocessed data
+            with open(
+                f"{self.model_type}_{self.dataset_type}_dataset.pkl", "rb"
+            ) as f:
+                tokenized_dataset = pickle.load(f)
+            print("Loaded preprocessed data from disk.")
+
+        except FileNotFoundError:
+            # If preprocessed data does not exist, load and preprocess
+            print("No dataset found.")
+            dataset = load_dataset(
+                "glue",
+                self.dataset_type,
+            )
+
+            tokenized_dataset = dataset.map(
+                self.preprocess,
+                remove_columns=dataset.column_names["train"],
+            )
+
+            # Save the preprocessed data
+            with open(
+                f"{self.model_type}_{self.dataset_type}_dataset.pkl", "wb"
+            ) as f:
+                pickle.dump(tokenized_dataset, f)
+            print("Preprocessed and saved data to disk.")
+
+        train_dataset = tokenized_dataset["train"]
+        val_dataset = tokenized_dataset["validation"]
+
+        return train_dataset, val_dataset
+
+    def get_data_collator(self):
+        """
+        Load the data collator that is responsible for taking in batches of examples
+        and converting them into a format that can be consumed by the model.
+        """
+        data_collator = DataCollatorWithPadding(
+            tokenizer=self.tokenizer,
+            max_length=512,
+        )
+        return data_collator
+
+    def get_compute_metrics(self, preds):
+        """
+        Load the compute_metrics function that is used by the HuggingFace Trainer to
+        evaluate the model.
+        :return:
+        """
+        preds, labels = preds
+        preds = preds[0][:, 0]
+        return self.metrics.compute(predictions=preds, references=labels)
+
+    def preprocess(self, example):
+        if self.dataset_type == QNLI:
+            input_text = (
+                "Does the context entail the question? \n"
+                + "context: "
+                + example["sentence"]
+                + " question: "
+                + example["question"]
+            )
+        elif self.dataset_type == SST2:
+            input_text = (
+                "Positive or negative sentiment?\n" + example["sentence"]
+            )
+        elif self.dataset_type == COLA:
+            input_text = "cola classification: " + example["sentence"]
+        else:
+            raise ValueError(f"Invalid dataset: ({self.dataset_type})")
+
+        inputs = self.tokenizer(
+            input_text,
+            truncation=True,
+            max_length=512,
+        )
+        inputs["labels"] = example["label"]
+
+        return inputs
