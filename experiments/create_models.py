@@ -16,7 +16,9 @@ from models.build_model import build_model
 from utils.constants import (
     # Models
     GPT2,
+    GPT2_XL,
     T5,
+    T5_3B,
     # Datasets
     # SST2,
     BILLSUM,
@@ -24,10 +26,13 @@ from utils.constants import (
     QNLI,
     SST2,
     COLA,
+    WIC,
+    MULTIRC,
+    BOOLQ,
 )
 
 
-os.environ["MASTER_PORT"] = "29502"
+os.environ["MASTER_PORT"] = "29509"
 
 
 class CustomTrainer(Trainer):
@@ -74,7 +79,7 @@ def finetune(
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
-    # preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
+    preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
@@ -107,7 +112,7 @@ def finetune(
         gradient_checkpointing=config["gradient_checkpointing"],
         bf16=True,
         ddp_find_unused_parameters=True,
-        hub_model_id=f"{model_type}_{dataset_type}_{run_name}",
+        hub_model_id=model_name,
         push_to_hub=True,
     )
 
@@ -229,62 +234,66 @@ def create_model(
 
 if __name__ == "__main__":
     dataset_types = [
+        # BILLSUM,
+        COLA,
+        SST2,
         QNLI,
-        # COLA,
-        # SST2,
-    ]  # QNLI, SST2
-    model_types = [T5]
+        BOOLQ,
+        MULTIRC,
+        WIC,
+    ]
+    model_types = [T5_3B]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 3,
+                "num_epochs": 10,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": True,
             }
 
             create_model(
+                use_mare_upcycling=True,
+                capacity_factor=2,
+                num_generalists=1,
+                num_experts=3,
+                apply_to_half_layers=True,
+                **common_args,
+            )
+
+            create_model(
+                use_mare_upcycling=True,
+                capacity_factor=2,
+                num_generalists=0,
+                num_experts=4,
+                apply_to_half_layers=True,
+                **common_args,
+            )
+
+            create_model(
                 run_name="dense_epochs5",
                 **common_args,
             )
 
-            create_model(
-                use_mare_upcycling=True,
-                capacity_factor=2,
-                num_generalists=1,
-                num_experts=7,
-                apply_to_half_layers=True,
-                **common_args,
-            )
+            # create_model(
+            #     use_mare_upcycling=True,
+            #     capacity_factor=2,
+            #     num_generalists=1,
+            #     num_experts=15,
+            #     apply_to_half_layers=True,
+            #     **common_args,
+            # )
 
-            create_model(
-                use_mare_upcycling=True,
-                capacity_factor=2,
-                num_generalists=0,
-                num_experts=8,
-                apply_to_half_layers=True,
-                **common_args,
-            )
-
-            create_model(
-                use_mare_upcycling=True,
-                capacity_factor=2,
-                num_generalists=1,
-                num_experts=15,
-                apply_to_half_layers=True,
-                **common_args,
-            )
-
-            create_model(
-                use_mare_upcycling=True,
-                capacity_factor=2,
-                num_generalists=0,
-                num_experts=16,
-                apply_to_half_layers=True,
-                **common_args,
-            )
+            # create_model(
+            #     use_mare_upcycling=True,
+            #     capacity_factor=2,
+            #     num_generalists=0,
+            #     num_experts=16,
+            #     apply_to_half_layers=True,
+            #     **common_args,
+            # )
 
     # Original dense
     # create_model(

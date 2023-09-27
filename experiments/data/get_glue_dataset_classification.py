@@ -11,10 +11,14 @@ from utils.constants import (
     QNLI,
     SST2,
     COLA,
+    WIC,
+    MULTIRC,
+    BOOLQ,
+    SUPERGLUE,
 )
 
 
-class GLUE(Dataset):
+class GLUEDataset(Dataset):
     def __init__(
         self,
         tokenizer,
@@ -31,6 +35,7 @@ class GLUE(Dataset):
         super().__init__(tokenizer, model, model_type)
         self.dataset_type = dataset_type
         self.metrics = evaluate.load("accuracy")
+        self.benchmark = "super_glue" if dataset_type in SUPERGLUE else "glue"
 
     def get_tokenized_dataset(self):
         """
@@ -49,7 +54,7 @@ class GLUE(Dataset):
             # If preprocessed data does not exist, load and preprocess
             print("No dataset found.")
             dataset = load_dataset(
-                "glue",
+                self.benchmark,
                 self.dataset_type,
             )
 
@@ -113,6 +118,32 @@ class GLUE(Dataset):
             )
         elif self.dataset_type == COLA:
             input_text = "cola classification: " + example["sentence"]
+        elif self.dataset_type == BOOLQ:
+            input_text = (
+                "Yes or No?"
+                + "\nQuestion: "
+                + example["question"]
+                + "\nPessage: "
+                + example["passage"]
+            )
+        elif self.dataset_type == MULTIRC:
+            input_text = (
+                "Is the answer correct?"
+                + "\nPassage: "
+                + example["paragraph"]
+                + "\nQuestion: "
+                + example["question"]
+                + "\nAnswer: "
+                + example["answer"]
+            )
+        elif self.dataset_type == WIC:
+            input_text = (
+                "Is the word used in the same context?"
+                + "\nFirst sentence: "
+                + example["sentence1"]
+                + "\nSecond sentence: "
+                + example["sentence2"]
+            )
         else:
             raise ValueError(f"Invalid dataset: ({self.dataset_type})")
 
@@ -124,3 +155,6 @@ class GLUE(Dataset):
         inputs["labels"] = example["label"]
 
         return inputs
+
+    def preprocess_logits_for_metrics(self, **args):
+        pass

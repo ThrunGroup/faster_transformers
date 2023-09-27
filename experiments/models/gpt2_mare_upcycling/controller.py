@@ -1,10 +1,11 @@
+import torch
+
 from .model import MAREMLP
 
 
 def inject_pretrained_weights(
     new_mlp,
     original_block,
-    config,
     num_all_rounders: int = 0,
     num_experts: int = 0,
     random_noise_std: float = 1e-3,
@@ -24,7 +25,9 @@ def inject_pretrained_weights(
     if num_all_rounders:
         new_mlp.c_fc_ar.weight.data = c_fc_weight.repeat(num_all_rounders, 1)
         new_mlp.c_fc_ar.bias.data = c_fc_bias.repeat(1)
-        new_mlp.c_proj_ar.weight.data = c_proj_weight.repeat(1, num_all_rounders)
+        new_mlp.c_proj_ar.weight.data = c_proj_weight.repeat(
+            1, num_all_rounders
+        )
         new_mlp.c_proj_ar.bias.data = c_proj_bias.repeat(num_all_rounders)
         params_list += [
             new_mlp.c_fc_ar.weight,
@@ -49,7 +52,10 @@ def inject_pretrained_weights(
     if random_noise_std:
         for param in params_list:
             with torch.no_grad():
-                param += torch.normal(mean=0, std=random_noise_std, size=param.shape)
+                param += torch.normal(
+                    mean=0, std=random_noise_std, size=param.shape
+                )
+
 
 def apply_mare_upcycling_gpt2(
     model,
@@ -69,7 +75,9 @@ def apply_mare_upcycling_gpt2(
     )
 
     # Iterate through blocks and replace self-attention layers
-    for block in model.transformer.h:
+    for index, block in enumerate(model.transformer.h):
+        if index % 2 == 0:
+            continue
         intermediate_size = block.mlp.c_fc.weight.shape[1]
         new_attention = MAREMLP(
             intermediate_size,

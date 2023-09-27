@@ -4,7 +4,7 @@ from .get_squad_dataset import SQuAD
 from .get_openwebtext_dataset import OpenWebText
 from .get_sst2_dataset import SST2_Dataset
 from .get_samsum_dataset_ import Samsum
-from .get_glue_dataset_classification import GLUE
+from .get_glue_dataset_classification import GLUEDataset
 from .get_default_dataset import DefaultDataset
 
 from utils.constants import (
@@ -13,8 +13,8 @@ from utils.constants import (
     OPENWEBTEXT,
     SST2,
     SAMSUM,
-    QNLI,
-    COLA,
+    GLUE,
+    SUPERGLUE,
 )
 
 from transformers import (
@@ -109,11 +109,7 @@ def get_dataset(
     :param model: Model to finetune / evaluate
     :return: tokenized dataset, data collator, and compute_metrics function
     """
-    if (
-        False
-        and "t5" in model_type
-        and dataset_name in [QNLI, SST2, COLA, SQUAD]
-    ):
+    if False and "t5" in model_type and dataset_name in GLUE + SUPERGLUE:
         if dataset_name in [QNLI, SST2, COLA]:
             dataset = load_dataset("glue", dataset_name)
         else:
@@ -163,8 +159,8 @@ def get_dataset(
             dataset = OpenWebText(tokenizer, model, model_type)
         elif dataset_name == SAMSUM:
             dataset = Samsum(tokenizer, model, model_type)
-        elif dataset_name in [COLA, QNLI, SST2]:
-            dataset = GLUE(
+        elif dataset_name in GLUE + SUPERGLUE:
+            dataset = GLUEDataset(
                 tokenizer, model, model_type, dataset_type=dataset_name
             )
         else:

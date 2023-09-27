@@ -57,7 +57,6 @@ def apply_mare_upcycling_t5(
     num_experts: int = 0,
     capacity_factor: int = 0,
     apply_to_half_layers: bool = False,
-    is_sequence_classification: bool = False,
 ):
     print("Applying MARE Upcycling to T5...")
     print(

@@ -5,6 +5,7 @@ GPT2_MEDIUM = "gpt2-medium"
 GPT2_LARGE = "gpt2-large"
 GPT2_XL = "gpt2-xl"
 T5 = "t5-base"
+T5_LARGE = "t5-large"
 T5_3B = "t5-3b"
 OPT = "opt"
 OPT_125M = "opt-125m"
@@ -42,9 +43,19 @@ WIKITEXT2 = "wikitext-2-raw-v1"
 SQUAD = "squad"
 OPENWEBTEXT = "openwebtext"
 SAMSUM = "samsum"
+
+# GLUE
 QNLI = "qnli"
 SST2 = "sst2"
 COLA = "cola"
+STSB = "stsb"
+GLUE = [QNLI, SST2, COLA, STSB]
+
+# Super GLUE
+WIC = "wic"
+BOOLQ = "boolq"
+MULTIRC = "multirc"
+SUPERGLUE = [WIC, BOOLQ, MULTIRC]
 
 # Number of blocks
 NUM_BLOCKS_GPT2 = 12

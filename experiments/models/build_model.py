@@ -31,10 +31,9 @@ from utils.constants import (
     T5,
     BILLSUM,
     SQUAD,
-    SST2,
     SAMSUM,
-    QNLI,
-    COLA,
+    GLUE,
+    SUPERGLUE,
 )
 
 
@@ -61,8 +60,6 @@ def get_model(model_type, dataset_type):
         model = AutoModelForSequenceClassification
     # model_type = "lukeleeai/t5-base_cola_dense_epochs5"
     model = model.from_pretrained(model_type, config=config)
-
-    print(model)
 
     return config, model
 
@@ -102,14 +99,13 @@ def build_model(
             num_experts,
             capacity_factor,
             apply_to_half_layers,
-            is_sequence_classification=(dataset_type in [COLA]),
         )
 
     if use_mare_lora:
         apply_mare_lora(model, config, num_generalists, num_experts)
         freeze_model(model)
 
-    if dataset_type in [COLA, QNLI, SST2]:
+    if dataset_type in GLUE + SUPERGLUE:
         original_out_proj = model.classification_head.out_proj
         new_out_proj = nn.Linear(config.d_model, 4)
         new_out_proj.weight.data = original_out_proj.weight.data.repeat(4, 1)
@@ -137,3 +133,5 @@ if __name__ == "__main__":
         num_generalists=1,
         capacity_factor=2,
     )
+
+    print(mare_upcycling)
