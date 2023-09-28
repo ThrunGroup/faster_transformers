@@ -93,7 +93,7 @@ class MAREMLP(T5DenseActDense):
         # Experts
         if self.num_experts:
             if self.is_residual_hierarchy:
-                ar_hidden_states = self.act(ar_hidden_states)
+                ar_hidden_states += hidden_states
                 router = self.ex_router(ar_hidden_states)  # (B, T, E)
             else:
                 router = self.ex_router(hidden_states)  # (B, T, E)
