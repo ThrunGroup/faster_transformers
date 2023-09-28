@@ -24,10 +24,10 @@ class MLPSparsityCheck(T5DenseActDense):
         self.num_params += int(torch.numel(hidden_states))
         self.counts_per_idx = self.counts_per_idx.to(hidden_states.device)
         self.counts_per_idx += torch.sum(hidden_states!=0, dim=(0, 1))
-        if self.counts % 100 == 0:
+        if self.counts % 500 == 0:
             print(f"block idx: {self.block_idx} / sparsity:{self.num_zeros/self.num_params}")
             sorted_values, sorted_idcs = self.counts_per_idx.clone().detach().sort()
-            print(torch.histogram(self.counts_per_idx.to('cpu'), 32, density=True))
+            # print(torch.histogram(self.counts_per_idx.to('cpu'), 32, density=True))
             # print(f"block idx: {self.block_idx}/ sorted counts: {sorted_values[:5], sorted_values[-5:]}/"
             #       f"sorted idcs: {sorted_idcs[:5], sorted_idcs[-5:]}")
             # print(f"block idx: {self.block_idx} / sparsity:{self.num_negatives / self.num_params}")
