@@ -54,7 +54,7 @@ def apply_sparsity_check_MLP(
 
             new_mlp = MLPSparsityCheck(config, block_idx)
             old_mlp = mlp_layer.DenseReluDense
-            new_mlp.wi.weight.data = new_mlp.wi.weight.data
+            new_mlp.wi.weight.data = old_mlp.wi.weight.data
             new_mlp.wo.weight.data = old_mlp.wo.weight.data
 
             mlp_layer.DenseReluDense = new_mlp
