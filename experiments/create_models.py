@@ -235,6 +235,7 @@ def create_model(
 
 
 if __name__ == "__main__":
+    torch.set_printoptions(threshold=32)
     dataset_types = [
         # BILLSUM,
         COLA,
