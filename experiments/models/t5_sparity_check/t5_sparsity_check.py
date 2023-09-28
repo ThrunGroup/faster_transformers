@@ -27,7 +27,8 @@ class MLPSparsityCheck(T5DenseActDense):
         if self.counts % 100 == 0:
             print(f"block idx: {self.block_idx} / sparsity:{self.num_zeros/self.num_params}")
             a = self.counts_per_idx.clone().detach().sort()
-            print(f"block idx: {self.block_idx}/ sorted counts: {a[:20], a[-20:]}")
+            print(self.counts_per_idx.shape)
+            print(f"block idx: {self.block_idx}/ sorted counts: {a[:10], a[-10:]}")
             # print(f"block idx: {self.block_idx} / sparsity:{self.num_negatives / self.num_params}")
             # print(f"block idx: {self.block_idx} / sparsity:{self.num_positives / self.num_params}")
         hidden_states = self.dropout(hidden_states)
