@@ -46,4 +46,4 @@ def apply_sparsity_check_MLP(
             else:
                 mlp_layer = block.layer[1]
 
-            mlp_layer.DenseReluDense = MLPSparsityCheck(config)
+            mlp_layer.DenseReluDense = MLPSparsityCheck(config, block_idx)
