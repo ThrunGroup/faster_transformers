@@ -64,10 +64,10 @@ class GATEDATTENTION(T5Attention):
                 present_key_value_state = outputs[1]
                 attention_outputs += outputs[2]
 
-    # @Jay: 1) When to sum all the outputs from MARE and Experts (after applying mlp layers or before it)
-    #  2) Normalize router probs after choosing topk
+        # @Jay: 1) When to sum all the outputs from MARE and Experts (after applying mlp layers or before it)
+        #  2) Normalize router probs after choosing topk
 
-    super().forward()
+        super().forward(hidden_states, **args)
 
 
 class MAREATTENTION(T5Attention):
@@ -89,7 +89,7 @@ class MAREATTENTION(T5Attention):
         **args,
     ):
         B, T, C = hidden_states.shape
-        super().forward()
+        super().forward(hidden_states, **args)
 
         # Add attention ouputs from all rounder & Sparse experts
 
