@@ -13,7 +13,7 @@ class MLPSparsityCheck(T5DenseActDense):
         self.num_params = 0
         self.block_idx = block_idx
         self.counts = 0
-        self.counts_per_idx = torch.zeros(config.d_model)
+        self.counts_per_idx = torch.zeros(config.d_ff)
 
 
     def forward(self, hidden_states):
