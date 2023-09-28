@@ -25,7 +25,7 @@ class MLPSparsityCheck(T5DenseActDense):
         self.num_negatives += int(torch.sum(hidden_states<=0))
         self.num_positives += int(torch.sum(hidden_states>0))
         self.num_params += int(torch.numel(hidden_states))
-        if self.counts % 33 == 0 :
+        if self.counts % 1000 == 0 :
             print(f"block idx: {self.block_idx} / sparsity:{self.num_zeros/self.num_params}")
             print(f"block idx: {self.block_idx} / sparsity:{self.num_negatives / self.num_params}")
             print(f"block idx: {self.block_idx} / sparsity:{self.num_positives / self.num_params}")

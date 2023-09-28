@@ -237,7 +237,7 @@ def create_model(
 if __name__ == "__main__":
     dataset_types = [
         # BILLSUM,
-        COLA,
+        # COLA,
         SST2,
         QNLI,
         BOOLQ,
