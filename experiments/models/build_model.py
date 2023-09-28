@@ -10,7 +10,6 @@ from transformers import (
 )
 from torch import nn
 
-
 from experiments.models.gpt2_mare.controller import apply_mare_attention
 from experiments.models.gpt2_peft_mare.controller import (
     apply_mare_lora,
@@ -77,6 +76,8 @@ def build_model(
     apply_to_half_layers: bool = False,
 ):
     config, model = get_model(model_type, dataset_type)
+
+    print(model)
 
     if use_mare_attention:
         function_to_apply = (

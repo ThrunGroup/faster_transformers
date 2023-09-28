@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from torch import nn
 
-from experiments.models.t5_mare_upcycling.model import MAREMLP
+from experiments.models.t5_mare_upcycling.mare_mlp import MAREMLP
 
 
 def inject_pretrained_weights(
