@@ -26,9 +26,10 @@ class MLPSparsityCheck(T5DenseActDense):
         self.counts_per_idx += torch.sum(hidden_states!=0, dim=(0, 1))
         if self.counts % 100 == 0:
             print(f"block idx: {self.block_idx} / sparsity:{self.num_zeros/self.num_params}")
-            a = self.counts_per_idx.clone().detach().sort()
-            print(self.counts_per_idx.shape, a.shape, a[:3])
-            print(f"block idx: {self.block_idx}/ sorted counts: {a[:10], a[-10:]}")
+            sorted_values, sorted_idcs = self.counts_per_idx.clone().detach().sort()[0]
+            print(self.counts_per_idx.shape)
+            print(f"block idx: {self.block_idx}/ sorted counts: {sorted_values[:5], sorted_values[-5:]}/"
+                  f"sorted idcs: {sorted_idcs[:5], sorted_idcs[-5:]}")
             # print(f"block idx: {self.block_idx} / sparsity:{self.num_negatives / self.num_params}")
             # print(f"block idx: {self.block_idx} / sparsity:{self.num_positives / self.num_params}")
         hidden_states = self.dropout(hidden_states)
