@@ -3,9 +3,10 @@ import numpy as np
 from torch import nn
 
 from experiments.models.t5_mare_upcycling.mare_mlp import MAREMLP
+from experiments.models.t5_mare_upcycling.mare_attention import MAREAttention
 
 
-def inject_pretrained_weights(
+def inject_pretrained_weights_to_mlp(
     new_mlp,
     original_mlp,
     num_all_rounders: int = 0,
@@ -50,6 +51,68 @@ def inject_pretrained_weights(
     del new_mlp.wo
 
 
+def inject_pretrained_weights_to_attention(
+    new_attention,
+    original_attention,
+    num_all_rounders: int = 0,
+    num_experts: int = 0,
+):
+    # Multiply the attention block
+    num_attentions = num_all_rounders + num_experts
+    new_attention.self_attentions = nn.ModuleList(
+        [original_attention for _ in range(num_attentions)]
+    )
+
+    del new_attention.SelfAttention
+
+
+def apply_mare_attention_t5(
+    model,
+    config,
+    num_generalists: int = 0,
+    num_experts: int = 0,
+    capacity_factor: int = 0,
+    apply_to_half_layers: bool = False,
+):
+    print("Applying MARE Attention to T5...")
+    print(
+        "Original num params: ",
+        sum(p.numel() for p in model.parameters() if p.requires_grad),
+    )
+
+    # Iterate through blocks and replace self-attention layers
+    # for block in [model]
+    for is_decoder, network in enumerate(
+        [model.transformer.encoder, model.transformer.decoder]
+    ):
+        for block_idx, block in enumerate(network.block):
+            original_attention_layer = block.layer[0].SelfAttention
+            has_relative_attention_bias = (
+                original_attention_layer.has_relative_attention_bias
+            )
+
+            new_attention_layer = MAREAttention(
+                config,
+                has_relative_attention_bias,
+                num_all_rounders=num_generalists,
+                num_experts=num_experts,
+                capacity_factor=capacity_factor,
+            )
+
+            inject_pretrained_weights_to_attention(
+                new_attention_layer,
+                original_attention_layer,
+                num_all_rounders=num_generalists,
+                num_experts=num_experts,
+            )
+            block.layer[0] = new_attention_layer
+
+    print(
+        "Changed num params:  ",
+        sum(p.numel() for p in model.parameters() if p.requires_grad),
+    )
+
+
 def apply_mare_upcycling_t5(
     model,
     config,
@@ -90,7 +153,7 @@ def apply_mare_upcycling_t5(
                 capacity_factor=capacity_factor,
             )
 
-            inject_pretrained_weights(
+            inject_pretrained_weights_to_mlp(
                 new_mlp,
                 mlp_layer,
                 num_all_rounders=num_generalists,

@@ -31,7 +31,6 @@ from utils.constants import (
     BOOLQ,
 )
 
-
 os.environ["MASTER_PORT"] = "29509"
 
 
@@ -106,11 +105,11 @@ def finetune(
         run_name=model_name,
         # for memory issues
         gradient_accumulation_steps=2,
-        deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
-        bf16=True,
+        # bf16=True,
+        # deepspeed="ds_config.json",
         ddp_find_unused_parameters=True,
         hub_model_id=model_name,
         push_to_hub=True,
@@ -242,23 +241,23 @@ if __name__ == "__main__":
         MULTIRC,
         WIC,
     ]
-    model_types = [T5_3B]
+    model_types = [T5]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": 10,
-                "train_batch_size": 32,
-                "test_batch_size": 64,
-                "gradient_checkpointing": True,
+                "train_batch_size": 1,
+                "test_batch_size": 1,
+                "gradient_checkpointing": False,
             }
 
             create_model(
                 use_mare_upcycling=True,
                 capacity_factor=2,
                 num_generalists=1,
-                num_experts=3,
+                num_experts=4,
                 apply_to_half_layers=True,
                 **common_args,
             )

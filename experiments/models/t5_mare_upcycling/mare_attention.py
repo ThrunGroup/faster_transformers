@@ -1,12 +1,9 @@
 import torch
 from torch import nn
 from transformers.models.t5.modeling_t5 import (
-    T5DenseActDense,
     T5Attention,
-    T5LayerNorm,
     T5LayerSelfAttention,
 )
-from typing import Optional, Tuple
 
 from experiments.models.router import Router
 
@@ -26,7 +23,7 @@ class MAREAttention(T5LayerSelfAttention):
         self.num_experts = num_experts
         self.capacity_factor = capacity_factor - num_all_rounders
         assert self.capacity_factor >= 0, "Capacity factor must be nonnegative"
-        embed_dim = config.d_model
+        self.embed_dim = config.d_model
 
         self.self_attentions = nn.ModuleList(
             [
@@ -38,7 +35,7 @@ class MAREAttention(T5LayerSelfAttention):
             ]
         )
 
-        self.expert_router = Router(embed_dim, self.num_experts)
+        self.expert_router = Router(self.embed_dim, self.num_experts)
         self.attention_scales = nn.Parameter(torch.ones(8))
 
     def forward(
@@ -57,10 +54,11 @@ class MAREAttention(T5LayerSelfAttention):
         ex_hidden_states = None
         extra_attention_outputs = []
 
-        def self_attention(index, inputs):
-            return self.self_attentions(index)(
+        def self_attention(index, inputs, K=T):
+            mask = attention_mask[:, :, :K, :K]
+            return self.self_attentions[index](
                 inputs,
-                mask=attention_mask,
+                mask=mask,
                 position_bias=position_bias,
                 layer_head_mask=layer_head_mask,
                 past_key_value=past_key_value,
@@ -79,14 +77,17 @@ class MAREAttention(T5LayerSelfAttention):
             ]  # ARs * attention outputs (tuple)
             ar_hidden_states = torch.cat(
                 [outputs[0] for outputs in ar_outputs], dim=-1
-            ).sum(
-                dim=-1
-            )  # (B, T, C)
-            # extra_attention_outputs.extend(
+            )
+            #     .sum(
+            #     dim=-1
+            # )  # (B, T, C)
+            extra_attention_outputs.extend(
+                [outputs[1:] for outputs in ar_outputs]
+            )
 
         # Experts
         if self.num_experts:
-            router = self.ex_router(hidden_states)  # (B, T, E)
+            router = self.expert_router(hidden_states)  # (B, T, E)
 
             K = max((T * self.capacity_factor // self.num_experts), 1)
 
@@ -106,10 +107,12 @@ class MAREAttention(T5LayerSelfAttention):
             )
 
             ex_outputs = [
-                self_attention(ex_index, ex_hidden_states[:, :, ex_index])
-                for ex_index in range(
-                    self.num_all_rounders, self.num_attentions
+                self_attention(
+                    self.num_all_rounders + ex_index,
+                    ex_hidden_states[:, :, ex_index],
+                    K=K,
                 )
+                for ex_index in range(self.num_experts)
             ]  # E * attention outputs (tuple)
             ex_hidden_states = torch.cat(
                 [outputs[0] for outputs in ex_outputs], dim=-1
@@ -129,8 +132,7 @@ class MAREAttention(T5LayerSelfAttention):
                 1,
                 top_k_indices.unsqueeze(-1).expand(-1, -1, -1, self.embed_dim),
                 ex_hidden_states.view(B, K, self.num_experts, -1)
-                * top_k_probs.unsqueeze(-1)
-                * self.ex_scales[: self.num_experts].view(1, 1, -1, 1),
+                * top_k_probs.unsqueeze(-1),
             )
             ex_hidden_states = ex_zeros.sum(dim=2)  # (B, T, C)
 
@@ -140,12 +142,11 @@ class MAREAttention(T5LayerSelfAttention):
                 + self.attention_scales[1] * ex_hidden_states
             )
         elif self.num_all_rounders:
-            attention_output = ex_hidden_states
-        else:
             attention_output = ar_hidden_states
+        else:
+            attention_output = ex_hidden_states
 
         hidden_states = hidden_states + self.dropout(attention_output)
-        outputs = (hidden_states,) + attention_output[
-            1:
-        ]  # add attentions if we output them
+        outputs = (hidden_states,) + (None,) + (None,)
+
         return outputs

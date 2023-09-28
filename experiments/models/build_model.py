@@ -23,6 +23,7 @@ from experiments.models.gpt2_mare_upcycling.controller import (
 )
 from experiments.models.t5_mare_upcycling.controller import (
     apply_mare_upcycling_t5,
+    apply_mare_attention_t5,
 )
 
 from utils.constants import (
@@ -42,7 +43,9 @@ def get_model(model_type, dataset_type):
         config = GPT2Config
     else:
         config = T5Config
-    config = config.from_pretrained(model_type)
+    config = config.from_pretrained(
+        model_type, output_past=False, use_cache=False
+    )
 
     # get model
     if "t5" in model_type:
@@ -77,8 +80,6 @@ def build_model(
 ):
     config, model = get_model(model_type, dataset_type)
 
-    print(model)
-
     if use_mare_attention:
         function_to_apply = (
             apply_mare_attention if num_generalists else apply_gated_attention
@@ -91,7 +92,7 @@ def build_model(
         function_to_apply = (
             apply_mare_upcycling_gpt2
             if GPT2 in model_type
-            else apply_mare_upcycling_t5
+            else apply_mare_attention_t5
         )
         function_to_apply(
             model,
@@ -130,7 +131,7 @@ if __name__ == "__main__":
         model_name,
         dataset_type,
         use_mare_upcycling=True,
-        num_experts=8,
+        num_experts=16,
         num_generalists=1,
         capacity_factor=2,
     )
