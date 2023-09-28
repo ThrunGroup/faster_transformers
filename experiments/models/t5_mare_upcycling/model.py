@@ -14,7 +14,7 @@ class MAREMLP(T5DenseActDense):
         num_all_rounders,
         num_experts,
         capacity_factor,
-        is_residual_hierarchy: bool = False,
+        is_residual_hierarchy: bool = True,
         routing_type: str = "EXPERT_CHOICE_ROUTING"
     ):
         super().__init__(config)
@@ -93,6 +93,7 @@ class MAREMLP(T5DenseActDense):
         # Experts
         if self.num_experts:
             if self.is_residual_hierarchy:
+                ar_hidden_states = self.act(ar_hidden_states)
                 router = self.ex_router(ar_hidden_states)  # (B, T, E)
             else:
                 router = self.ex_router(hidden_states)  # (B, T, E)
@@ -158,12 +159,9 @@ class MAREMLP(T5DenseActDense):
             ex_hidden_states = ex_zeros.sum(dim=2)
 
         if self.num_all_rounders and self.num_experts:
-            if self.is_residual_hierarchy:
-                hidden_states = ex_hidden_states
-            else:
-                hidden_states = (
-                    self.ar_scales[0] * ar_hidden_states + ex_hidden_states
-                )
+            hidden_states = (
+                self.ar_scales[0] * ar_hidden_states + ex_hidden_states
+            )
         elif self.num_all_rounders:
             hidden_states = ar_hidden_states
         else:
