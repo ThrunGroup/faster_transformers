@@ -251,23 +251,23 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": 1,
-                "train_batch_size": 32,
-                "test_batch_size": 64,
+                "train_batch_size": 8,
+                "test_batch_size": 16,
                 "gradient_checkpointing": True,
             }
-            # create_model(
-            #     use_sparsity_check=True,
-            #     **common_args,
-            # )
-
             create_model(
-                use_mare_upcycling=True,
-                capacity_factor=2,
-                num_generalists=1,
-                num_experts=2,
-                apply_to_half_layers=True,
+                use_sparsity_check=True,
                 **common_args,
             )
+
+            # create_model(
+            #     use_mare_upcycling=True,
+            #     capacity_factor=2,
+            #     num_generalists=1,
+            #     num_experts=2,
+            #     apply_to_half_layers=True,
+            #     **common_args,
+            # )
 
             # create_model(
             #     use_mare_upcycling=True,

@@ -1,10 +1,31 @@
 import torch
 from torch import nn
-from transformers.models.t5.modeling_t5 import T5DenseActDense
+from transformers.models.t5.modeling_t5 import T5DenseActDense, T5Attention, T5Config
 from typing import Optional, Tuple
 import numpy as np
 
 from experiments.models.router import Router
+
+
+class MAREATTENTION(T5Attention):
+    def __init__(
+        self,
+        config: T5Config,
+        num_all_rounders,
+        num_experts,
+        capacity_factor,
+        has_relative_attention_bias=False,
+    ):
+        super().__init__(
+            config=config, has_relative_attention_bias=has_relative_attention_bias
+        )
+
+    def forward(
+        self,
+        hidden_states,
+        **args,
+    ):
+        super().forward()
 
 
 class MAREMLP(T5DenseActDense):
@@ -14,8 +35,8 @@ class MAREMLP(T5DenseActDense):
         num_all_rounders,
         num_experts,
         capacity_factor,
-        is_residual_hierarchy: bool = True,
-        routing_type: str = "EXPERT_CHOICE_ROUTING"
+        is_residual_hierarchy: bool = False,
+        routing_type: str = "EXPERT_CHOICE_ROUTING",
     ):
         super().__init__(config)
         embed_dim = config.d_model
@@ -57,7 +78,6 @@ class MAREMLP(T5DenseActDense):
         self.ar_scales = nn.Parameter(torch.ones(8))
         self.ex_scales = nn.Parameter(torch.ones(self.num_experts * 2))
 
-
     def forward(
         self, hidden_states: Optional[Tuple[torch.FloatTensor]]
     ) -> torch.FloatTensor:
@@ -65,9 +85,7 @@ class MAREMLP(T5DenseActDense):
 
         # All-rounders
         if self.num_all_rounders:
-            ar_hidden_states = hidden_states.repeat(
-                1, 1, self.num_all_rounders
-            )
+            ar_hidden_states = hidden_states.repeat(1, 1, self.num_all_rounders)
             ar_hidden_states = self.wi_ar(ar_hidden_states)
             ar_hidden_states = self.act(ar_hidden_states)
             ar_hidden_states = self.dropout(ar_hidden_states)
@@ -98,7 +116,6 @@ class MAREMLP(T5DenseActDense):
             else:
                 router = self.ex_router(hidden_states)  # (B, T, E)
 
-
             K = max(
                 (
                     T
@@ -118,9 +135,7 @@ class MAREMLP(T5DenseActDense):
             else:
                 ex_hidden_states = hidden_states.repeat(1, 1, self.num_experts)
             ex_hidden_states = torch.gather(
-                ex_hidden_states.view(
-                    B, T, self.num_experts, -1
-                ),  # (B, T, E, C)
+                ex_hidden_states.view(B, T, self.num_experts, -1),  # (B, T, E, C)
                 1,
                 top_k_indices.unsqueeze(-1).expand(-1, -1, -1, C),
                 # (B, K, E, C)
@@ -159,9 +174,7 @@ class MAREMLP(T5DenseActDense):
             ex_hidden_states = ex_zeros.sum(dim=2)
 
         if self.num_all_rounders and self.num_experts:
-            hidden_states = (
-                self.ar_scales[0] * ar_hidden_states + ex_hidden_states
-            )
+            hidden_states = self.ar_scales[0] * ar_hidden_states + ex_hidden_states
         elif self.num_all_rounders:
             hidden_states = ar_hidden_states
         else:
