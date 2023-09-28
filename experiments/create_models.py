@@ -244,7 +244,7 @@ if __name__ == "__main__":
         MULTIRC,
         WIC,
     ]
-    model_types = [T5_3B]
+    model_types = [T5]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
