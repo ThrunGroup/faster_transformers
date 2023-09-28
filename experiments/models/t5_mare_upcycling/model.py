@@ -24,6 +24,10 @@ class MAREMLP(T5DenseActDense):
         self.num_experts = num_experts
         self.capacity_factor = capacity_factor
 
+        # Sparsity-adaptive MOE
+        self.num_zeros_intermediate = 0
+        self.num_params_intermediate = 0
+
         if num_all_rounders:
             self.wi_ar = nn.Linear(
                 num_all_rounders * embed_dim, intermediate_size, bias=False
@@ -49,6 +53,7 @@ class MAREMLP(T5DenseActDense):
         # self.scales = nn.Parameter(torch.ones(8))
         self.ar_scales = nn.Parameter(torch.ones(8))
         self.ex_scales = nn.Parameter(torch.ones(self.num_experts * 2))
+
 
     def forward(
         self, hidden_states: Optional[Tuple[torch.FloatTensor]]

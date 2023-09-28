@@ -106,7 +106,7 @@ def finetune(
         run_name=model_name,
         # for memory issues
         gradient_accumulation_steps=2,
-        deepspeed="ds_config.json",
+        # deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
@@ -169,6 +169,7 @@ def create_model(
     use_mare_lora: bool = False,
     use_mare_attention: bool = False,
     use_mare_upcycling: bool = False,
+    use_sparsity_check: bool = False,
     num_generalists: int = 0,
     num_experts: int = 0,
     apply_to_half_layers: bool = False,
@@ -207,6 +208,7 @@ def create_model(
         use_mare_lora=use_mare_lora,
         use_mare_attention=use_mare_attention,
         use_mare_upcycling=use_mare_upcycling,
+        use_sparsity_check=use_sparsity_check,
         num_generalists=num_generalists,
         num_experts=num_experts,
         capacity_factor=capacity_factor,
@@ -248,34 +250,38 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 10,
+                "num_epochs": 1,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": True,
             }
-
             create_model(
-                use_mare_upcycling=True,
-                capacity_factor=2,
-                num_generalists=1,
-                num_experts=3,
-                apply_to_half_layers=True,
+                use_sparsity_check=True,
                 **common_args,
             )
 
-            create_model(
-                use_mare_upcycling=True,
-                capacity_factor=2,
-                num_generalists=0,
-                num_experts=4,
-                apply_to_half_layers=True,
-                **common_args,
-            )
-
-            create_model(
-                run_name="dense_epochs5",
-                **common_args,
-            )
+            # create_model(
+            #     use_mare_upcycling=True,
+            #     capacity_factor=2,
+            #     num_generalists=1,
+            #     num_experts=3,
+            #     apply_to_half_layers=True,
+            #     **common_args,
+            # )
+            #
+            # create_model(
+            #     use_mare_upcycling=True,
+            #     capacity_factor=2,
+            #     num_generalists=0,
+            #     num_experts=4,
+            #     apply_to_half_layers=True,
+            #     **common_args,
+            # )
+            #
+            # create_model(
+            #     run_name="dense_epochs5",
+            #     **common_args,
+            # )
 
             # create_model(
             #     use_mare_upcycling=True,
