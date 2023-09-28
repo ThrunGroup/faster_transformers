@@ -8,6 +8,7 @@ import numpy as np
 
 from experiments.models.router import Router
 
+
 class GATEDATTENTION(T5Attention):
     def __init__(
         self,
@@ -37,11 +38,7 @@ class GATEDATTENTION(T5Attention):
     ):
         B, T, C = hidden_states.shape
         K = max(
-            (
-                    T
-                    * self.capacity_factor
-                    // self.num_experts
-            ),
+            (T * self.capacity_factor // self.num_experts),
             1,
         )
         routing_probs = self.router(hidden_states)  # B, T, E
@@ -55,7 +52,7 @@ class GATEDATTENTION(T5Attention):
         for idx in range(self.num_experts):
             expert: T5Attention = self.experts[idx]
             mask = res[:, :, idx].to(hidden_states.device).unsqueeze(dim=-1)  # B, T, 1
-            outputs = expert(hidden_states * mask, * args)
+            outputs = expert(hidden_states * mask, *args)
             # Normalize
             # for idx in range(len(outputs)):
             #     outputs[idx] *=
@@ -67,10 +64,8 @@ class GATEDATTENTION(T5Attention):
                 present_key_value_state = outputs[1]
                 attention_outputs += outputs[2]
 
-
-
-
-
+    # @Jay: 1) When to sum all the outputs from MARE and Experts (after applying mlp layers or before it)
+    #  2) Normalize router probs after choosing topk
 
     super().forward()
 
