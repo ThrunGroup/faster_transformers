@@ -106,7 +106,7 @@ def finetune(
         run_name=model_name,
         # for memory issues
         gradient_accumulation_steps=2,
-        # deepspeed="ds_config.json",
+        deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
@@ -237,7 +237,7 @@ def create_model(
 if __name__ == "__main__":
     dataset_types = [
         # BILLSUM,
-        # COLA,
+        COLA,
         SST2,
         QNLI,
         BOOLQ,
@@ -251,24 +251,24 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": 1,
-                "train_batch_size": 4,
-                "test_batch_size": 8,
+                "train_batch_size": 32,
+                "test_batch_size": 64,
                 "gradient_checkpointing": True,
             }
+            # create_model(
+            #     use_sparsity_check=True,
+            #     **common_args,
+            # )
+
             create_model(
-                use_sparsity_check=True,
+                use_mare_upcycling=True,
+                capacity_factor=2,
+                num_generalists=1,
+                num_experts=2,
+                apply_to_half_layers=True,
                 **common_args,
             )
 
-            # create_model(
-            #     use_mare_upcycling=True,
-            #     capacity_factor=2,
-            #     num_generalists=1,
-            #     num_experts=3,
-            #     apply_to_half_layers=True,
-            #     **common_args,
-            # )
-            #
             # create_model(
             #     use_mare_upcycling=True,
             #     capacity_factor=2,
