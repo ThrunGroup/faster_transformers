@@ -1,10 +1,78 @@
 import torch
+import copy
 from torch import nn
+import torch.nn.functional as f
 from transformers.models.t5.modeling_t5 import T5DenseActDense, T5Attention, T5Config
 from typing import Optional, Tuple
 import numpy as np
 
 from experiments.models.router import Router
+
+class GATEDATTENTION(T5Attention):
+    def __init__(
+        self,
+        config: T5Config,
+        num_experts,
+        capacity_factor,
+        attention_model: T5Attention,
+        has_relative_attention_bias=False,
+    ):
+        super().__init__(
+            config=config, has_relative_attention_bias=has_relative_attention_bias
+        )
+        self.experts = [None] * num_experts
+        self.num_experts = num_experts
+        for idx in range(num_experts):
+            self.experts[idx] = copy.deepcopy(attention_model)
+        embed_dim = config.d_model
+        self.router = Router(embed_dim, num_experts)
+
+    def inject_randomness(self):
+        return
+
+    def forward(
+        self,
+        hidden_states,
+        **args,
+    ):
+        B, T, C = hidden_states.shape
+        K = max(
+            (
+                    T
+                    * self.capacity_factor
+                    // self.num_experts
+            ),
+            1,
+        )
+        routing_probs = self.router(hidden_states)  # B, T, E
+        routing_probs = f.softmax(routing_probs, dim=1)
+        topk_values, indices = torch.topk(routing_probs, K, dim=1)
+        res = torch.zeros_like(routing_probs)  # B, T, E
+        res = res.scatter(1, indices, torch.ones_like(topk_values))  # B, T, E
+        # res = f.normalize(res, p=1, dim=1)  # B, T, E
+
+        hidden_states, present_key_value_state, attention_outputs = [None] * 3
+        for idx in range(self.num_experts):
+            expert: T5Attention = self.experts[idx]
+            mask = res[:, :, idx].to(hidden_states.device).unsqueeze(dim=-1)  # B, T, 1
+            outputs = expert(hidden_states * mask, * args)
+            # Normalize
+            # for idx in range(len(outputs)):
+            #     outputs[idx] *=
+
+            if hidden_states is None:
+                hidden_states, present_key_value_state, attention_outputs = outputs
+            else:
+                hidden_states += outputs[0]
+                present_key_value_state = outputs[1]
+                attention_outputs += outputs[2]
+
+
+
+
+
+
+    super().forward()
 
 
 class MAREATTENTION(T5Attention):
@@ -25,6 +93,7 @@ class MAREATTENTION(T5Attention):
         hidden_states,
         **args,
     ):
+        B, T, C = hidden_states.shape
         super().forward()
 
 
