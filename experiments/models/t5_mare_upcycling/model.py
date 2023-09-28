@@ -14,6 +14,8 @@ class MAREMLP(T5DenseActDense):
         num_all_rounders,
         num_experts,
         capacity_factor,
+        is_residual_hierarchy: bool = True,
+        routing_type: str = "EXPERT_CHOICE_ROUTING"
     ):
         super().__init__(config)
         embed_dim = config.d_model
@@ -23,6 +25,7 @@ class MAREMLP(T5DenseActDense):
         self.num_all_rounders = num_all_rounders
         self.num_experts = num_experts
         self.capacity_factor = capacity_factor
+        self.is_residual_hierarchy = is_residual_hierarchy
 
         # Sparsity-adaptive MOE
         self.num_zeros_intermediate = 0
@@ -89,7 +92,11 @@ class MAREMLP(T5DenseActDense):
 
         # Experts
         if self.num_experts:
-            router = self.ex_router(hidden_states)  # (B, T, E)
+            if self.is_residual_hierarchy:
+                router = self.ex_router(ar_hidden_states)  # (B, T, E)
+            else:
+                router = self.ex_router(hidden_states)  # (B, T, E)
+
 
             K = max(
                 (
@@ -105,7 +112,10 @@ class MAREMLP(T5DenseActDense):
             top_k_probs = torch.gather(top_k.values, 1, indices_)
 
             # x: (B, T, E, C) -> (B, K, E, C) -> (B, K, E * C)
-            ex_hidden_states = hidden_states.repeat(1, 1, self.num_experts)
+            if self.is_residual_hierarchy:
+                ex_hidden_states = ar_hidden_states.repeat(1, 1, self.num_experts)
+            else:
+                ex_hidden_states = hidden_states.repeat(1, 1, self.num_experts)
             ex_hidden_states = torch.gather(
                 ex_hidden_states.view(
                     B, T, self.num_experts, -1
@@ -148,9 +158,12 @@ class MAREMLP(T5DenseActDense):
             ex_hidden_states = ex_zeros.sum(dim=2)
 
         if self.num_all_rounders and self.num_experts:
-            hidden_states = (
-                self.ar_scales[0] * ar_hidden_states + ex_hidden_states
-            )
+            if self.is_residual_hierarchy:
+                hidden_states = ex_hidden_states
+            else:
+                hidden_states = (
+                    self.ar_scales[0] * ar_hidden_states + ex_hidden_states
+                )
         elif self.num_all_rounders:
             hidden_states = ar_hidden_states
         else:
