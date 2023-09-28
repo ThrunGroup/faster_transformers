@@ -14,7 +14,7 @@ class MAREMLP(T5DenseActDense):
         num_all_rounders,
         num_experts,
         capacity_factor,
-        is_residual_hierarchy: bool = True,
+        is_residual_hierarchy: bool = False,
         routing_type: str = "EXPERT_CHOICE_ROUTING"
     ):
         super().__init__(config)
