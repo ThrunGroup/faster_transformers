@@ -66,7 +66,7 @@ class MLPSparsityCheck(T5DenseActDense):
                 "mare_mlp_histograms",
                 f"block{self.block_idx}_histogram",
             )
-        data = self.counts_per_idx.clone().detach()
+        data = self.counts_per_idx.clone().detach().cpu()
         plt.figure(figsize=(10, 6))
         plt.hist(data, bins="auto")
         plt.text(
