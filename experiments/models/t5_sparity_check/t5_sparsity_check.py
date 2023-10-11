@@ -116,7 +116,8 @@ def activate_stats(model):
                 mlp_layer = block.layer[2]
             else:
                 mlp_layer = block.layer[1]
-            mlp_layer.DenseReluDense.acitvate_stats()
+            mlp_layer.DenseReluDense: MLPSparsityCheck
+            mlp_layer.DenseReluDense.activate_stats()
 
 
 def plot_stats(model):
@@ -128,6 +129,7 @@ def plot_stats(model):
                 mlp_layer = block.layer[2]
             else:
                 mlp_layer = block.layer[1]
+            mlp_layer.DenseReluDense: MLPSparsityCheck
             mlp_layer.DenseReluDense.plot_stats()
 
 
