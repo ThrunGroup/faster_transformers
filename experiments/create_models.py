@@ -61,6 +61,7 @@ def finetune(
     push_to_hub: bool = False,
     config=None,
     save_stats: bool = False,
+    use_mare_mlp: bool = False,
 ):
     """
     Finetune the model on a dataset
@@ -83,22 +84,22 @@ def finetune(
     compute_metrics = dataset.get_compute_metrics()
     preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
 
-    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
-        wandb_run = wandb.init(
-            project=f"{model_type}_{dataset_type}",
-            name=model_name,
-            reinit=True,
-            config=config,
-        )
+    # if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
+    wandb_run = wandb.init(
+        project=f"{model_type}_{dataset_type}",
+        name=model_name,
+        reinit=True,
+        config=config,
+    )
 
     training_args = TrainingArguments(
         output_dir=model_name,
         evaluation_strategy="steps",
-        eval_steps=10,
+        eval_steps=50,
         logging_steps=5,
         save_strategy="steps",
         learning_rate=5e-5,
-        warmup_steps=200,
+        warmup_steps=20,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -134,20 +135,58 @@ def finetune(
         # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         compute_metrics=compute_metrics,
     )
+    if use_mare_mlp:
+        mare_trainer = CustomTrainer(
+            # trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=val_dataset,
+            tokenizer=tokenizer,
+            data_collator=data_collator,
+            callbacks=[early_stopping],
+            # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+            compute_metrics=compute_metrics,
+        )
 
     print("\n*********************")
     print("Training ", model_name)
     print("*********************\n")
 
     if num_epochs != 0:
-        trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+        if use_mare_mlp:
+            model.activate_stats(model)
+            trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
     if do_evaluation:
         if save_stats:
-            model.activate_stats(model)
+            model.activate_stats(model, True)
         trainer.evaluate()
         if save_stats:
-            model.plot_stats(model)
+            dir_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "mare mlp stats histograms"
+            )
+            filename = f"data-{dataset_name}_epochs-{num_epochs}_int ff activations_"
+            model.plot_stats(model, os.path.join(dir_path, filename))
+        wandb_run.finish()
+        # Empty out gpu memory
+        del trainer
+        gc.collect()
+        torch.cuda.empty_cache()
+        gc.collect()
+
+    if use_mare_mlp:
+        wandb_run = wandb.init(
+            project=f"{model_type}_{dataset_type}",
+            name=model_name,
+            reinit=True,
+            config=config,
+        )
+        model.activate_mare_mlp(model)
+        training_args.num_train_epochs = num_epochs
+        mare_trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+        mare_trainer.evaluate()
+        wandb_run.finish()
 
     # if do_evaluation:
     #     return evaluate_model(
@@ -159,9 +198,10 @@ def finetune(
     #         trainer=trainer,
     #     )
 
-    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
-        wandb_run.finish()
-    trainer.push_to_hub()
+    # if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
+    #     wandb_run.finish()
+    if push_to_hub:
+        trainer.push_to_hub()
 
     # Empty out gpu memory
     del trainer
@@ -180,7 +220,8 @@ def create_model(
     use_mare_lora: bool = False,
     use_mare_attention: bool = False,
     use_mare_upcycling: bool = False,
-    use_sparsity_check: bool = False,
+    use_mare_mlp: bool = False,
+    use_collect_stats: bool = False,
     num_generalists: int = 0,
     num_experts: int = 0,
     apply_to_half_layers: bool = False,
@@ -221,7 +262,7 @@ def create_model(
         use_mare_lora=use_mare_lora,
         use_mare_attention=use_mare_attention,
         use_mare_upcycling=use_mare_upcycling,
-        use_sparsity_check=use_sparsity_check,
+        use_mare_mlp=use_mare_mlp,
         num_generalists=num_generalists,
         num_experts=num_experts,
         capacity_factor=capacity_factor,
@@ -245,6 +286,7 @@ def create_model(
         run_name=run_name,
         config=config,
         save_stats=save_stats,
+        use_mare_mlp=use_mare_mlp,
     )
 
 
@@ -253,11 +295,11 @@ if __name__ == "__main__":
     dataset_types = [
         # BILLSUM,
         COLA,
-        SST2,
-        QNLI,
-        BOOLQ,
-        MULTIRC,
-        WIC,
+        # SST2,
+        # QNLI,
+        # BOOLQ,
+        # MULTIRC,
+        # WIC,
     ]
     model_types = [T5]
     for model_type in model_types:
@@ -265,13 +307,17 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 0,
+                "num_epochs": 1,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": True,
             }
+            # create_model(
+            #     run_name="dense_epochs5",
+            #     **common_args,
+            # )
             create_model(
-                use_sparsity_check=True,
+                use_mare_mlp=True,
                 **common_args,
                 save_stats=True,
             )
@@ -294,10 +340,6 @@ if __name__ == "__main__":
             #     **common_args,
             # )
             #
-            # create_model(
-            #     run_name="dense_epochs5",
-            #     **common_args,
-            # )
 
             # create_model(
             #     use_mare_upcycling=True,

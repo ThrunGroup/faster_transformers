@@ -73,7 +73,7 @@ def build_model(
     use_mare_lora: bool = False,
     use_mare_attention: bool = False,
     use_mare_upcycling: bool = False,
-    use_sparsity_check: bool = False,
+    use_mare_mlp: bool = False,
     capacity_factor: int = 0,
     random_token_selection: bool = False,
     num_generalists: int = 0,
@@ -109,7 +109,7 @@ def build_model(
         apply_mare_lora(model, config, num_generalists, num_experts)
         freeze_model(model)
 
-    if use_sparsity_check:
+    if use_mare_mlp:
         apply_sparsity_check_MLP(model, config)
 
     if dataset_type in GLUE + SUPERGLUE:
