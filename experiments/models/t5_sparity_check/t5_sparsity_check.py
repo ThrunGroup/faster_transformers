@@ -107,8 +107,7 @@ class MLPSparsityCheck(T5DenseActDense):
         return hidden_states
 
 
-def activate_stats(self):
-    model = self
+def activate_stats(model):
     for is_decoder, network in enumerate(
         [model.transformer.encoder, model.transformer.decoder]
     ):
@@ -120,8 +119,7 @@ def activate_stats(self):
             mlp_layer.DenseReluDense.acitvate_stats()
 
 
-def plot_stats(self):
-    model = self
+def plot_stats(model):
     for is_decoder, network in enumerate(
         [model.transformer.encoder, model.transformer.decoder]
     ):

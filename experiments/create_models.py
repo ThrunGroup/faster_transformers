@@ -139,14 +139,15 @@ def finetune(
     print("Training ", model_name)
     print("*********************\n")
 
-    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+    if num_epochs != 0:
+        trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
     if do_evaluation:
         if save_stats:
-            model.activate_stats()
+            model.activate_stats(model)
         trainer.evaluate()
         if save_stats:
-            model.plot_stats()
+            model.plot_stats(model)
 
     # if do_evaluation:
     #     return evaluate_model(
@@ -264,7 +265,7 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 1,
+                "num_epochs": 0,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": True,
