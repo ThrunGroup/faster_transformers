@@ -60,6 +60,7 @@ def finetune(
     do_evaluation: bool = True,
     push_to_hub: bool = False,
     config=None,
+    save_stats: bool = False,
 ):
     """
     Finetune the model on a dataset
@@ -71,6 +72,7 @@ def finetune(
     :param num_epochs: Number of epochs to train the model
     :param resume_from_checkpoint: Whether to resume the training from the checkpoint
     :param do_evaluation: Whether to evaluate the model after training and save the metrics
+    :param save_stats: Whether to save statistics of t5_sparsity_check model
     :returns: Dictionary of evaluation metrics and inference time if `do_evaluation` is true
     """
     print("Finetuning started...")
@@ -106,7 +108,7 @@ def finetune(
         run_name=model_name,
         # for memory issues
         gradient_accumulation_steps=2,
-        deepspeed="ds_config.json",
+        # deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
@@ -138,6 +140,13 @@ def finetune(
     print("*********************\n")
 
     trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+
+    if do_evaluation:
+        if save_stats:
+            model.activate_stats()
+        trainer.evaluate()
+        if save_stats:
+            model.plot_stats()
 
     # if do_evaluation:
     #     return evaluate_model(
@@ -178,6 +187,7 @@ def create_model(
     train_batch_size: int = 0,
     test_batch_size: int = 0,
     gradient_checkpointing: bool = False,
+    save_stats: bool = False,
     **kwargs,
 ):
     """
@@ -188,6 +198,7 @@ def create_model(
     :param dataset_name: Name of the dataset to train on
     :param num_epochs: Number of epochs to finetune the model
     :param do_evaluation: Whether to evaluate the model after training and save the metrics
+    :param save_stats: Whether to save statistics of model (should set to be true only for t5_sparsity_check model)
     :return: Dictionary of evaluation logs if `do_evaluation` is true
     """
     # Build a Gated Attention model
@@ -232,6 +243,7 @@ def create_model(
         resume_from_checkpoint=False,
         run_name=run_name,
         config=config,
+        save_stats=save_stats,
     )
 
 
@@ -252,7 +264,7 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 5,
+                "num_epochs": 1,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": True,
@@ -260,6 +272,7 @@ if __name__ == "__main__":
             create_model(
                 use_sparsity_check=True,
                 **common_args,
+                save_stats=True,
             )
 
             # create_model(
