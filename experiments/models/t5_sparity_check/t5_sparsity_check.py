@@ -206,6 +206,9 @@ def activate_mare(model):
 def apply_sparsity_check_MLP(
         model,
         config,
+        num_generalists: int = 2,
+        num_experts: int = 2,
+        expert_size: int = 2,
 ):
     for is_decoder, network in enumerate(
             [model.transformer.encoder, model.transformer.decoder]
@@ -215,7 +218,7 @@ def apply_sparsity_check_MLP(
                 mlp_layer = block.layer[2]
             else:
                 mlp_layer = block.layer[1]
-            new_mlp = MLPSparsityCheck(config, block_idx)
+            new_mlp = MLPSparsityCheck(config, block_idx, num_all_rounders=num_generalists, num_experts=num_experts, expert_dim=expert_size)
             old_mlp = mlp_layer.DenseReluDense
             new_mlp.wi.weight.data = old_mlp.wi.weight.data
             new_mlp.wo.weight.data = old_mlp.wo.weight.data

@@ -197,6 +197,7 @@ def create_model(
     use_collect_stats: bool = False,
     num_generalists: int = 0,
     num_experts: int = 0,
+    expert_size: int = 0,
     apply_to_half_layers: bool = False,
     do_evaluation: bool = True,
     train_batch_size: int = 0,
@@ -218,17 +219,21 @@ def create_model(
     """
     # Build a Gated Attention model
     model_name = f"{model_type}_{dataset_name}"
-    if num_generalists == 1:
+    if num_generalists != 0:
         model_name += f"_mare_ar{num_generalists}_ex{num_experts}"
+        if expert_size:
+            model_name += f"_size-{expert_size}"
     elif num_experts:
         model_name += f"_moe_ex{num_experts}"
     else:
         model_name += f"_dense"
 
     if use_collect_stats:
-        model_name += "_collected-stats"
-    if use_mare_mlp:
-        model_name += "_mare-mlp"
+        if use_mare_mlp:
+            pre_trained_model_name = model_name + "_collected-stats"
+            model_name += "_mare_mlp"
+        else:
+            model_name += "_collected-stats"
     model_name += run_name  # optional
 
     # captures the method parameters and model_name as a dictionary
@@ -296,13 +301,13 @@ if __name__ == "__main__":
             #     run_name="dense_epochs5",
             #     **common_args,
             # )
-            # create_model(
-            #     use_mare_mlp=False,
-            #     **common_args,
-            #     save_stats=True,
-            #     use_collect_stats=True,
-            #     push_to_hub=True,
-            # )
+            create_model(
+                use_mare_mlp=False,
+                **common_args,
+                save_stats=True,
+                use_collect_stats=True,
+                push_to_hub=True,
+            )
             create_model(
                 use_mare_mlp=True,
                 **common_args,
