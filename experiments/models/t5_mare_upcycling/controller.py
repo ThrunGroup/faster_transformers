@@ -3,7 +3,10 @@ import numpy as np
 from torch import nn
 
 from experiments.models.t5_mare_upcycling.mare_mlp import MAREMLP
-from experiments.models.t5_mare_upcycling.mare_attention import MAREAttention
+from experiments.models.t5_mare_upcycling.mare_attention import (
+    MAREAttention,
+    PruningAttention,
+)
 
 
 def inject_pretrained_weights_to_mlp(
@@ -51,19 +54,40 @@ def inject_pretrained_weights_to_mlp(
     del new_mlp.wo
 
 
-def inject_pretrained_weights_to_attention(
+def inject_pretrained_weights_to_pruning_attention(
     new_attention,
     original_attention,
-    num_all_rounders: int = 0,
-    num_experts: int = 0,
 ):
-    # Multiply the attention block
-    num_attentions = num_all_rounders + num_experts
-    new_attention.self_attentions = nn.ModuleList(
-        [original_attention for _ in range(num_attentions)]
-    )
+    new_attention.SelfAttention = original_attention
 
-    del new_attention.SelfAttention
+
+def apply_pruning_attention_t5(
+    model,
+    config,
+):
+    print("Applying Pruning Attention to T5...")
+
+    # Iterate through blocks and replace self-attention layers
+    # for block in [model]
+    for is_decoder, network in enumerate(
+        [model.transformer.encoder, model.transformer.decoder]
+    ):
+        for block_idx, block in enumerate(network.block):
+            original_attention_layer = block.layer[0].SelfAttention
+            has_relative_attention_bias = (
+                original_attention_layer.has_relative_attention_bias
+            )
+
+            new_attention_layer = PruningAttention(
+                config,
+                has_relative_attention_bias,
+            )
+
+            inject_pretrained_weights_to_pruning_attention(
+                new_attention_layer,
+                original_attention_layer,
+            )
+            block.layer[0] = new_attention_layer
 
 
 def apply_mare_attention_t5(
@@ -90,6 +114,7 @@ def apply_mare_attention_t5(
             has_relative_attention_bias = (
                 original_attention_layer.has_relative_attention_bias
             )
+            print(has_relative_attention_bias)
 
             new_attention_layer = MAREAttention(
                 config,

@@ -1,3 +1,4 @@
+import torch
 from transformers import (
     GPT2Config,
     T5Config,
@@ -23,7 +24,8 @@ from experiments.models.gpt2_mare_upcycling.controller import (
 )
 from experiments.models.t5_mare_upcycling.controller import (
     apply_mare_upcycling_t5,
-    apply_mare_attention_t5,
+    # apply_mare_attention_t5,
+    apply_pruning_attention_t5,
 )
 
 from utils.constants import (
@@ -92,15 +94,15 @@ def build_model(
         function_to_apply = (
             apply_mare_upcycling_gpt2
             if GPT2 in model_type
-            else apply_mare_attention_t5
+            else apply_pruning_attention_t5
         )
         function_to_apply(
             model,
             config,
-            num_generalists,
-            num_experts,
-            capacity_factor,
-            apply_to_half_layers,
+            # num_generalists,
+            # num_experts,
+            # capacity_factor,
+            # apply_to_half_layers,
         )
 
     if use_mare_lora:
@@ -124,16 +126,27 @@ if __name__ == "__main__":
     model_name = "lukeleeai/t5-base_baseline"
     dataset_type = BILLSUM
 
-    # base = build_model(model_name, dataset_type)
+    base = build_model(model_name, dataset_type)
+
+    # print(base)
+    #
+    base_attention_q = (
+        base.transformer.encoder.block[0].layer[0].SelfAttention.q
+    )
 
     # base = build_model(model_name)
-    mare_upcycling = build_model(
+    mare = build_model(
         model_name,
         dataset_type,
         use_mare_upcycling=True,
-        num_experts=16,
+        num_experts=3,
         num_generalists=1,
         capacity_factor=2,
     )
+    print(mare)
 
-    print(mare_upcycling)
+    new_attention_q = (
+        mare.transformer.encoder.block[0].layer[0].SelfAttention.q
+    )
+
+    print(torch.allclose(base_attention_q.weight, new_attention_q.weight))

@@ -34,7 +34,7 @@ from utils.constants import (
 os.environ["MASTER_PORT"] = "29509"
 
 
-class CustomTrainer(Trainer):
+class ClassificationTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False):
         labels = inputs.pop("labels")
         # forward pass
@@ -45,6 +45,51 @@ class CustomTrainer(Trainer):
 
         loss = F.binary_cross_entropy(logits, labels)
         return (loss, outputs) if return_outputs else loss
+
+
+class PruningTrainer(Trainer):
+    def compute_penalty(self, model):
+        penalty = torch.zeros(1).to(model.device)
+        act = torch.nn.Sigmoid()
+        for coder in [
+            model.transformer.encoder,
+            model.transformer.decoder,
+        ]:
+            for block in coder.block:
+                penalty += torch.sum(2 * act(block.layer[0].pruning_scalers))
+        return penalty
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.pop("labels")
+        # forward pass
+        outputs = model(**inputs)
+
+        logits = outputs.get("logits")[:, 0]
+        labels = labels.to(logits.dtype)
+
+        # get penalty term
+        lambda_coeff = 0.1
+        regularizer = lambda_coeff * self.compute_penalty(model)
+        loss = F.binary_cross_entropy(logits, labels) + torch.sum(regularizer)
+        return (loss, outputs) if return_outputs else loss
+
+    def on_epoch_end(self):
+        act = torch.nn.Sigmoid()
+        with torch.no_grad():
+            total_scalers, below_threshold = 0, 0
+            threshold = 0.1
+            for coder in [
+                self.model.transformer.encoder,
+                self.model.transformer.decoder,
+            ]:
+                for block in coder:
+                    scalers = 2 * act(block.layer[0].pruning_scalers)
+                    total_scalers += scalers.numel()
+                    below_threshold += (scalers < threshold).sum().item()
+            percentage = (below_threshold / total_scalers) * 100
+            print(
+                f"Percentage of scalers below {threshold}: {percentage:.2f}%"
+            )
 
 
 def finetune(
@@ -119,7 +164,7 @@ def finetune(
         early_stopping_patience=10, early_stopping_threshold=0.001
     )
 
-    trainer = CustomTrainer(
+    trainer = PruningTrainer(
         # trainer = Trainer(
         model=model,
         args=training_args,
@@ -255,10 +300,6 @@ if __name__ == "__main__":
 
             create_model(
                 use_mare_upcycling=True,
-                capacity_factor=2,
-                num_generalists=1,
-                num_experts=4,
-                apply_to_half_layers=True,
                 **common_args,
             )
 
