@@ -63,6 +63,7 @@ def finetune(
     save_stats: bool = False,
     use_mare_mlp: bool = False,
     use_collect_stats: bool = False,
+    pre_trained_model_name: str = None,
 ):
     """
     Finetune the model on a dataset
@@ -146,7 +147,7 @@ def finetune(
             model.activate_stats(model)
             trainer.train()
         if use_collect_stats and use_mare_mlp:
-            model.from_pretrained(f"thrunlab/{model_name}")
+            model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
             model.activate_mare_mlp(model)
             trainer.train()
 
@@ -219,6 +220,7 @@ def create_model(
     """
     # Build a Gated Attention model
     model_name = f"{model_type}_{dataset_name}"
+    pre_trained_model_name = None
     if num_generalists != 0:
         model_name += f"_mare_ar{num_generalists}_ex{num_experts}"
         if expert_size:
@@ -272,6 +274,7 @@ def create_model(
         use_mare_mlp=use_mare_mlp,
         use_collect_stats=use_collect_stats,
         push_to_hub=kwargs["push_to_hub"],
+        pre_trained_model_name=pre_trained_model_name,
     )
 
 
@@ -301,13 +304,13 @@ if __name__ == "__main__":
             #     run_name="dense_epochs5",
             #     **common_args,
             # )
-            create_model(
-                use_mare_mlp=False,
-                **common_args,
-                save_stats=True,
-                use_collect_stats=True,
-                push_to_hub=True,
-            )
+            # create_model(
+            #     use_mare_mlp=False,
+            #     **common_args,
+            #     save_stats=True,
+            #     use_collect_stats=True,
+            #     push_to_hub=True,
+            # )
             create_model(
                 use_mare_mlp=True,
                 **common_args,
