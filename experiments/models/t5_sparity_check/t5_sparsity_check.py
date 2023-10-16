@@ -119,15 +119,14 @@ class MLPSparsityCheck(T5DenseActDense):
             hidden_states = self.wi(hidden_states)
         else:
             # mask = torch.zeros_like(self.counts_per_idx, device=hidden_states.device)
-            mask = torch.zeros_like(hidden_states, dtype=self.wi.weight.dtype, device=self.wi.weight.device)
             routing_probs = self.router(hidden_states)  # shape: ..., d_ff - num_all_rounders * expert_dim
+            mask = torch.zeros_like(hidden_states, dtype=routing_probs.dtype, device=routing_probs.device)
             # routing_probs = torch.sum(routing_probs, dim=(0, 1))  # shape: d_ff - num_all_rounders * expert_dim
             topk_values, topk_idcs = torch.topk(
                 routing_probs, k=self.num_experts * self.expert_dim, dim=-1,
             )
             topk_idcs = self.non_mare_idcs[topk_idcs]
             mask[..., self.mare_idcs] = float('inf')
-            print(mask.dtype, self.wi.weight.dtype, topk_values.dtype)
             mask = mask.scatter(-1, topk_idcs, topk_values)
             mask = F.sigmoid(mask)
             hidden_states = self.wi(hidden_states * mask)
