@@ -14,6 +14,7 @@ class MLPRouter(nn.Module):
         self.router = nn.Sequential(
             nn.Linear(input_dims, low_rank),
             nn.ReLU(),
+            nn.LayerNorm(output_dims),
             nn.Linear(low_rank, output_dims),
             # nn.Sigmoid(),
         )
