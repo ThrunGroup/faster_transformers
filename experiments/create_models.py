@@ -227,6 +227,8 @@ def create_model(
 
     if use_collect_stats:
         model_name += "_collected-stats"
+    if use_mare_mlp:
+        model_name += "_mare-mlp"
     model_name += run_name  # optional
 
     # captures the method parameters and model_name as a dictionary
