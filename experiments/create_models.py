@@ -58,10 +58,11 @@ def finetune(
     resume_from_checkpoint: bool = False,
     run_name: str = "",
     do_evaluation: bool = True,
-    push_to_hub: bool = False,
+    push_to_hub: bool = True,
     config=None,
     save_stats: bool = False,
     use_mare_mlp: bool = False,
+    use_collect_stats: bool = False,
 ):
     """
     Finetune the model on a dataset
@@ -115,7 +116,7 @@ def finetune(
         gradient_checkpointing=config["gradient_checkpointing"],
         bf16=True,
         ddp_find_unused_parameters=True,
-        hub_model_id=model_name,
+        hub_model_id=f"thrunlab/{model_name}",
         push_to_hub=True,
     )
 
@@ -135,28 +136,19 @@ def finetune(
         # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         compute_metrics=compute_metrics,
     )
-    if use_mare_mlp:
-        mare_trainer = CustomTrainer(
-            # trainer = Trainer(
-            model=model,
-            args=training_args,
-            train_dataset=train_dataset,
-            eval_dataset=val_dataset,
-            tokenizer=tokenizer,
-            data_collator=data_collator,
-            callbacks=[early_stopping],
-            # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
-            compute_metrics=compute_metrics,
-        )
 
     print("\n*********************")
     print("Training ", model_name)
     print("*********************\n")
 
     if num_epochs != 0:
-        if use_mare_mlp:
+        if use_collect_stats and not use_mare_mlp:
             model.activate_stats(model)
-            trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+            trainer.train()
+        if use_collect_stats and use_mare_mlp:
+            model.from_pretrained(f"thrunlab/{model_name}")
+            model.activate_mare_mlp(model)
+            trainer.train()
 
     if do_evaluation:
         if save_stats:
@@ -168,26 +160,7 @@ def finetune(
             )
             filename = f"data-{dataset_name}_epochs-{num_epochs}_int ff activations_"
             model.plot_stats(model, os.path.join(dir_path, filename))
-        wandb_run.finish()
-        # Empty out gpu memory
-        del trainer
-        gc.collect()
-        torch.cuda.empty_cache()
-        gc.collect()
-
-    if use_mare_mlp:
-        wandb_run = wandb.init(
-            project=f"{model_type}_{dataset_type}",
-            name=model_name,
-            reinit=True,
-            config=config,
-        )
-        model.activate_mare_mlp(model)
-        training_args.num_train_epochs = num_epochs
-        mare_trainer.train(resume_from_checkpoint=resume_from_checkpoint)
-        mare_trainer.evaluate()
-        wandb_run.finish()
-
+    wandb_run.finish()
     # if do_evaluation:
     #     return evaluate_model(
     #         model_name,
@@ -251,6 +224,9 @@ def create_model(
         model_name += f"_moe_ex{num_experts}"
     else:
         model_name += f"_dense"
+
+    if use_collect_stats:
+        model_name += "_collected-stats"
     model_name += run_name  # optional
 
     # captures the method parameters and model_name as a dictionary
@@ -262,7 +238,7 @@ def create_model(
         use_mare_lora=use_mare_lora,
         use_mare_attention=use_mare_attention,
         use_mare_upcycling=use_mare_upcycling,
-        use_mare_mlp=use_mare_mlp,
+        use_mare_mlp=use_mare_mlp or use_collect_stats,
         num_generalists=num_generalists,
         num_experts=num_experts,
         capacity_factor=capacity_factor,
@@ -285,8 +261,10 @@ def create_model(
         resume_from_checkpoint=False,
         run_name=run_name,
         config=config,
-        save_stats=save_stats,
+        save_stats=(save_stats or use_collect_stats),
         use_mare_mlp=use_mare_mlp,
+        use_collect_stats=use_collect_stats,
+        push_to_hub=kwargs["push_to_hub"],
     )
 
 
@@ -317,9 +295,18 @@ if __name__ == "__main__":
             #     **common_args,
             # )
             create_model(
+                use_mare_mlp=False,
+                **common_args,
+                save_stats=True,
+                use_collect_stats=True,
+                push_to_hub=True,
+            )
+            create_model(
                 use_mare_mlp=True,
                 **common_args,
                 save_stats=True,
+                use_collect_stats = True,
+                push_to_hub=False,
             )
 
             # create_model(
