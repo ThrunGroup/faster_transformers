@@ -123,16 +123,15 @@ def build_model(
 
 if __name__ == "__main__":
     model_name = T5
-    model_name = "lukeleeai/t5-base_baseline"
     dataset_type = BILLSUM
 
     base = build_model(model_name, dataset_type)
 
-    # print(base)
-    #
     base_attention_q = (
         base.transformer.encoder.block[0].layer[0].SelfAttention.q
     )
+
+    # print(base)
 
     # base = build_model(model_name)
     mare = build_model(
@@ -143,10 +142,15 @@ if __name__ == "__main__":
         num_generalists=1,
         capacity_factor=2,
     )
-    print(mare)
 
-    new_attention_q = (
-        mare.transformer.encoder.block[0].layer[0].SelfAttention.q
-    )
+    for a, b in zip(
+        base.transformer.encoder.block, mare.transformer.encoder.block
+    ):
+        a_att = a.layer[0].SelfAttention.k
+        b_att = b.layer[0].SelfAttention.k
 
-    print(torch.allclose(base_attention_q.weight, new_attention_q.weight))
+        print(a_att.bias, b_att.bias)
+        # if not torch.allclose(a_att.bias, b_att.bias):
+        #     print(1)
+
+    # print(mare)

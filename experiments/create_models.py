@@ -4,7 +4,10 @@ from transformers import (
     TrainingArguments,
     EarlyStoppingCallback,
     AutoTokenizer,
+    TrainerCallback,
+    TrainerState,
 )
+
 from torch.nn import functional as F
 import wandb
 
@@ -47,6 +50,33 @@ class ClassificationTrainer(Trainer):
         return (loss, outputs) if return_outputs else loss
 
 
+class PrintScalersCallback(TrainerCallback):
+    def on_step_end(
+        self, args: TrainingArguments, state: TrainerState, control, **kwargs
+    ):
+        if state.global_step % 100 == 0:
+            model = kwargs["model"]
+            if hasattr(model, "scalers"):
+                print(
+                    f"Step {state.global_step}: Scalers value - {model.scalers}"
+                )
+
+            for is_encoder, coder in enumerate(
+                [
+                    model.transformer.encoder,
+                    model.transformer.decoder,
+                ]
+            ):
+                for i, block in enumerate(coder.block):
+                    scalers = torch.nn.Sigmoid()(
+                        block.layer[0].pruning_scalers
+                    )
+                    if is_encoder:
+                        print("encoder", i, scalers)
+                    else:
+                        print("decoder", i, scalers)
+
+
 class PruningTrainer(Trainer):
     def compute_penalty(self, model):
         penalty = torch.zeros(1).to(model.device)
@@ -56,7 +86,8 @@ class PruningTrainer(Trainer):
             model.transformer.decoder,
         ]:
             for block in coder.block:
-                penalty += torch.sum(2 * act(block.layer[0].pruning_scalers))
+                # penalty += torch.sum(2 * act(block.layer[0].pruning_scalers))
+                penalty += torch.sum(torch.abs(block.layer[0].pruning_scalers))
         return penalty
 
     def compute_loss(self, model, inputs, return_outputs=False):
@@ -68,28 +99,10 @@ class PruningTrainer(Trainer):
         labels = labels.to(logits.dtype)
 
         # get penalty term
-        lambda_coeff = 0.1
+        lambda_coeff = 1
         regularizer = lambda_coeff * self.compute_penalty(model)
         loss = F.binary_cross_entropy(logits, labels) + torch.sum(regularizer)
         return (loss, outputs) if return_outputs else loss
-
-    def on_epoch_end(self):
-        act = torch.nn.Sigmoid()
-        with torch.no_grad():
-            total_scalers, below_threshold = 0, 0
-            threshold = 0.1
-            for coder in [
-                self.model.transformer.encoder,
-                self.model.transformer.decoder,
-            ]:
-                for block in coder:
-                    scalers = 2 * act(block.layer[0].pruning_scalers)
-                    total_scalers += scalers.numel()
-                    below_threshold += (scalers < threshold).sum().item()
-            percentage = (below_threshold / total_scalers) * 100
-            print(
-                f"Percentage of scalers below {threshold}: {percentage:.2f}%"
-            )
 
 
 def finetune(
@@ -138,14 +151,14 @@ def finetune(
         evaluation_strategy="steps",
         eval_steps=10,
         logging_steps=5,
-        save_strategy="steps",
+        save_strategy="no",
         learning_rate=5e-5,
         warmup_steps=200,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
         save_total_limit=1,
-        load_best_model_at_end=True,
+        load_best_model_at_end=False,
         report_to="wandb",
         run_name=model_name,
         # for memory issues
@@ -154,10 +167,10 @@ def finetune(
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
         # bf16=True,
-        # deepspeed="ds_config.json",
-        ddp_find_unused_parameters=True,
+        deepspeed="ds_config.json",
+        # ddp_find_unused_parameters=True,
         hub_model_id=model_name,
-        push_to_hub=True,
+        # push_to_hub=True,
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -172,7 +185,10 @@ def finetune(
         eval_dataset=val_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        callbacks=[early_stopping],
+        callbacks=[
+            # early_stopping,
+            PrintScalersCallback()
+        ],
         # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         compute_metrics=compute_metrics,
     )
@@ -293,8 +309,8 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": 10,
-                "train_batch_size": 1,
-                "test_batch_size": 1,
+                "train_batch_size": 16,
+                "test_batch_size": 16,
                 "gradient_checkpointing": False,
             }
 
@@ -303,19 +319,19 @@ if __name__ == "__main__":
                 **common_args,
             )
 
-            create_model(
-                use_mare_upcycling=True,
-                capacity_factor=2,
-                num_generalists=0,
-                num_experts=4,
-                apply_to_half_layers=True,
-                **common_args,
-            )
+            # create_model(
+            #     use_mare_upcycling=True,
+            #     capacity_factor=2,
+            #     num_generalists=0,
+            #     num_experts=4,
+            #     apply_to_half_layers=True,
+            #     **common_args,
+            # )
 
-            create_model(
-                run_name="dense_epochs5",
-                **common_args,
-            )
+            # create_model(
+            #     run_name="dense_epochs5",
+            #     **common_args,
+            # )
 
             # create_model(
             #     use_mare_upcycling=True,

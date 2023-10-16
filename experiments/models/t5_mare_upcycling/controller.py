@@ -58,7 +58,8 @@ def inject_pretrained_weights_to_pruning_attention(
     new_attention,
     original_attention,
 ):
-    new_attention.SelfAttention = original_attention
+    new_attention.SelfAttention = original_attention.SelfAttention
+    new_attention.layer_norm = original_attention.layer_norm
 
 
 def apply_pruning_attention_t5(
@@ -73,9 +74,9 @@ def apply_pruning_attention_t5(
         [model.transformer.encoder, model.transformer.decoder]
     ):
         for block_idx, block in enumerate(network.block):
-            original_attention_layer = block.layer[0].SelfAttention
+            original_attention_layer = block.layer[0]
             has_relative_attention_bias = (
-                original_attention_layer.has_relative_attention_bias
+                original_attention_layer.SelfAttention.has_relative_attention_bias
             )
 
             new_attention_layer = PruningAttention(
@@ -88,6 +89,15 @@ def apply_pruning_attention_t5(
                 original_attention_layer,
             )
             block.layer[0] = new_attention_layer
+
+    # freeze the model
+    for name, param in model.named_parameters():
+        if (
+            "pruning_scalers" not in name
+            or "classification" not in name
+            or "SelfAttention" not in name
+        ):
+            param.requires_grad = False
 
 
 def apply_mare_attention_t5(

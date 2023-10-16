@@ -16,7 +16,7 @@ class PruningAttention(T5LayerSelfAttention):
     ):
         super().__init__(config, has_relative_attention_bias)
         self.num_heads = config.num_heads
-        self.pruning_scalers = nn.Parameter(torch.zeros(self.num_heads))
+        self.pruning_scalers = nn.Parameter(torch.rand(self.num_heads) * 0.01)
         self.act = nn.Sigmoid()
 
     def forward(
@@ -43,9 +43,9 @@ class PruningAttention(T5LayerSelfAttention):
         # Softly turn off the unnecessary heads
         B, T, C = attention_output[0].shape
         attention_out = attention_output[0].view(B, T, self.num_heads, -1)
-        attention_out = (
-            attention_out * self.act(self.pruning_scalers).unsqueeze(-1) * 2
-        )
+        attention_out = attention_out * self.act(
+            self.pruning_scalers
+        ).unsqueeze(-1)
         attention_out = attention_out.view(B, T, C)
 
         hidden_states = hidden_states + self.dropout(attention_out)
