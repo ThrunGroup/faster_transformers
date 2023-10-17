@@ -1,11 +1,16 @@
 import torch
 import numpy as np
 from torch import nn
+from transformers.models.t5.modeling_t5 import (
+    T5LayerSelfAttention,
+    T5Attention,
+)
 
 from experiments.models.t5_mare_upcycling.mare_mlp import MAREMLP
 from experiments.models.t5_mare_upcycling.mare_attention import (
     MAREAttention,
     PruningAttention,
+    PruningSelfAttention,
 )
 
 
@@ -62,6 +67,50 @@ def inject_pretrained_weights_to_pruning_attention(
     new_attention.layer_norm = original_attention.layer_norm
 
 
+def apply_pruning_self_attention_t5(
+    model,
+    config,
+):
+    print("Applying Pruning Attention to T5...")
+
+    # Iterate through blocks and replace self-attention layers
+    # for block in [model]
+    for is_decoder, network in enumerate(
+        [model.transformer.encoder, model.transformer.decoder]
+    ):
+        for block_idx, block in enumerate(network.block):
+            original_attention_layer = block.layer[0].SelfAttention
+            has_relative_attention_bias = (
+                original_attention_layer.has_relative_attention_bias
+            )
+
+            new_attention_layer = T5LayerSelfAttention(
+                config,
+                has_relative_attention_bias,
+            )
+
+            new_attention_layer.SelfAttention = PruningSelfAttention(
+                config,
+                has_relative_attention_bias,
+            )
+            new_attention_layer.SelfAttention.q = original_attention_layer.q
+            new_attention_layer.SelfAttention.k = original_attention_layer.k
+            new_attention_layer.SelfAttention.v = original_attention_layer.v
+            new_attention_layer.SelfAttention.o = original_attention_layer.o
+
+            block.layer[0] = new_attention_layer
+
+    # freeze the model
+    for name, param in model.named_parameters():
+        if not (
+            "pruning_scalers" in name
+            or "classification" in name
+            or "SelfAttention" in name
+        ):
+            print(name)
+            param.requires_grad = False
+
+
 def apply_pruning_attention_t5(
     model,
     config,
@@ -92,11 +141,12 @@ def apply_pruning_attention_t5(
 
     # freeze the model
     for name, param in model.named_parameters():
-        if (
-            "pruning_scalers" not in name
-            or "classification" not in name
-            or "SelfAttention" not in name
+        if not (
+            "pruning_scalers" in name
+            or "classification" in name
+            or "SelfAttention" in name
         ):
+            print(name)
             param.requires_grad = False
 
 
