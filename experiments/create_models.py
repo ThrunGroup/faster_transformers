@@ -177,6 +177,7 @@ def finetune(
     if push_to_hub:
         print("pushing to hub")
         trainer.push_to_hub()
+        model.from_pretrained(f"thrunlab/{model_name}")
 
     # Empty out gpu memory
     del trainer
@@ -308,23 +309,23 @@ if __name__ == "__main__":
             #     run_name="dense_epochs5",
             #     **common_args,
             # )
-            # create_model(
-            #     use_mare_mlp=False,
-            #     **common_args,
-            #     save_stats=True,
-            #     use_collect_stats=True,
-            #     push_to_hub=True,
-            #     num_generalists=2,
-            #     num_experts=16,
-            #     expert_size=64,
-            # )
+            create_model(
+                use_mare_mlp=False,
+                **common_args,
+                save_stats=True,
+                use_collect_stats=True,
+                push_to_hub=True,
+                num_generalists=2,
+                num_experts=16,
+                expert_size=64,
+            )
             create_model(
                 use_mare_mlp=True,
                 **common_args,
                 save_stats=True,
                 use_collect_stats=True,
                 push_to_hub=False,
-                num_generalists=0,
+                num_generalists=2,
                 num_experts=16,
                 expert_size=64,
             )
