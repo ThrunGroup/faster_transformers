@@ -283,9 +283,9 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 1,
-                "train_batch_size": 4,
-                "test_batch_size": 4,
+                "num_epochs": 2,
+                "train_batch_size": 16,
+                "test_batch_size": 16,
                 "gradient_checkpointing": False,
             }
             # create_model(

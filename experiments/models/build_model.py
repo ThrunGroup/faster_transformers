@@ -26,6 +26,7 @@ from experiments.models.t5_mare_upcycling.controller import (
 )
 from experiments.models.t5_mare_downcycling.t5_sparsity_check import (
     apply_sparsity_check_MLP,
+    apply_sparse_MLP,
 )
 
 from utils.constants import (
@@ -109,7 +110,8 @@ def build_model(
         freeze_model(model)
 
     if use_mare_mlp:
-        apply_sparsity_check_MLP(model, config)
+        # apply_sparsity_check_MLP(model, config)
+        apply_sparse_MLP(model, config)
 
     if dataset_type in GLUE + SUPERGLUE:
         original_out_proj = model.classification_head.out_proj
