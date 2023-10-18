@@ -146,6 +146,8 @@ class MLPSparsityCheck(T5DenseActDense):
             topk_idcs = self.non_mare_idcs[topk_idcs]
             mask[..., self.mare_idcs] = 1
             mask = mask.scatter(-1, topk_idcs, topk_values)
+            for params in self.router.parameters():
+                print(params.grad)
             # mask[..., self.mare_idcs] = torch.finfo(mask.dtype).max
             # mask = F.sigmoid(mask)
             hidden_states = self.wi(hidden_states) * mask
