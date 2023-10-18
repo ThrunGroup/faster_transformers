@@ -175,6 +175,7 @@ def finetune(
     # if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
     #     wandb_run.finish()
     if push_to_hub:
+        print("pushing to hub")
         trainer.push_to_hub()
 
     # Empty out gpu memory
@@ -229,6 +230,8 @@ def create_model(
         model_name += f"_moe_ex{num_experts}"
     else:
         model_name += f"_dense"
+
+    model_name += f"_epochs-{num_epochs}"
 
     if use_collect_stats:
         if use_mare_mlp:
@@ -295,7 +298,7 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 5,
+                "num_epochs": 1,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": True,

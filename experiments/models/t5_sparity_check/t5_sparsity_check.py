@@ -13,8 +13,8 @@ class MLPRouter(nn.Module):
         super().__init__()
         self.router = nn.Sequential(
             nn.Linear(input_dims, low_rank),
-            # nn.ReLU(),
-            # nn.LayerNorm(low_rank),
+            nn.ReLU(),
+            nn.LayerNorm(low_rank),
             nn.Linear(low_rank, output_dims),
             nn.Sigmoid(),
         )
@@ -49,6 +49,8 @@ class MLPSparsityCheck(T5DenseActDense):
         )
         self.router.to(self.wo.weight.dtype)
 
+        print("ar, exp, dim: ", num_all_rounders, num_experts, expert_dim)
+
     def collect_stats(self, intermediate_states):
         # Collecting stats
         self.num_zeros += int(torch.sum(intermediate_states == 0))
@@ -75,6 +77,7 @@ class MLPSparsityCheck(T5DenseActDense):
         )
         self.is_collecting_stats = False  # Turning off collecting stats
         print(self.mare_idcs)
+        print("ar, exp, dim: ", self.num_all_rounders, self.num_experts, self.expert_dim)
 
     def deactivate_mare(self):
         self.is_mare = False
