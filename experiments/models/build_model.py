@@ -78,6 +78,7 @@ def build_model(
     random_token_selection: bool = False,
     num_generalists: int = 0,
     num_experts: int = 0,
+    expert_size: int = 0,
     apply_to_half_layers: bool = False,
 ):
     config, model = get_model(model_type, dataset_type)
@@ -86,15 +87,11 @@ def build_model(
         function_to_apply = (
             apply_mare_attention if num_generalists else apply_gated_attention
         )
-        function_to_apply(
-            model, config, random_token_selection, num_generalists
-        )
+        function_to_apply(model, config, random_token_selection, num_generalists)
 
     if use_mare_upcycling:
         function_to_apply = (
-            apply_mare_upcycling_gpt2
-            if GPT2 in model_type
-            else apply_mare_upcycling_t5
+            apply_mare_upcycling_gpt2 if GPT2 in model_type else apply_mare_upcycling_t5
         )
         function_to_apply(
             model,
@@ -110,16 +107,20 @@ def build_model(
         freeze_model(model)
 
     if use_mare_mlp:
-        apply_sparsity_check_MLP(model, config)
+        apply_sparsity_check_MLP(
+            model,
+            config,
+            num_generalists=num_generalists,
+            num_experts=num_experts,
+            expert_size=expert_size,
+        )
 
     if dataset_type in GLUE + SUPERGLUE:
         original_out_proj = model.classification_head.out_proj
         new_out_proj = nn.Linear(config.d_model, 4)
         new_out_proj.weight.data = original_out_proj.weight.data.repeat(4, 1)
         new_out_proj.bias.data = original_out_proj.bias.data.repeat(4)
-        model.classification_head.out_proj = nn.Sequential(
-            new_out_proj, nn.Sigmoid()
-        )
+        model.classification_head.out_proj = nn.Sequential(new_out_proj, nn.Sigmoid())
 
     return model
 
