@@ -297,16 +297,16 @@ if __name__ == "__main__":
                 "push_to_hub": True,
             }
 
-            # create_model(
-            #     run_name="dense_baseline",
-            #     **common_args,
-            # )
-
             create_model(
-                use_mare_mlp=True,
-                run_name="_einsum",
+                run_name="dense_baseline",
                 **common_args,
             )
+
+            # create_model(
+            #     use_mare_mlp=True,
+            #     run_name="_einsum",
+            #     **common_args,
+            # )
 
             # create_model(
             #     use_mare_mlp=False,
