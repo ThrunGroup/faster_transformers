@@ -150,6 +150,7 @@ def finetune(
             model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
             model.activate_mare_mlp(model)
             trainer.train()
+    trainer.train()
 
     if do_evaluation:
         if save_stats:
