@@ -329,7 +329,7 @@ if __name__ == "__main__":
                 use_collect_stats=False,
                 push_to_hub=False,
                 num_generalists=0,
-                num_experts=16 * 3,
+                num_experts=16 * 3 * 2,
                 expert_size=32,
             )
 
