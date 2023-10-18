@@ -324,7 +324,7 @@ if __name__ == "__main__":
                 save_stats=True,
                 use_collect_stats=True,
                 push_to_hub=False,
-                num_generalists=2,
+                num_generalists=0,
                 num_experts=16,
                 expert_size=64,
             )
