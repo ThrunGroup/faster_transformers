@@ -13,8 +13,8 @@ class MLPRouter(nn.Module):
         super().__init__()
         self.router = nn.Sequential(
             nn.Linear(input_dims, low_rank),
-            nn.ReLU(),
-            nn.LayerNorm(low_rank),
+            # nn.ReLU(),
+            # nn.LayerNorm(low_rank),
             nn.Linear(low_rank, output_dims),
             # nn.Sigmoid(),
         )
@@ -130,6 +130,7 @@ class MLPSparsityCheck(T5DenseActDense):
             mask[..., self.mare_idcs] = torch.finfo(mask.dtype).max
             mask = mask.scatter(-1, topk_idcs, topk_values)
             mask = F.sigmoid(mask)
+            print(mask)
             hidden_states = self.wi(hidden_states) * mask
             # mask = mask.unsqueeze(-1)
             # hidden_states = F.linear(hidden_states, self.wi.weight * mask)
