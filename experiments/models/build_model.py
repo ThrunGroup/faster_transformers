@@ -10,7 +10,6 @@ from transformers import (
 )
 from torch import nn
 
-
 from experiments.models.gpt2_mare.controller import apply_mare_attention
 from experiments.models.gpt2_peft_mare.controller import (
     apply_mare_lora,
@@ -25,7 +24,7 @@ from experiments.models.gpt2_mare_upcycling.controller import (
 from experiments.models.t5_mare_upcycling.controller import (
     apply_mare_upcycling_t5,
 )
-from experiments.models.t5_sparity_check.t5_sparsity_check import (
+from experiments.models.t5_mare_downcycling.t5_sparsity_check import (
     apply_sparsity_check_MLP,
 )
 

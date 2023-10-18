@@ -16,11 +16,8 @@ from models.build_model import build_model
 from utils.constants import (
     # Models
     GPT2,
-    GPT2_XL,
     T5,
-    T5_3B,
     # Datasets
-    # SST2,
     BILLSUM,
     SQUAD,
     QNLI,
@@ -30,7 +27,6 @@ from utils.constants import (
     MULTIRC,
     BOOLQ,
 )
-
 
 os.environ["MASTER_PORT"] = "29509"
 
@@ -111,13 +107,13 @@ def finetune(
         run_name=model_name,
         # for memory issues
         gradient_accumulation_steps=2,
-        # deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
-        bf16=True,
-        ddp_find_unused_parameters=True,
-        hub_model_id=f"thrunlab/{model_name}",
+        # bf16=True,
+        # ddp_find_unused_parameters=True,
+        # deepspeed="ds_config.json",
+        hub_model_id=f"lukeleeai/{model_name}",
         push_to_hub=True,
     )
 
@@ -147,7 +143,7 @@ def finetune(
             model.activate_stats(model)
             trainer.train()
         if use_collect_stats and use_mare_mlp:
-            model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
+            model.from_pretrained(f"lukeleeai/{pre_trained_model_name}")
             model.activate_mare_mlp(model)
             trainer.train()
 
@@ -157,23 +153,15 @@ def finetune(
         trainer.evaluate()
         if save_stats:
             dir_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), "mare mlp stats histograms"
+                os.path.dirname(os.path.abspath(__file__)),
+                "mare mlp stats histograms",
             )
-            filename = f"data-{dataset_name}_epochs-{num_epochs}_int ff activations_"
+            filename = (
+                f"data-{dataset_name}_epochs-{num_epochs}_int ff activations_"
+            )
             model.plot_stats(model, os.path.join(dir_path, filename))
-    wandb_run.finish()
+    # wandb_run.finish()
     # if do_evaluation:
-    #     return evaluate_model(
-    #         model_name,
-    #         dataset_name,
-    #         model=model,
-    #         tokenizer=tokenizer,
-    #         test_dataset=test_dataset,
-    #         trainer=trainer,
-    #     )
-
-    # if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
-    #     wandb_run.finish()
     if push_to_hub:
         trainer.push_to_hub()
 
@@ -296,9 +284,9 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": 1,
-                "train_batch_size": 32,
-                "test_batch_size": 64,
-                "gradient_checkpointing": True,
+                "train_batch_size": 4,
+                "test_batch_size": 4,
+                "gradient_checkpointing": False,
             }
             # create_model(
             #     run_name="dense_epochs5",
