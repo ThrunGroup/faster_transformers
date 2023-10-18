@@ -147,11 +147,11 @@ def finetune(
             model.activate_stats(model)
             trainer.train()
         if use_collect_stats and use_mare_mlp:
-            model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
+            # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
+            model.load_state_dict(torch.load(pre_trained_model_name))
             model.activate_mare_mlp(model)
             trainer.train()
     trainer.train()
-
     if do_evaluation:
         if save_stats:
             model.activate_stats(model, True)
@@ -177,8 +177,9 @@ def finetune(
     #     wandb_run.finish()
     if push_to_hub:
         print("pushing to hub")
-        trainer.push_to_hub()
-        model.from_pretrained(f"thrunlab/{model_name}")
+        torch.save(model.state_dict(), model_name)
+        # trainer.push_to_hub()
+        # model.from_pretrained(f"thrunlab/{model_name}")
 
     # Empty out gpu memory
     del trainer
@@ -327,7 +328,7 @@ if __name__ == "__main__":
                 use_collect_stats=False,
                 push_to_hub=False,
                 num_generalists=0,
-                num_experts=16,
+                num_experts=4,
                 expert_size=64,
             )
 
