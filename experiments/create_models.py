@@ -151,6 +151,7 @@ def finetune(
             model.load_state_dict(torch.load(pre_trained_model_name))
             model.activate_mare_mlp(model)
             trainer.train()
+    model.activate_mare_mlp(model)
     trainer.train()
     if do_evaluation:
         if save_stats:
@@ -328,8 +329,8 @@ if __name__ == "__main__":
                 use_collect_stats=False,
                 push_to_hub=False,
                 num_generalists=0,
-                num_experts=4,
-                expert_size=2,
+                num_experts=16,
+                expert_size=16,
             )
 
             # create_model(
