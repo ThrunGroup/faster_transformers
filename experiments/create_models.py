@@ -82,13 +82,13 @@ def finetune(
     compute_metrics = dataset.get_compute_metrics()
     preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
 
-    # if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
-    wandb_run = wandb.init(
-        project=f"{model_type}_{dataset_type}",
-        name=model_name,
-        reinit=True,
-        config=config,
-    )
+    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
+        wandb_run = wandb.init(
+            project=f"{model_type}_{dataset_type}",
+            name=model_name,
+            reinit=True,
+            config=config,
+        )
 
     training_args = TrainingArguments(
         output_dir=model_name,
@@ -110,9 +110,9 @@ def finetune(
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
-        # bf16=True,
         # ddp_find_unused_parameters=True,
-        # deepspeed="ds_config.json",
+        bf16=True,
+        deepspeed="ds_config.json",
         hub_model_id=f"lukeleeai/{model_name}",
         push_to_hub=True,
     )
@@ -129,7 +129,7 @@ def finetune(
         eval_dataset=val_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        callbacks=[early_stopping],
+        # callbacks=[early_stopping],
         # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         compute_metrics=compute_metrics,
     )
@@ -138,29 +138,33 @@ def finetune(
     print("Training ", model_name)
     print("*********************\n")
 
-    if num_epochs != 0:
-        if use_collect_stats and not use_mare_mlp:
-            model.activate_stats(model)
-            trainer.train()
-        if use_collect_stats and use_mare_mlp:
-            model.from_pretrained(f"lukeleeai/{pre_trained_model_name}")
-            model.activate_mare_mlp(model)
-            trainer.train()
+    trainer.train()
 
-    if do_evaluation:
-        if save_stats:
-            model.activate_stats(model, True)
-        trainer.evaluate()
-        if save_stats:
-            dir_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "mare mlp stats histograms",
-            )
-            filename = (
-                f"data-{dataset_name}_epochs-{num_epochs}_int ff activations_"
-            )
-            model.plot_stats(model, os.path.join(dir_path, filename))
-    # wandb_run.finish()
+    # if num_epochs != 0:
+    #     if use_collect_stats and not use_mare_mlp:
+    #         model.activate_stats(model)
+    #         trainer.train()
+    #     if use_collect_stats and use_mare_mlp:
+    #         model.from_pretrained(f"lukeleeai/{pre_trained_model_name}")
+    #         model.activate_mare_mlp(model)
+    #         trainer.train()
+
+    # if do_evaluation:
+    #     if save_stats:
+    #         model.activate_stats(model, True)
+    #     trainer.evaluate()
+    #     if save_stats:
+    #         dir_path = os.path.join(
+    #             os.path.dirname(os.path.abspath(__file__)),
+    #             "mare mlp stats histograms",
+    #         )
+    #         filename = (
+    #             f"data-{dataset_name}_epochs-{num_epochs}_int ff activations_"
+    #         )
+    #         model.plot_stats(model, os.path.join(dir_path, filename))
+
+    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
+        wandb_run.finish()
     # if do_evaluation:
     if push_to_hub:
         trainer.push_to_hub()
@@ -217,6 +221,9 @@ def create_model(
         model_name += f"_moe_ex{num_experts}"
     else:
         model_name += f"_dense"
+
+    if use_mare_mlp:
+        model_name += "_mare_mlp"
 
     if use_collect_stats:
         if use_mare_mlp:
@@ -283,43 +290,43 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 2,
-                "train_batch_size": 16,
-                "test_batch_size": 16,
-                "gradient_checkpointing": False,
+                "num_epochs": 8,
+                "train_batch_size": 8,
+                "test_batch_size": 32,
+                "gradient_checkpointing": True,
+                "push_to_hub": True,
             }
+
             # create_model(
-            #     run_name="dense_epochs5",
+            #     run_name="dense_baseline",
             #     **common_args,
             # )
-            create_model(
-                use_mare_mlp=False,
-                **common_args,
-                save_stats=True,
-                use_collect_stats=True,
-                push_to_hub=True,
-                num_generalists=2,
-                num_experts=16,
-                expert_size=64,
-            )
+
             create_model(
                 use_mare_mlp=True,
+                run_name="_einsum",
                 **common_args,
-                save_stats=True,
-                use_collect_stats=True,
-                push_to_hub=False,
-                num_generalists=2,
-                num_experts=16,
-                expert_size=64,
             )
 
             # create_model(
-            #     use_mare_upcycling=True,
-            #     capacity_factor=2,
-            #     num_generalists=1,
-            #     num_experts=2,
-            #     apply_to_half_layers=True,
+            #     use_mare_mlp=False,
             #     **common_args,
+            #     save_stats=True,
+            #     use_collect_stats=True,
+            #     push_to_hub=True,
+            #     num_generalists=2,
+            #     num_experts=16,
+            #     expert_size=64,
+            # )
+            # create_model(
+            #     use_mare_mlp=True,
+            #     **common_args,
+            #     save_stats=True,
+            #     use_collect_stats=True,
+            #     push_to_hub=False,
+            #     num_generalists=2,
+            #     num_experts=16,
+            #     expert_size=64,
             # )
 
             # create_model(
@@ -349,52 +356,3 @@ if __name__ == "__main__":
             #     apply_to_half_layers=True,
             #     **common_args,
             # )
-
-    # Original dense
-    # create_model(
-    #     run_name="baseline",
-    #     **common_args,
-    # )
-
-    # MARE without experts
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     num_generalists=2,
-    #     capacity_factor=2,
-    #     num_experts=0,
-    #     run_name="c2_dense_2_half",
-    #     apply_to_half_layers=True,
-    #     **common_args,
-    # )
-
-    # # MARE without ARs
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     capacity_factor=2,
-    #     num_generalists=0,
-    #     num_experts=8,
-    #     run_name="moe_ex8_one_more",
-    #     apply_to_half_layers=True,
-    #     **common_args,
-    # )
-
-    # MARE
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     capacity_factor=2,
-    #     num_generalists=1,
-    #     num_experts=7,
-    #     run_name="mare_ar1_ex7_half_from_ft_scaler_per_expert",
-    #     apply_to_half_layers=True,
-    #     **common_args,
-    # )
-
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     capacity_factor=2,
-    #     num_generalists=1,
-    #     num_experts=4,
-    #     run_name="c2_mare_ar1_ex4_half_from_ft_dense",
-    #     apply_to_half_layers=True,
-    #     **common_args,
-    # )

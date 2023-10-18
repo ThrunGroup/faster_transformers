@@ -26,6 +26,8 @@ from experiments.models.t5_mare_upcycling.controller import (
 )
 from experiments.models.t5_mare_downcycling.t5_sparsity_check import (
     apply_sparsity_check_MLP,
+)
+from experiments.models.t5_mare_downcycling.t5_sparse_mlp import (
     apply_sparse_MLP,
 )
 
@@ -61,7 +63,7 @@ def get_model(model_type, dataset_type):
     else:
         # GLUE
         model = AutoModelForSequenceClassification
-    # model_type = "lukeleeai/t5-base_cola_dense_epochs5"
+    model_type = "lukeleeai/t5-base_cola_densedense_baseline"
     model = model.from_pretrained(model_type, config=config)
 
     return config, model
@@ -121,6 +123,8 @@ def build_model(
         model.classification_head.out_proj = nn.Sequential(
             new_out_proj, nn.Sigmoid()
         )
+
+    print(model)
 
     return model
 

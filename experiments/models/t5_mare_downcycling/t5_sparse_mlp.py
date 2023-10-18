@@ -16,7 +16,8 @@ class MLPRouter(nn.Module):
             nn.ReLU(),
             nn.LayerNorm(low_rank),
             nn.Linear(low_rank, output_dims),
-            # nn.Sigmoid(),
+            # nn.Softmax(dim=-1),
+            nn.Sigmoid(),
         )
 
     def forward(self, x):
@@ -50,6 +51,7 @@ class MLPSparseMLP(T5DenseActDense):
             low_rank=64,
         )
         self.router.to(self.wo.weight.dtype)
+        self.d_ff = config.d_ff
 
     def collect_stats(self, intermediate_states):
         # Collecting stats
@@ -124,47 +126,101 @@ class MLPSparseMLP(T5DenseActDense):
 
     def forward(self, hidden_states):
         B, T, C = hidden_states.shape
-        outputs = torch.zeros(B, T, C)
+        K = int(self.d_ff * 0.3)
 
         router_probs = self.router(hidden_states)  # (B, T, 4D)
         topk_values, topk_idcs = torch.topk(
             router_probs,
-            k=int(T * 0.1),
+            k=K,
             dim=-1,
         )  # (B, T, E)
 
-        for b in range(B):
-            for t in range(t):
-                expert_indices = topk_idcs[b, t]
+        # get first intermediate results first
+        DI, DO = self.wi.weight.T.shape
 
-                # get first intermediate results first
-                x = hidden_states[b][t]  # (D)
-                wi = self.wi.weight[:, expert_indices]
-                bi = self.wi.bias[expert_indices]
-                hidden_states = x @ wi + bi
-                hidden_states = self.act(hidden_states)
+        wi_selected = torch.gather(
+            self.wi.weight.T.unsqueeze(0)
+            .unsqueeze(0)
+            .expand(B, T, -1, -1),  # (B_, T_, DI, DO)
+            -1,
+            topk_idcs.unsqueeze(-2).expand(-1, -1, DI, -1),  # (B, T, DI_, K)
+        ).view(
+            B, T, -1, K
+        )  # (B, T, C, K)
 
-                if (
-                    isinstance(self.wo.weight, torch.Tensor)
-                    and hidden_states.dtype != self.wo.weight.dtype
-                    and self.wo.weight.dtype != torch.int8
-                ):
-                    hidden_states = hidden_states.to(self.wo.weight.dtype)
+        hidden_states = torch.einsum(
+            "btca,btce->btae", hidden_states[:, :, :, None], wi_selected
+        ).reshape(B, T, K)
+        hidden_states = self.act(hidden_states)
+        hidden_states = hidden_states * topk_values
+        #  * K  # (B, T, K)
+        hidden_states = self.dropout(hidden_states)
+        if (
+            isinstance(self.wo.weight, torch.Tensor)
+            and hidden_states.dtype != self.wo.weight.dtype
+            and self.wo.weight.dtype != torch.int8
+        ):
+            hidden_states = hidden_states.to(self.wo.weight.dtype)
 
-                # get final intermediates results
-                wo = self.wo.weight[expert_indices]
-                bo = self.wo.bias
-                hidden_states = hidden_states @ wo + bo
-                hidden_states = self.wo(hidden_states)
+        # get final intermediates results
+        DI, DO = self.wo.weight.T.shape
 
-                # multiply router probabilities
-                hidden_states = hidden_states * torch.nn.Sigmoid()(
-                    topk_values[b, t]
-                )
+        wo_selected = torch.gather(
+            self.wo.weight.T.unsqueeze(0)
+            .unsqueeze(0)
+            .expand(B, T, -1, -1),  # (B_, T_, DI, DO)
+            -2,
+            topk_idcs.unsqueeze(-1).expand(-1, -1, -1, DO),  # (B, T, K, DO_)
+        ).view(
+            B, T, K, -1
+        )  # (B, T, K, C)
 
-                outputs[b][t] = hidden_states
+        hidden_states = torch.einsum(
+            "btea,btec->btac", hidden_states[:, :, :, None], wo_selected
+        ).reshape(B, T, -1)
 
         return hidden_states
+
+    # def forward(self, hidden_states):
+    # with FOR LOOP
+    #     B, T, C = hidden_states.shape
+    #     outputs = torch.zeros(B, T, C)
+
+    #     router_probs = self.router(hidden_states)  # (B, T, 4D)
+    #     topk_values, topk_idcs = torch.topk(
+    #         router_probs,
+    #         k=int(self.d_ff * 0.5),
+    #         dim=-1,
+    #     )  # (B, T, E)
+
+    #     for b in range(B):
+    #         for t in range(T):
+    #             expert_indices = topk_idcs[b, t]
+
+    #             # get first intermediate results first
+    #             x = hidden_states[b, t]  # (D)
+    #             wi = self.wi.weight.T[:, expert_indices]  # (D, E)
+    #             x = x @ wi  # (1, E)
+    #             x = self.act(x)
+
+    #             # multiply router probabilities
+    #             x = x * torch.nn.Sigmoid()(topk_values[b, t])  # (1, E)
+
+    #             if (
+    #                 isinstance(self.wo.weight, torch.Tensor)
+    #                 and x.dtype != self.wo.weight.dtype
+    #                 and self.wo.weight.dtype != torch.int8
+    #             ):
+    #                 x = x.to(self.wo.weight.dtype)
+
+    #             # get final intermediates results
+    #             wo = self.wo.weight.T[expert_indices]
+
+    #             x = x @ wo
+
+    #             outputs[b][t] = x
+
+    #     return hidden_states
 
     # def forward(self, hidden_states):
     #     if self.is_mare is False:
