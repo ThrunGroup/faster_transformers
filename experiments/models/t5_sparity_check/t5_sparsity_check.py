@@ -130,7 +130,7 @@ class MLPSparsityCheck(T5DenseActDense):
             mask[..., self.mare_idcs] = torch.finfo(mask.dtype).max
             mask = mask.scatter(-1, topk_idcs, topk_values)
             mask = F.sigmoid(mask)
-            hidden_states = self.wi(hidden_states * mask)
+            hidden_states = self.wi(hidden_states) * mask
             # mask = mask.unsqueeze(-1)
             # hidden_states = F.linear(hidden_states, self.wi.weight * mask)
         hidden_states = self.act(hidden_states)
