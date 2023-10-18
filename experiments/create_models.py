@@ -329,7 +329,7 @@ if __name__ == "__main__":
                 push_to_hub=False,
                 num_generalists=0,
                 num_experts=4,
-                expert_size=64,
+                expert_size=2,
             )
 
             # create_model(
