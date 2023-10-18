@@ -78,6 +78,7 @@ class MLPSparsityCheck(T5DenseActDense):
         self.is_collecting_stats = False  # Turning off collecting stats
         print(self.mare_idcs)
         print("ar, exp, dim: ", self.num_all_rounders, self.num_experts, self.expert_dim)
+        print("counted_idx:", self.counts_per_idx)
 
     def deactivate_mare(self):
         self.is_mare = False
