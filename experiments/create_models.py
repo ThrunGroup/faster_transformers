@@ -300,7 +300,7 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 1,
+                "num_epochs": 5,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": True,
@@ -309,23 +309,23 @@ if __name__ == "__main__":
             #     run_name="dense_epochs5",
             #     **common_args,
             # )
-            create_model(
-                use_mare_mlp=False,
-                **common_args,
-                save_stats=True,
-                use_collect_stats=True,
-                push_to_hub=True,
-                num_generalists=2,
-                num_experts=16,
-                expert_size=64,
-            )
+            # create_model(
+            #     use_mare_mlp=False,
+            #     **common_args,
+            #     save_stats=True,
+            #     use_collect_stats=True,
+            #     push_to_hub=True,
+            #     num_generalists=2,
+            #     num_experts=16,
+            #     expert_size=64,
+            # )
             create_model(
                 use_mare_mlp=True,
                 **common_args,
                 save_stats=True,
-                use_collect_stats=True,
+                use_collect_stats=False,
                 push_to_hub=False,
-                num_generalists=2,
+                num_generalists=0,
                 num_experts=16,
                 expert_size=64,
             )
