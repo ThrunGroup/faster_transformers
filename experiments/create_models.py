@@ -149,7 +149,7 @@ def finetune(
             trainer.train()
         if use_collect_stats and use_mare_mlp:
             model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
-            # model.load_state_dict(torch.load(pre_trained_model_name))
+            # model.load_state_dict(torch.load(f"thrunlab/{pre_trained_model_name}"))
             model.activate_mare_mlp(model)
             for module in model.modules(): # @Jay: Should be removed after the experiment
                 for param in module.paramters():
@@ -185,7 +185,7 @@ def finetune(
     #     wandb_run.finish()
     if push_to_hub:
         print("pushing to hub")
-        torch.save(model.state_dict(), model_name)
+        torch.save(model.state_dict(), f"thrunlab/{model_name}")
         trainer.push_to_hub()
         # model.from_pretrained(f"thrunlab/{model_name}")
 
@@ -319,16 +319,16 @@ if __name__ == "__main__":
             #     run_name="dense_epochs5",
             #     **common_args,
             # )
-            # create_model(
-            #     use_mare_mlp=False,
-            #     **common_args,
-            #     save_stats=True,
-            #     use_collect_stats=True,
-            #     push_to_hub=True,
-            #     num_generalists=0,
-            #     num_experts=16,
-            #     expert_size=32,
-            # )
+            create_model(
+                use_mare_mlp=False,
+                **common_args,
+                save_stats=True,
+                use_collect_stats=True,
+                push_to_hub=True,
+                num_generalists=0,
+                num_experts=16,
+                expert_size=32,
+            )
             create_model(
                 use_mare_mlp=True,
                 **common_args,
