@@ -1,4 +1,4 @@
-from transformers import T5Config, PretrainedConfig
+from transformers import T5Config, PretrainedConfig, PreTrainedModel
 from transformers.models.t5.modeling_t5 import T5DenseActDense
 import torch
 import torch.nn as nn

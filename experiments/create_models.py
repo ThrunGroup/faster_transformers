@@ -148,8 +148,8 @@ def finetune(
             model.activate_stats(model)
             trainer.train()
         if use_collect_stats and use_mare_mlp:
-            # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
-            model.load_state_dict(torch.load(pre_trained_model_name))
+            model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
+            # model.load_state_dict(torch.load(pre_trained_model_name))
             model.activate_mare_mlp(model)
             for module in model.modules(): # @Jay: Should be removed after the experiment
                 for param in module.paramters():
@@ -160,8 +160,6 @@ def finetune(
                         param.requires_grad = True
 
             trainer.train()
-    model.activate_mare_mlp(model)
-    trainer.train()
     if do_evaluation:
         if save_stats:
             model.activate_stats(model, True)
@@ -188,7 +186,7 @@ def finetune(
     if push_to_hub:
         print("pushing to hub")
         torch.save(model.state_dict(), model_name)
-        # trainer.push_to_hub()
+        trainer.push_to_hub()
         # model.from_pretrained(f"thrunlab/{model_name}")
 
     # Empty out gpu memory
@@ -329,7 +327,7 @@ if __name__ == "__main__":
                 push_to_hub=True,
                 num_generalists=2,
                 num_experts=16,
-                expert_size=64,
+                expert_size=32,
             )
             create_model(
                 use_mare_mlp=True,
