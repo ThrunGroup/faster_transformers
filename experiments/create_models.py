@@ -333,7 +333,7 @@ if __name__ == "__main__":
                 use_mare_mlp=True,
                 **common_args,
                 save_stats=True,
-                use_collect_stats=False,
+                use_collect_stats=True,
                 push_to_hub=False,
                 num_generalists=0,
                 num_experts=16,
