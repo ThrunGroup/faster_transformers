@@ -152,7 +152,7 @@ def finetune(
             # model.load_state_dict(torch.load(f"thrunlab/{pre_trained_model_name}"))
             model.activate_mare_mlp(model)
             for module in model.modules(): # @Jay: Should be removed after the experiment
-                for param in module.paramters():
+                for param in module.parameters():
                     param.requires_grad = False
             for module in model.modules():
                 if isinstance(module, MLPRouter):
