@@ -185,8 +185,9 @@ def finetune(
     #     wandb_run.finish()
     if push_to_hub:
         print("pushing to hub")
-        torch.save(model.state_dict(), f"thrunlab/{model_name}")
         trainer.push_to_hub()
+        os.makedirs("thrunlab", exist_ok=True)
+        # torch.save(model.state_dict(), f"thrunlab/{model_name}")
         # model.from_pretrained(f"thrunlab/{model_name}")
 
     # Empty out gpu memory
