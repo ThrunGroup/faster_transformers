@@ -143,9 +143,7 @@ class MLPSparsityCheck(T5DenseActDense):
                 k=self.num_experts * self.expert_dim,
                 dim=-1,
             )
-            print(topk_values, topk_idcs)
             topk_idcs = self.non_mare_idcs[topk_idcs]
-            print(topk_idcs)
             mask[..., self.mare_idcs] = 1
             mask = mask.scatter(-1, topk_idcs, topk_values)
             # mask[..., self.mare_idcs] = torch.finfo(mask.dtype).max
