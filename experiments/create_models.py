@@ -320,16 +320,16 @@ if __name__ == "__main__":
             #     run_name="dense_epochs5",
             #     **common_args,
             # )
-            create_model(
-                use_mare_mlp=False,
-                **common_args,
-                save_stats=True,
-                use_collect_stats=True,
-                push_to_hub=True,
-                num_generalists=0,
-                num_experts=16,
-                expert_size=32,
-            )
+            # create_model(
+            #     use_mare_mlp=False,
+            #     **common_args,
+            #     save_stats=True,
+            #     use_collect_stats=True,
+            #     push_to_hub=True,
+            #     num_generalists=0,
+            #     num_experts=16,
+            #     expert_size=32,
+            # )
             create_model(
                 use_mare_mlp=True,
                 **common_args,
