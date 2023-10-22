@@ -160,6 +160,7 @@ def get_dataset(
         elif dataset_name == SAMSUM:
             dataset = Samsum(tokenizer, model, model_type)
         elif dataset_name in GLUE + SUPERGLUE:
+            print("Loading GLUE")
             dataset = GLUEDataset(
                 tokenizer, model, model_type, dataset_type=dataset_name
             )

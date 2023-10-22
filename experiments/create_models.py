@@ -1,3 +1,6 @@
+import numpy as np
+import random
+
 import os
 from transformers import (
     Trainer,
@@ -13,6 +16,15 @@ import wandb
 
 import gc
 import torch
+from transformers import set_seed
+
+# seeds
+seed = 0
+random.seed(seed)
+set_seed(seed)  # transformer set_seed
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
 
 from data.get_dataset import get_dataset
 from models.build_model import build_model
@@ -51,9 +63,22 @@ class ClassificationTrainer(Trainer):
 
 
 class PrintScalersCallback(TrainerCallback):
+    def __init__(self, trainer) -> None:
+        super().__init__()
+        self._trainer = trainer
+
     def on_step_end(
         self, args: TrainingArguments, state: TrainerState, control, **kwargs
     ):
+        if state.global_step % 4:
+            print(
+                self._trainer.evaluate(
+                    eval_dataset=self._trainer.train_dataset,
+                    metric_key_prefix="train",
+                )
+            )
+            # print(self._trainer.train_dataset.select(range(100))["input_ids"])
+
         if state.global_step % 100 == 0:
             model = kwargs["model"]
             if hasattr(model, "scalers"):
@@ -68,9 +93,10 @@ class PrintScalersCallback(TrainerCallback):
                 ]
             ):
                 for i, block in enumerate(coder.block):
-                    scalers = torch.nn.Sigmoid()(
-                        block.layer[0].pruning_scalers
-                    )
+                    # scalers = torch.nn.Sigmoid()(
+                    #     block.layer[0].pruning_scalers
+                    # )
+                    scalers = block.layer[0].pruning_scalers
                     if is_encoder:
                         print("encoder", i, scalers)
                     else:
@@ -86,9 +112,7 @@ class PruningTrainer(Trainer):
             model.transformer.decoder,
         ]:
             for block in coder.block:
-                penalty += torch.sum(
-                    act(block.layer[0].SelfAttention.pruning_scalers)
-                )
+                penalty += torch.sum((block.layer[0].pruning_scalers))
         return penalty
 
     def compute_loss(self, model, inputs, return_outputs=False):
@@ -100,11 +124,10 @@ class PruningTrainer(Trainer):
         labels = labels.to(logits.dtype)
 
         # get penalty term
-        lambda_coeff = 100
-        regularizer = lambda_coeff * self.compute_penalty(model)
-        loss = 0.0001 * F.binary_cross_entropy(logits, labels) + torch.sum(
-            regularizer
-        )
+        lambda_coeff = 0.1
+        # regularizer = lambda_coeff * self.compute_penalty(model)
+        loss = F.binary_cross_entropy(logits, labels) * 0.00000001
+        # + torch.sum(regularizer)
         return (loss, outputs) if return_outputs else loss
 
 
@@ -117,7 +140,7 @@ def finetune(
     num_epochs: int = 10,
     resume_from_checkpoint: bool = False,
     run_name: str = "",
-    do_evaluation: bool = True,
+    do_evaluation: bool = False,
     push_to_hub: bool = False,
     config=None,
 ):
@@ -139,9 +162,13 @@ def finetune(
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
-    preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
+    # preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
 
-    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
+    if (
+        "LOCAL_RANK" in os.environ
+        and int(os.environ["LOCAL_RANK"]) == 0
+        and False
+    ):
         wandb_run = wandb.init(
             project=f"{model_type}_{dataset_type}",
             name=model_name,
@@ -163,9 +190,10 @@ def finetune(
         save_total_limit=1,
         load_best_model_at_end=False,
         report_to="wandb",
+        seed=42,
         run_name=model_name,
         # for memory issues
-        gradient_accumulation_steps=2,
+        # gradient_accumulation_steps=2,
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
@@ -188,13 +216,10 @@ def finetune(
         eval_dataset=val_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        callbacks=[
-            # early_stopping,
-            PrintScalersCallback()
-        ],
         # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         compute_metrics=compute_metrics,
     )
+    trainer.add_callback(PrintScalersCallback(trainer))
 
     print("\n*********************")
     print("Training ", model_name)
@@ -212,7 +237,11 @@ def finetune(
     #         trainer=trainer,
     #     )
 
-    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
+    if (
+        "LOCAL_RANK" in os.environ
+        and int(os.environ["LOCAL_RANK"]) == 0
+        and False
+    ):
         wandb_run.finish()
 
     # Empty out gpu memory
@@ -278,6 +307,8 @@ def create_model(
 
     model.config.pad_token_id = model.config.eos_token_id
 
+    # return model
+
     tokenizer = AutoTokenizer.from_pretrained(model_type)
     if GPT2 in model_type:
         tokenizer.pad_token = tokenizer.eos_token
@@ -299,11 +330,11 @@ if __name__ == "__main__":
     dataset_types = [
         # BILLSUM,
         COLA,
-        SST2,
-        QNLI,
-        BOOLQ,
-        MULTIRC,
-        WIC,
+        # SST2,
+        # QNLI,
+        # BOOLQ,
+        # MULTIRC,
+        # WIC,
     ]
     model_types = [T5]
     for model_type in model_types:
@@ -311,16 +342,33 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 10,
-                "train_batch_size": 1,
-                "test_batch_size": 1,
+                "num_epochs": 5,
+                "train_batch_size": 4,
+                "test_batch_size": 4,
                 "gradient_checkpointing": False,
             }
+            set_seed(0)
 
-            create_model(
-                use_mare_upcycling=True,
+            model = create_model(
+                # use_mare_upcycling=True,
                 **common_args,
             )
+
+            # models = []
+            # for i in range(2):
+            #     set_seed(0)
+            #     model = create_model(
+            #         # use_mare_upcycling=True,
+            #         **common_args,
+            #     )
+            #     models += (model,)
+            #
+            # for p1, p2 in zip(
+            #     models[0].named_parameters(), models[1].named_parameters()
+            # ):
+            #     if not torch.allclose(p1[1], p2[1]):
+            #         print("different!")
+            #         print(p1[0], p2[0], p1[1].shape)
 
             # create_model(
             #     use_mare_upcycling=True,

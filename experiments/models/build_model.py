@@ -8,6 +8,7 @@ from transformers import (
     AutoModelForSequenceClassification,
     T5ForConditionalGeneration,
     T5ForSequenceClassification,
+    set_seed,
 )
 from torch import nn
 
@@ -25,8 +26,7 @@ from experiments.models.gpt2_mare_upcycling.controller import (
 from experiments.models.t5_mare_upcycling.controller import (
     apply_mare_upcycling_t5,
     # apply_mare_attention_t5,
-    # apply_pruning_attention_t5,
-    apply_pruning_self_attention_t5,
+    apply_pruning_attention_t5,
 )
 
 from utils.constants import (
@@ -95,7 +95,7 @@ def build_model(
         function_to_apply = (
             apply_mare_upcycling_gpt2
             if GPT2 in model_type
-            else apply_pruning_self_attention_t5
+            else apply_pruning_attention_t5
         )
         function_to_apply(
             model,
