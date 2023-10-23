@@ -88,7 +88,8 @@ class MARETrainer(Trainer):
         # regularizer = lambda_coeff * self.compute_penalty(model)
         loss = self.compute_penalty(model) #F.binary_cross_entropy(logits, labels) + self.compute_penalty(model)
         if loss is None:
-            loss = F.binary_cross_entropy(logits, labels)
+            # loss = F.binary_cross_entropy(logits, labels)
+            loss = torch.tensor([.0], requires_grad=True)
             print("hi loss is NOne")
         else:
             print('hi loss is not NOne')
