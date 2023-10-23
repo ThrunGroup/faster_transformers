@@ -70,6 +70,10 @@ class MARETrainer(Trainer):
                         mlp_layer.DenseReluDense.routing_probs,
                         mlp_layer.DenseReluDense.activation,
                     )
+                print(mlp_layer.DenseReluDense.routing_probs.requires_grad)
+                for name, param in  mlp_layer.DenseReluDense.router.named_parameters():
+                    print(name, param.requires_grad)
+
         return loss
 
     def compute_loss(self, model, inputs, return_outputs=False):
