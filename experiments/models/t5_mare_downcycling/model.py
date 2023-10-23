@@ -48,15 +48,22 @@ class MAREDownCyclingSelfAttention(T5LayerSelfAttention):
         output_attentions=False,
     ):
         normed_hidden_states = self.layer_norm(hidden_states)
+        expert_position_bias = position_bias
+        all_rounder_position_bias = position_bias
+
+        if position_bias is not None:
+            all_rounder_position_bias, expert_position_bias = position_bias
 
         all_rounder_attention = self.AllRounderSelfAttention(
             normed_hidden_states,
+            mask=attention_mask,
+            position_bias=all_rounder_position_bias,
         )
 
         expert_attention = self.SelfAttention(
             normed_hidden_states,
-            # mask=attention_mask,
-            # position_bias=position_bias,
+            mask=attention_mask,
+            # position_bias=expert_position_bias,
             # layer_head_mask=layer_head_mask,
             # past_key_value=past_key_value,
             # use_cache=use_cache,
@@ -68,9 +75,11 @@ class MAREDownCyclingSelfAttention(T5LayerSelfAttention):
             # + self.dropout(all_rounder_attention[0])
             # * self.all_rounder_scaler[0]
         )
-        outputs = (hidden_states,) + expert_attention[
-            1:
-        ]  # add attentions if we output them
+
+        outputs = (hidden_states,) + (
+            None,
+            (all_rounder_attention[-1], expert_attention[-1]),
+        )  # add attentions if we output them
         return outputs
 
 
@@ -106,26 +115,11 @@ class MAREDownCyclingAttention(T5Attention):
         output_attentions=False,
     ):
         B, T, C = hidden_states.shape
-        K = min(max(T // 6, 6), T)
+        # K = min(max(int(T * 0.9), 6), T)
+        K = T - 1
 
-        real_seq_length = K
-
-        if past_key_value is not None:
-            if len(past_key_value) != 2:
-                raise ValueError(
-                    f"past_key_value should have 2 past states: keys and values. Got {len(past_key_value)} past states"
-                )
-            real_seq_length += (
-                past_key_value[0].shape[2]
-                if query_length is None
-                else query_length
-            )
-
-        key_length = (
-            real_seq_length
-            if key_value_states is None
-            else key_value_states.shape[1]
-        )
+        real_seq_length = T
+        key_length = real_seq_length
 
         def shape(states):
             """projection"""
@@ -170,6 +164,17 @@ class MAREDownCyclingAttention(T5Attention):
                     hidden_states = past_key_value
             return hidden_states
 
+        # get query states
+        query_states = shape(self.q(hidden_states))  # (B, H, T, c)
+
+        # get key/value states  (B, H, T, c)
+        key_states = project(
+            hidden_states,
+            self.k,
+            key_value_states,
+            past_key_value[0] if past_key_value is not None else None,
+        )
+
         # route
         router = self.router(hidden_states)  # (B, H, T)
         top_k = torch.topk(router, k=K, sorted=False)  # (B, H, K)
@@ -187,16 +192,6 @@ class MAREDownCyclingAttention(T5Attention):
             .expand(-1, -1, -1, self.key_value_proj_dim),  # (B, K, H, c)
         ).view(B, K, C)
 
-        # get query states
-        query_states = shape(self.q(hidden_states))  # (B, H, K, c)
-
-        # get key/value states  (B, H, K, c)
-        key_states = project(
-            hidden_states,
-            self.k,
-            key_value_states,
-            past_key_value[0] if past_key_value is not None else None,
-        )
         value_states = project(
             hidden_states,
             self.v,
@@ -216,38 +211,68 @@ class MAREDownCyclingAttention(T5Attention):
                     device=scores.device,
                     dtype=scores.dtype,
                 )
-                if self.gradient_checkpointing and self.training:
-                    position_bias.requires_grad = True
+                position_bias = self.compute_bias(
+                    real_seq_length, key_length, device=scores.device
+                )
             else:
                 position_bias = self.compute_bias(
                     real_seq_length, key_length, device=scores.device
                 )
-
-            # if key and values are already calculated
-            # we want only the last query position bias
-            if past_key_value is not None:
-                position_bias = position_bias[
-                    :, :, -hidden_states.size(1) :, :
-                ]
 
             if mask is not None:
                 position_bias = (
                     position_bias + mask
                 )  # (B, n_heads, T, key_length)
 
+        # if position_bias is None:
+        #     if not self.has_relative_attention_bias:
+        #         position_bias = torch.zeros(
+        #             (1, self.n_heads, real_seq_length, key_length),
+        #             device=scores.device,
+        #             dtype=scores.dtype,
+        #         )
+        #         if self.gradient_checkpointing and self.training:
+        #             position_bias.requires_grad = True
+        #     else:
+        #         position_bias = self.compute_bias(
+        #             real_seq_length, key_length, device=scores.device
+        #         )
+
+        #     # if key and values are already calculated
+        #     # we want only the last query position bias
+        #     if past_key_value is not None:
+        #         position_bias = position_bias[
+        #             :, :, -hidden_states.size(1) :, :
+        #         ]
+
+        #     if mask is not None:
+        #         position_bias = (
+        #             position_bias + mask
+        #         )  # (B, n_heads, T, key_length)
+
         position_bias_masked = position_bias
 
-        scores += position_bias_masked
+        scores += position_bias_masked  # (B, H, T, T)
+
+        scores = torch.gather(
+            scores,  # (B, H, T, T)
+            -2,
+            top_k_indices.unsqueeze(-1).expand(-1, -1, -1, T),  # (B, H, K, T)
+        )
+
+        scores = torch.gather(
+            scores,  # (B, H, K, T)
+            -1,
+            top_k_indices.unsqueeze(-2).expand(-1, -1, K, -1),  # (B, H, K, K)
+        )
+
         attn_weights = nn.functional.softmax(scores.float(), dim=-1).type_as(
             scores
         )  # (B, n_heads, K, key_length)
+
         attn_weights = nn.functional.dropout(
             attn_weights, p=self.dropout, training=self.training
         )  # (B, n_heads, K, key_length)
-
-        # Mask heads if we want to
-        if layer_head_mask is not None:
-            attn_weights = attn_weights * layer_head_mask
 
         # attn_output = unshape(
         #     torch.matmul(attn_weights, value_states)
@@ -267,9 +292,10 @@ class MAREDownCyclingAttention(T5Attention):
         indices = top_k_indices.unsqueeze(-1).expand(
             -1, -1, -1, self.key_value_proj_dim
         )  # (B, H, K, c)
-        logits_per_head = (
-            top_k_probs.unsqueeze(-1).to(attn_output.dtype) * attn_output
-        )
+        # logits_per_head = (
+        #     top_k_probs.unsqueeze(-1).to(attn_output.dtype) * attn_output
+        # )
+        logits_per_head = attn_output
         logits.scatter_(
             2, indices, logits_per_head
         )  # (B, H, K, c) -> (B, H, T, c)

@@ -70,13 +70,13 @@ class PrintScalersCallback(TrainerCallback):
     def on_step_end(
         self, args: TrainingArguments, state: TrainerState, control, **kwargs
     ):
-        if state.global_step % 4:
+        if state.global_step % 20 == 0:
             self._trainer.evaluate(
-                eval_dataset=self._trainer.train_dataset,
+                eval_dataset=self._trainer.train_dataset.select(range(100)),
                 metric_key_prefix="train",
             )
 
-        if state.global_step % 100 == 0:
+        if state.global_step % 100 == 0 and False:
             model = kwargs["model"]
             if hasattr(model, "scalers"):
                 print(
@@ -164,10 +164,10 @@ def finetune(
     if (
         "LOCAL_RANK" in os.environ
         and int(os.environ["LOCAL_RANK"]) == 0
-        and False
-    ):
+        # and False
+    ) or "LOCAL_RANK" not in os.environ:
         wandb_run = wandb.init(
-            project=f"{model_type}_{dataset_type}",
+            project=f"{model_type}_{dataset_type}_attention",
             name=model_name,
             reinit=True,
             config=config,
@@ -194,7 +194,7 @@ def finetune(
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
-        # bf16=True,
+        bf16=True,
         # deepspeed="ds_config.json",
         # ddp_find_unused_parameters=True,
         hub_model_id=model_name,
@@ -206,7 +206,8 @@ def finetune(
     )
 
     # trainer = PruningTrainer(
-    trainer = ClassificationTrainer(
+    # trainer = ClassificationTrainer(
+    trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
@@ -237,8 +238,8 @@ def finetune(
     if (
         "LOCAL_RANK" in os.environ
         and int(os.environ["LOCAL_RANK"]) == 0
-        and False
-    ):
+        # and False
+    ) or "LOCAL_RANK" not in os.environ:
         wandb_run.finish()
 
     # Empty out gpu memory
@@ -278,7 +279,7 @@ def create_model(
     :return: Dictionary of evaluation logs if `do_evaluation` is true
     """
     # Build a Gated Attention model
-    model_name = f"{model_type}_{dataset_name}"
+    model_name = f"{model_type}_{dataset_name}_attention"
     if num_generalists == 1:
         model_name += f"_mare_ar{num_generalists}_ex{num_experts}"
     elif num_experts:
@@ -333,21 +334,30 @@ if __name__ == "__main__":
         # MULTIRC,
         # WIC,
     ]
-    model_types = [T5]
+    model_types = [GPT2]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 5,
-                "train_batch_size": 4,
-                "test_batch_size": 4,
+                "num_epochs": 30,
+                "train_batch_size": 32,
+                "test_batch_size": 64,
                 "gradient_checkpointing": False,
             }
+            # set_seed(0)
+
+            # model = create_model(
+            #     run_name="dense_baseline",
+            #     **common_args,
+            # )
+
             set_seed(0)
 
             model = create_model(
-                use_mare_upcycling=True,
+                run_name="_1/6_with_ar_>=L/2",
+                num_generalists=1,
+                use_mare_attention=True,
                 **common_args,
             )
 

@@ -47,5 +47,9 @@ def apply_mare_downcycling_attention(
             new_attention_layer.layer_norm = (
                 original_attention_layer.layer_norm
             )
+            if original_self_attention.has_relative_attention_bias:
+                new_attention_layer.SelfAttention.relative_attention_bias = (
+                    original_self_attention.relative_attention_bias
+                )
 
             block.layer[0] = new_attention_layer

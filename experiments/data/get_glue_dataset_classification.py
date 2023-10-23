@@ -53,13 +53,13 @@ class GLUEDataset(Dataset):
         except FileNotFoundError:
             # If preprocessed data does not exist, load and preprocess
             print("No dataset found.")
-            dataset = load_dataset(
-                self.benchmark, self.dataset_type, split="train[:16]"
-            )
+            # dataset = load_dataset(
+            #     self.benchmark, self.dataset_type, split="train[:32]"
+            # )
 
-            dataset = dataset.train_test_split(test_size=0.2)
+            # dataset = dataset.train_test_split(test_size=0.2)
 
-            print(dataset)
+            dataset = load_dataset(self.benchmark, self.dataset_type)
 
             tokenized_dataset = dataset.map(
                 self.preprocess,
@@ -74,7 +74,8 @@ class GLUEDataset(Dataset):
             print("Preprocessed and saved data to disk.")
 
         train_dataset = tokenized_dataset["train"]
-        val_dataset = tokenized_dataset["test"]
+        # val_dataset = tokenized_dataset["test"]
+        val_dataset = tokenized_dataset["validation"]
 
         return train_dataset, val_dataset
 
@@ -96,13 +97,13 @@ class GLUEDataset(Dataset):
         :return:
         """
         preds, labels = preds
-        # preds = preds[0].argmax(-1)
+        preds = preds.argmax(-1)
         # print(preds[0].shape)
         # print(preds[0])
-        print(preds[0].shape, labels.shape)
-        preds = np.array(
-            preds[0][:, 0] > 1 / 2, dtype=float
-        )  # the output is sigmoid
+        # print(preds[0].shape, labels.shape)
+        # preds = np.array(
+        #     preds[0][:, 0] > 1 / 2, dtype=float
+        # )  # the output is sigmoid
         # print(preds)
         return self.metrics.compute(predictions=preds, references=labels)
 

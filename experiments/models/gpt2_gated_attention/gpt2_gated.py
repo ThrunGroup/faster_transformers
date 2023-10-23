@@ -123,7 +123,7 @@ class GatedAttention(GPT2Attention):
         B, T, C = hidden_states.shape  # (Batch size, Num tokens, Embd dim)
 
         # Diminishing token selection
-        K = min(max(T // 6, 12), T)
+        K = min(max(T // 2, 12), T)
         # if self.layer_idx <= self.config.n_layer // 12:
         #     K = T
         # else:

@@ -12,7 +12,9 @@ from transformers import (
 )
 from torch import nn
 
-from experiments.models.gpt2_mare.controller import apply_mare_attention
+from experiments.models.gpt2_mare_attention.controller import (
+    apply_mare_attention,
+)
 from experiments.models.gpt2_peft_mare.controller import (
     apply_mare_lora,
     freeze_model,
@@ -88,7 +90,9 @@ def build_model(
 
     if use_mare_attention:
         function_to_apply = (
-            apply_mare_attention if num_generalists else apply_gated_attention
+            apply_mare_attention
+            # apply_gated_attention
+            #   if num_generalists else apply_gated_attention
         )
         function_to_apply(
             model, config, random_token_selection, num_generalists
@@ -113,14 +117,16 @@ def build_model(
         apply_mare_lora(model, config, num_generalists, num_experts)
         freeze_model(model)
 
-    if dataset_type in GLUE + SUPERGLUE:
-        original_out_proj = model.classification_head.out_proj
-        new_out_proj = nn.Linear(config.d_model, 4)
-        new_out_proj.weight.data = original_out_proj.weight.data.repeat(4, 1)
-        new_out_proj.bias.data = original_out_proj.bias.data.repeat(4)
-        model.classification_head.out_proj = nn.Sequential(
-            new_out_proj, nn.Sigmoid()
-        )
+    print(model)
+
+    # if dataset_type in GLUE + SUPERGLUE:
+    #     original_out_proj = model.classification_head.out_proj
+    #     new_out_proj = nn.Linear(config.d_model, 4)
+    #     new_out_proj.weight.data = original_out_proj.weight.data.repeat(4, 1)
+    #     new_out_proj.bias.data = original_out_proj.bias.data.repeat(4)
+    #     model.classification_head.out_proj = nn.Sequential(
+    #         new_out_proj, nn.Sigmoid()
+    #     )
 
     return model
 
@@ -153,8 +159,7 @@ if __name__ == "__main__":
         a_att = a.layer[0].SelfAttention.k
         b_att = b.layer[0].SelfAttention.k
 
-        print(a_att.bias, b_att.bias)
-        # if not torch.allclose(a_att.bias, b_att.bias):
-        #     print(1)
+        if not torch.allclose(a_att.weight, b_att.weight):
+            print(1)
 
     # print(mare)
