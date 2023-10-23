@@ -61,6 +61,8 @@ class MARETrainer(Trainer):
                 else:
                     mlp_layer = block.layer[1]
                 if loss is None:
+                    if mlp_layer.DenseReluDense.routing_probs is None:
+                        continue
                     loss = F.binary_cross_entropy(
                         mlp_layer.DenseReluDense.routing_probs,
                         mlp_layer.DenseReluDense.activation,
