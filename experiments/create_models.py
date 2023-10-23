@@ -49,6 +49,44 @@ class CustomTrainer(Trainer):
         return (loss, outputs) if return_outputs else loss
 
 
+class MARETrainer(Trainer):
+    def compute_penalty(self, model):
+        loss = None
+        for is_decoder, network in enumerate(
+            [model.transformer.encoder, model.transformer.decoder]
+        ):
+            for block_idx, block in enumerate(network.block):
+                if is_decoder:
+                    mlp_layer = block.layer[2]
+                else:
+                    mlp_layer = block.layer[1]
+                if loss is None:
+                    loss = F.binary_cross_entropy(
+                        mlp_layer.DenseReluDense.routing_probs,
+                        mlp_layer.DenseReluDense.activation,
+                    )
+                else:
+                    loss += F.binary_cross_entropy(
+                        mlp_layer.DenseReluDense.routing_probs,
+                        mlp_layer.DenseReluDense.activation,
+                    )
+        return loss
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.pop("labels")
+        # forward pass
+        outputs = model(**inputs)
+
+        logits = outputs.get("logits")[:, 0]
+        labels = labels.to(logits.dtype)
+
+        # # get penalty term
+        # lambda_coeff = 1
+        # regularizer = lambda_coeff * self.compute_penalty(model)
+        loss = self.compute_penalty(model) #F.binary_cross_entropy(logits, labels) + self.compute_penalty(model)
+        return (loss, outputs) if return_outputs else loss
+
+
 def finetune(
     model_type: str,
     model_name: str,
@@ -126,7 +164,7 @@ def finetune(
         early_stopping_patience=10, early_stopping_threshold=0.001
     )
 
-    trainer = CustomTrainer(
+    trainer = MARETrainer(
         # trainer = Trainer(
         model=model,
         args=training_args,
@@ -151,7 +189,11 @@ def finetune(
             model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
             # model.load_state_dict(torch.load(f"thrunlab/{pre_trained_model_name}"))
             model.activate_mare_mlp(model)
-            for module in model.transformer.modules(): # @Jay: Should be removed after the experiment
+            for (
+                module
+            ) in (
+                model.transformer.modules()
+            ):  # @Jay: Should be removed after the experiment
                 for name, param in module.named_parameters():
                     print(f"{name} is frozen.")
                     param.requires_grad = False

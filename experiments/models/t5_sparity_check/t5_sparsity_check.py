@@ -50,6 +50,8 @@ class MLPSparsityCheck(T5DenseActDense):
             expert_dim * (num_all_rounders + num_experts),
         )
         self.router.to(self.wo.weight.dtype)
+        self.routing_probs = None
+        self.activation = None
 
         print("ar, exp, dim: ", num_all_rounders, num_experts, expert_dim)
 
@@ -125,6 +127,8 @@ class MLPSparsityCheck(T5DenseActDense):
         plt.show()
 
     def forward(self, hidden_states):
+        self.activation = self.act(self.wi(hidden_states)) == 0
+
         if self.is_mare is False:
             hidden_states = self.wi(hidden_states)
         else:
@@ -151,6 +155,7 @@ class MLPSparsityCheck(T5DenseActDense):
             hidden_states = self.wi(hidden_states) * mask
             # mask = mask.unsqueeze(-1)
             # hidden_states = F.linear(hidden_states, self.wi.weight * mask)
+            self.routing_probs = routing_probs
         hidden_states = self.act(hidden_states)
 
         # Collecting stats
