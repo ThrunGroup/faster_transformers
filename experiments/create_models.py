@@ -93,9 +93,9 @@ class MARETrainer(Trainer):
         else:
             print('hi loss is not NOne')
             loss = a + F.binary_cross_entropy(logits, labels)
-        # loss = F.binary_cross_entropy(logits, labels)
+        loss = F.binary_cross_entropy(logits, labels)
         # print(loss)
-        # print(self.compute_penalty(model))
+        print(self.compute_penalty(model))
         return (loss, outputs) if return_outputs else loss
 
 
