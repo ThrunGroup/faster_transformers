@@ -70,9 +70,6 @@ class MARETrainer(Trainer):
                         mlp_layer.DenseReluDense.routing_probs,
                         mlp_layer.DenseReluDense.activation,
                     )
-                print(mlp_layer.DenseReluDense.routing_probs.requires_grad)
-                for name, param in  mlp_layer.DenseReluDense.router.named_parameters():
-                    print(name, param.requires_grad)
 
         return loss
 
@@ -156,7 +153,7 @@ def finetune(
         report_to="wandb",
         run_name=model_name,
         # for memory issues
-        gradient_accumulation_steps=2,
+        # gradient_accumulation_steps=2,
         # deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
