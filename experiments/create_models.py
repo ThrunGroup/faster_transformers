@@ -86,6 +86,7 @@ class MARETrainer(Trainer):
         # loss = self.compute_penalty(model) #F.binary_cross_entropy(logits, labels) + self.compute_penalty(model)
         loss = F.binary_cross_entropy(logits, labels)
         print(loss)
+        print(self.compute_penalty(model))
         return (loss, outputs) if return_outputs else loss
 
 
