@@ -127,7 +127,7 @@ class MLPSparsityCheck(T5DenseActDense):
         plt.show()
 
     def forward(self, hidden_states):
-        self.activation = self.act(self.wi(hidden_states)) == 0
+        self.activation = self.act(self.wi(hidden_states)) != 0
 
         if self.is_mare is False:
             hidden_states = self.wi(hidden_states)
@@ -156,6 +156,7 @@ class MLPSparsityCheck(T5DenseActDense):
             # mask = mask.unsqueeze(-1)
             # hidden_states = F.linear(hidden_states, self.wi.weight * mask)
             self.routing_probs = routing_probs
+            self.activation.to(routing_probs.dtype)
         hidden_states = self.act(hidden_states)
 
         # Collecting stats
