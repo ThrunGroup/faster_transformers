@@ -31,6 +31,7 @@ class MLPSparsityCheck(T5DenseActDense):
         num_all_rounders: int = 2,
         num_experts: int = 8,
         expert_dim: int = 64,
+        is_decoder: bool = True,
     ):
         super().__init__(config)
         self.config = config
@@ -40,6 +41,7 @@ class MLPSparsityCheck(T5DenseActDense):
         self.expert_dim = expert_dim
         self.is_mare = False
         self.is_collecting_stats = False
+        self.is_decoder = is_decoder
 
         self.num_zeros = 0
         self.num_params = 0
@@ -127,7 +129,7 @@ class MLPSparsityCheck(T5DenseActDense):
         plt.show()
 
     def forward(self, hidden_states):
-        print(hidden_states.requires_grad," ", self.block_idx)
+        print(hidden_states.requires_grad," ", self.block_idx, " ", self.is_decoder)
         self.activation = self.act(self.wi(hidden_states)) != 0
 
         if self.is_mare is False:
@@ -252,6 +254,7 @@ def apply_sparsity_check_MLP(
                 num_all_rounders=num_generalists,
                 num_experts=num_experts,
                 expert_dim=expert_size,
+                is_decoder=bool(is_decoder),
             )
             old_mlp = mlp_layer.DenseReluDense
             new_mlp.wi.weight.data = old_mlp.wi.weight.data
