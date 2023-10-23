@@ -54,13 +54,16 @@ class GLUEDataset(Dataset):
             # If preprocessed data does not exist, load and preprocess
             print("No dataset found.")
             dataset = load_dataset(
-                self.benchmark, self.dataset_type, split="train[:8]"
+                self.benchmark, self.dataset_type, split="train[:16]"
             )
+
+            dataset = dataset.train_test_split(test_size=0.2)
+
+            print(dataset)
 
             tokenized_dataset = dataset.map(
                 self.preprocess,
-                # remove_columns=dataset.column_names["train"],
-                remove_columns=dataset.column_names,
+                remove_columns=dataset.column_names["train"],
             )
 
             # Save the preprocessed data
@@ -71,7 +74,7 @@ class GLUEDataset(Dataset):
             print("Preprocessed and saved data to disk.")
 
         train_dataset = tokenized_dataset["train"]
-        val_dataset = tokenized_dataset["validation"]
+        val_dataset = tokenized_dataset["test"]
 
         return train_dataset, val_dataset
 

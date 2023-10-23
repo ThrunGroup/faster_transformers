@@ -71,13 +71,10 @@ class PrintScalersCallback(TrainerCallback):
         self, args: TrainingArguments, state: TrainerState, control, **kwargs
     ):
         if state.global_step % 4:
-            print(
-                self._trainer.evaluate(
-                    eval_dataset=self._trainer.train_dataset,
-                    metric_key_prefix="train",
-                )
+            self._trainer.evaluate(
+                eval_dataset=self._trainer.train_dataset,
+                metric_key_prefix="train",
             )
-            # print(self._trainer.train_dataset.select(range(100))["input_ids"])
 
         if state.global_step % 100 == 0:
             model = kwargs["model"]
@@ -208,8 +205,8 @@ def finetune(
         early_stopping_patience=10, early_stopping_threshold=0.001
     )
 
-    trainer = PruningTrainer(
-        # trainer = Trainer(
+    # trainer = PruningTrainer(
+    trainer = ClassificationTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
@@ -350,7 +347,7 @@ if __name__ == "__main__":
             set_seed(0)
 
             model = create_model(
-                # use_mare_upcycling=True,
+                use_mare_upcycling=True,
                 **common_args,
             )
 

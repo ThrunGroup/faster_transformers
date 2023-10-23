@@ -28,6 +28,9 @@ from experiments.models.t5_mare_upcycling.controller import (
     # apply_mare_attention_t5,
     apply_pruning_attention_t5,
 )
+from experiments.models.t5_mare_downcycling.controller import (
+    apply_mare_downcycling_attention,
+)
 
 from utils.constants import (
     GPT2,
@@ -95,7 +98,7 @@ def build_model(
         function_to_apply = (
             apply_mare_upcycling_gpt2
             if GPT2 in model_type
-            else apply_pruning_attention_t5
+            else apply_mare_downcycling_attention
         )
         function_to_apply(
             model,
