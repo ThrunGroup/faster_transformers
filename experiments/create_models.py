@@ -321,7 +321,7 @@ def create_model(
     model_name += f"_epochs-{num_epochs}"
 
     if use_mare_mlp:
-        pre_trained_model_name += f"_dense_epochs_{num_epochs}" # + "_collected-stats"
+        pre_trained_model_name += f"_dense_epochs-{num_epochs}" # + "_collected-stats"
         model_name += "_mare_mlp"
     model_name += run_name  # optional
 
@@ -388,11 +388,11 @@ if __name__ == "__main__":
                 "test_batch_size": 64,
                 "gradient_checkpointing": False,
             }
-            create_model(
-                # run_name="dense_epochs5",
-                **common_args,
-                push_to_hub=True,
-            )
+            # create_model(
+            #     # run_name="dense_epochs5",
+            #     **common_args,
+            #     push_to_hub=True,
+            # )
             # create_model(
             #     use_mare_mlp=False,
             #     **common_args,
