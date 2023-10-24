@@ -16,7 +16,7 @@ class MLPRouter(nn.Module):
             # nn.ReLU(),
             # nn.LayerNorm(low_rank),
             nn.Linear(low_rank, output_dims),
-            # nn.Sigmoid(),
+            nn.Sigmoid(),
         )
 
     def forward(self, x):
