@@ -166,7 +166,7 @@ def finetune(
         run_name=model_name,
         # for memory issues
         # gradient_accumulation_steps=2,
-        # deepspeed="ds_config.json",
+        deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
@@ -386,9 +386,9 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": 5,
-                "train_batch_size": 32,
-                "test_batch_size": 64,
-                "gradient_checkpointing": False,
+                "train_batch_size": 2,
+                "test_batch_size": 2,
+                "gradient_checkpointing": True,
             }
             create_model(
                 # run_name="dense_epochs5",
