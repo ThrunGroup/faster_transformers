@@ -171,6 +171,7 @@ def finetune(
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
         # bf16=True,
+        fp16=True,
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
         push_to_hub=True,
