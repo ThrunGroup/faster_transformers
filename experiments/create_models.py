@@ -173,6 +173,8 @@ def finetune(
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
         push_to_hub=True,
+        seed=0,
+        data_seed=0,
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -202,6 +204,7 @@ def finetune(
             trainer.train()
         if use_collect_stats and use_mare_mlp:
             # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
+            print(f"thrunlab/{pre_trained_model_name}.pt")
             model.load_state_dict(torch.load(f"thrunlab/{pre_trained_model_name}.pt"))
             model.activate_mare_mlp(model)
             # for (
@@ -379,16 +382,16 @@ if __name__ == "__main__":
             #     run_name="dense_epochs5",
             #     **common_args,
             # )
-            create_model(
-                use_mare_mlp=False,
-                **common_args,
-                save_stats=True,
-                use_collect_stats=True,
-                push_to_hub=True,
-                num_generalists=16,
-                num_experts=0,
-                expert_size=32,
-            )
+            # create_model(
+            #     use_mare_mlp=False,
+            #     **common_args,
+            #     save_stats=True,
+            #     use_collect_stats=True,
+            #     push_to_hub=True,
+            #     num_generalists=16,
+            #     num_experts=0,
+            #     expert_size=32,
+            # )
             create_model(
                 use_mare_mlp=True,
                 **common_args,
