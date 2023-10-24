@@ -45,7 +45,7 @@ class MLPSparsityCheck(T5DenseActDense):
 
         self.num_zeros = 0
         self.num_params = 0
-        self.counts_per_idx = torch.zeros(config.d_ff)
+        self.counts_per_idx = nn.Parameter(torch.zeros(config.d_ff), requires_grad=False)
         self.router = MLPRouter(
             config.d_model,
             config.d_ff - num_all_rounders * expert_dim,
