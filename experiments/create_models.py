@@ -209,7 +209,7 @@ def finetune(
             print(f"thrunlab/{pre_trained_model_name}.pt")
             state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
             print(state_dict.keys())
-            for key in copy.deepcopy(state_dict.keys()):
+            for key in list(state_dict.keys()):
                 if "router" in key:
                     state_dict.pop(key)
             model.load_state_dict(state_dict)
