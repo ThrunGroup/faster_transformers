@@ -210,7 +210,7 @@ def finetune(
             print(state_dict.keys())
             for key in state_dict.keys():
                 if "router" in key:
-                    state_dict.pop("key")
+                    state_dict.pop(key)
             model.load_state_dict(state_dict)
             model.activate_mare_mlp(model)
             # for (
