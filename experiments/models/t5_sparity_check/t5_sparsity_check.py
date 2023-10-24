@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import numpy as np
 import os
 import matplotlib.pyplot as plt
+import gc
 
 
 class MLPRouter(nn.Module):
@@ -266,6 +267,11 @@ def apply_sparsity_check_MLP(
             new_mlp.wo.weight.data = old_mlp.wo.weight.data
 
             mlp_layer.DenseReluDense = new_mlp
+            del old_mlp
+            gc.collect()
+            torch.cuda.empty_cache()
+            gc.collect()
+
     model.activate_stats = activate_stats
     model.plot_stats = plot_stats
     model.activate_mare_mlp = activate_mare

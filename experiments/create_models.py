@@ -410,7 +410,7 @@ if __name__ == "__main__":
             for fixed_cost in [0.02, 0.05, 0.1, 0.2, 0.3, 0.5, ]:
                 for ratio in [0.1, 0.25, 0.5, 0.75, 0.9]:
                     total_nums = int(total_size/expert_size * fixed_cost)
-                    num_generalists = int(total_nums * ratio)
+                    num_generalists = int(total_nums * ratio) + int(int(total_nums * ratio) % 2)  # To make it even
                     num_experts = total_nums - num_generalists
                     create_model(
                         use_mare_mlp=True,
