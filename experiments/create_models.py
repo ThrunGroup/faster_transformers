@@ -388,11 +388,11 @@ if __name__ == "__main__":
                 "test_batch_size": 64,
                 "gradient_checkpointing": False,
             }
-            # create_model(
-            #     # run_name="dense_epochs5",
-            #     **common_args,
-            #     push_to_hub=True,
-            # )
+            create_model(
+                # run_name="dense_epochs5",
+                **common_args,
+                push_to_hub=True,
+            )
             # create_model(
             #     use_mare_mlp=False,
             #     **common_args,
@@ -403,16 +403,23 @@ if __name__ == "__main__":
             #     num_experts=48,
             #     expert_size=32,
             # )
-            create_model(
-                use_mare_mlp=True,
-                **common_args,
-                save_stats=True,
-                use_collect_stats=True,
-                push_to_hub=False,
-                num_generalists=0,
-                num_experts=48,
-                expert_size=32,
-            )
+            total_size = 3072
+            expert_size = 16
+            for fixed_cost in [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, ]:
+                for ratio in [0.25, 0.5, 0.75, 0.9]:
+                    total_nums = int(total_size/expert_size * fixed_cost)
+                    num_generalists = int(total_nums * ratio)
+                    num_experts = total_nums - num_generalists
+                    create_model(
+                        use_mare_mlp=True,
+                        **common_args,
+                        save_stats=True,
+                        use_collect_stats=True,
+                        push_to_hub=False,
+                        num_generalists=num_generalists,
+                        num_experts=num_experts,
+                        expert_size=expert_size,
+                    )
 
             # create_model(
             #     use_mare_upcycling=True,
