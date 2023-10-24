@@ -202,12 +202,13 @@ def finetune(
         if use_collect_stats and not use_mare_mlp:
             model.activate_stats(model)
             trainer.train()
-        if use_collect_stats and use_mare_mlp:
+        if use_mare_mlp:
             # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
-            print(f"thrunlab/{pre_trained_model_name}.pt")
-            state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
-            print(state_dict.keys())
-            model.load_state_dict(state_dict)
+            if use_collect_stats:
+                print(f"thrunlab/{pre_trained_model_name}.pt")
+                state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
+                print(state_dict.keys())
+                model.load_state_dict(state_dict)
             model.activate_mare_mlp(model)
             # for (
             #     module
@@ -398,7 +399,7 @@ if __name__ == "__main__":
                 use_mare_mlp=True,
                 **common_args,
                 save_stats=True,
-                use_collect_stats=True,
+                use_collect_stats=False,
                 push_to_hub=False,
                 num_generalists=0,
                 num_experts=48,
