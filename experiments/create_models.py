@@ -205,15 +205,23 @@ def finetune(
             trainer.train()
         if use_mare_mlp:
             # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
-            pre_trained_model_name = "t5-base_cola_mare_ar16_ex32_size-32_epochs-5_collected-stats"
+            # pre_trained_model_name = "t5-base_cola_mare_ar16_ex32_size-32_epochs-5_collected-stats"
+
+            # Load pre-trained weights except parameters in routers
             print(f"thrunlab/{pre_trained_model_name}.pt")
             state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
             print(state_dict.keys())
-            for key in list(state_dict.keys()):
-                if "router" in key:
-                    state_dict.pop(key)
+            # for key in list(state_dict.keys()):
+            #     if "router" in key:
+            #         state_dict.pop(key)
             model.load_state_dict(state_dict, strict=False,)
+
+            # Collect Stats
+            if use_collect_stats:
+                model.activate_stats(model, True)
+                trainer.evaluate(train_dataset)
             model.activate_mare_mlp(model)
+            trainer.train()
             # for (
             #     module
             # ) in (
@@ -227,8 +235,6 @@ def finetune(
             #         for name, param in module.transformer.named_parameters():
             #             print(f"{name} is unfrozen.")
             #             param.requires_grad = True
-
-            trainer.train()
     if do_evaluation:
         if save_stats:
             model.activate_stats(model, True)
@@ -302,7 +308,7 @@ def create_model(
     """
     # Build a Gated Attention model
     model_name = f"{model_type}_{dataset_name}"
-    pre_trained_model_name = None
+    pre_trained_model_name = model_name
     if num_generalists != 0:
         model_name += f"_mare_ar{num_generalists}_ex{num_experts}"
         if expert_size:
@@ -314,12 +320,9 @@ def create_model(
 
     model_name += f"_epochs-{num_epochs}"
 
-    if use_collect_stats:
-        if use_mare_mlp:
-            pre_trained_model_name = model_name + "_collected-stats"
-            model_name += "_mare_mlp"
-        else:
-            model_name += "_collected-stats"
+    if use_mare_mlp:
+        pre_trained_model_name += f"_dense_epochs_{num_epochs}" # + "_collected-stats"
+        model_name += "_mare_mlp"
     model_name += run_name  # optional
 
     # captures the method parameters and model_name as a dictionary
@@ -380,15 +383,16 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 5,
+                "num_epochs": 1,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": False,
             }
-            # create_model(
-            #     run_name="dense_epochs5",
-            #     **common_args,
-            # )
+            create_model(
+                # run_name="dense_epochs5",
+                **common_args,
+                push_to_hub=True,
+            )
             # create_model(
             #     use_mare_mlp=False,
             #     **common_args,
