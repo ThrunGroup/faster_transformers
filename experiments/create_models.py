@@ -202,8 +202,7 @@ def finetune(
     if num_epochs != 0:
         if use_collect_stats and not use_mare_mlp:
             model.activate_stats(model)
-            trainer.train()
-        if use_mare_mlp:
+        elif use_mare_mlp:
             # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
             # pre_trained_model_name = "t5-base_cola_mare_ar16_ex32_size-32_epochs-5_collected-stats"
 
@@ -221,7 +220,9 @@ def finetune(
                 model.activate_stats(model, True)
                 trainer.evaluate(train_dataset)
             model.activate_mare_mlp(model)
-            trainer.train()
+
+
+            # Freeze model params
             # for (
             #     module
             # ) in (
@@ -235,6 +236,7 @@ def finetune(
             #         for name, param in module.transformer.named_parameters():
             #             print(f"{name} is unfrozen.")
             #             param.requires_grad = True
+    trainer.train()
     if do_evaluation:
         if save_stats:
             model.activate_stats(model, True)
@@ -413,7 +415,7 @@ if __name__ == "__main__":
                     create_model(
                         use_mare_mlp=True,
                         **common_args,
-                        save_stats=True,
+                        save_stats=False,
                         use_collect_stats=True,
                         push_to_hub=False,
                         num_generalists=num_generalists,
