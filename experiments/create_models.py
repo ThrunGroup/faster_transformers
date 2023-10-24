@@ -204,9 +204,13 @@ def finetune(
             trainer.train()
         if use_mare_mlp:
             # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
+            pre_trained_model_name = "t5-base_cola_mare_ar16_ex32_size-32_epochs-5_collected-stats"
             print(f"thrunlab/{pre_trained_model_name}.pt")
             state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
             print(state_dict.keys())
+            for key in state_dict.keys():
+                if "router" in key:
+                    state_dict.pop("key")
             model.load_state_dict(state_dict)
             model.activate_mare_mlp(model)
             # for (
@@ -384,16 +388,16 @@ if __name__ == "__main__":
             #     run_name="dense_epochs5",
             #     **common_args,
             # )
-            create_model(
-                use_mare_mlp=False,
-                **common_args,
-                save_stats=True,
-                use_collect_stats=True,
-                push_to_hub=True,
-                num_generalists=0,
-                num_experts=48,
-                expert_size=32,
-            )
+            # create_model(
+            #     use_mare_mlp=False,
+            #     **common_args,
+            #     save_stats=True,
+            #     use_collect_stats=True,
+            #     push_to_hub=True,
+            #     num_generalists=16,
+            #     num_experts=48,
+            #     expert_size=32,
+            # )
             create_model(
                 use_mare_mlp=True,
                 **common_args,
