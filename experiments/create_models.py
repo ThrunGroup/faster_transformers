@@ -86,14 +86,15 @@ class MARETrainer(Trainer):
         # # get penalty term
         # lambda_coeff = 1
         # regularizer = lambda_coeff * self.compute_penalty(model)
+        # loss = F.binary_cross_entropy(logits, labels)
         loss = self.compute_penalty(model) #F.binary_cross_entropy(logits, labels) + self.compute_penalty(model)
-        if loss is None:
-            # loss = F.binary_cross_entropy(logits, labels)
-            loss = F.binary_cross_entropy(torch.tensor(.0), torch.tensor(.0))
-            print("hi loss is NOne")
-        else:
-            print('hi loss is not NOne')
-            # loss = loss + F.binary_cross_entropy(logits, labels)
+        # if loss is None:
+        #     # loss = F.binary_cross_entropy(logits, labels)
+        #     loss = F.binary_cross_entropy(torch.tensor(.0), torch.tensor(.0))
+        #     print("hi loss is NOne")
+        # else:
+        #     print('hi loss is not NOne')
+        #     # loss = loss + F.binary_cross_entropy(logits, labels)
         print(loss)
         print(self.compute_penalty(model))
         return (loss, outputs) if return_outputs else loss
@@ -370,7 +371,7 @@ if __name__ == "__main__":
                 "num_epochs": 5,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
-                "gradient_checkpointing": True,
+                "gradient_checkpointing": False,
             }
             # create_model(
             #     run_name="dense_epochs5",

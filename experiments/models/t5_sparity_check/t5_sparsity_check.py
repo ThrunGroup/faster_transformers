@@ -13,10 +13,10 @@ class MLPRouter(nn.Module):
         super().__init__()
         self.router = nn.Sequential(
             nn.Linear(input_dims, low_rank),
-            nn.ReLU(),
-            nn.LayerNorm(low_rank),
+            # nn.ReLU(),
+            # nn.LayerNorm(low_rank),
             nn.Linear(low_rank, output_dims),
-            nn.Sigmoid(),
+            # nn.Sigmoid(),
         )
 
     def forward(self, x):
@@ -54,6 +54,7 @@ class MLPSparsityCheck(T5DenseActDense):
         self.router.to(self.wo.weight.dtype)
         self.routing_probs = None
         self.activation = None
+        self.count: int = 0
 
         print("ar, exp, dim: ", num_all_rounders, num_experts, expert_dim)
 
@@ -81,6 +82,7 @@ class MLPSparsityCheck(T5DenseActDense):
         self.non_mare_idcs = torch.tensor(
             np.setdiff1d(self.non_mare_idcs, self.mare_idcs.cpu(), True),
             device=self.mare_idcs.device,
+            dtype=torch.int64,
         )
         self.is_collecting_stats = False  # Turning off collecting stats
         print(self.mare_idcs)
@@ -129,7 +131,8 @@ class MLPSparsityCheck(T5DenseActDense):
         plt.show()
 
     def forward(self, hidden_states):
-        # print(hidden_states.requires_grad," ", self.block_idx, " ", self.is_decoder, " ", hidden_states.shape)
+        print(hidden_states.requires_grad," ", self.block_idx, " ", self.is_decoder, " ", hidden_states.shape, f"count: {self.count}")
+        self.count += 1
         if hidden_states.requires_grad:
             self.activation = self.act(self.wi(hidden_states)) != 0
 
