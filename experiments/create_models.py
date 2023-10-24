@@ -360,7 +360,7 @@ def create_model(
         resume_from_checkpoint=False,
         run_name=run_name,
         config=config,
-        save_stats=(save_stats or use_collect_stats),
+        save_stats=save_stats,
         use_mare_mlp=use_mare_mlp,
         use_collect_stats=use_collect_stats,
         push_to_hub=kwargs["push_to_hub"],
@@ -385,7 +385,7 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 1,
+                "num_epochs": 5,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": False,
