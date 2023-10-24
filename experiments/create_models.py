@@ -391,7 +391,7 @@ if __name__ == "__main__":
                 use_collect_stats=True,
                 push_to_hub=True,
                 num_generalists=16,
-                num_experts=0,
+                num_experts=32,
                 expert_size=32,
             )
             create_model(
@@ -401,7 +401,7 @@ if __name__ == "__main__":
                 use_collect_stats=True,
                 push_to_hub=False,
                 num_generalists=16,
-                num_experts=0,
+                num_experts=32,
                 expert_size=32,
             )
 
