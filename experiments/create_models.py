@@ -87,7 +87,9 @@ class MARETrainer(Trainer):
         # lambda_coeff = 1
         # regularizer = lambda_coeff * self.compute_penalty(model)
         # loss = F.binary_cross_entropy(logits, labels)
-        loss = self.compute_penalty(model) #F.binary_cross_entropy(logits, labels) + self.compute_penalty(model)
+        loss = 1 / 20 * self.compute_penalty(model) + F.binary_cross_entropy(
+            logits, labels
+        )  # + self.compute_penalty(model)
         # if loss is None:
         #     # loss = F.binary_cross_entropy(logits, labels)
         #     loss = F.binary_cross_entropy(torch.tensor(.0), torch.tensor(.0))
