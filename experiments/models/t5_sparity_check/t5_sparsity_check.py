@@ -68,7 +68,7 @@ class MLPSparsityCheck(T5DenseActDense):
     def init_stats(self):
         self.num_zeros = 0
         self.num_params = 0
-        self.counts_per_idx = torch.zeros(self.config.d_ff)
+        self.counts_per_idx *= 0
 
     def activate_mare(self):
         self.is_mare = True
