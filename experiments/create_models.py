@@ -87,10 +87,11 @@ class MARETrainer(Trainer):
         # # get penalty term
         # lambda_coeff = 1
         # regularizer = lambda_coeff * self.compute_penalty(model)
+        loss = self.compute_penalty(model)
         # loss = F.binary_cross_entropy(logits, labels)
-        loss = 1 / 20 * self.compute_penalty(model) + F.binary_cross_entropy(
-            logits, labels
-        )  # + self.compute_penalty(model)
+        # loss = 1 / 20 * self.compute_penalty(model) + F.binary_cross_entropy(
+        #     logits, labels
+        # )  # + self.compute_penalty(model)
         # if loss is None:
         #     # loss = F.binary_cross_entropy(logits, labels)
         #     loss = F.binary_cross_entropy(torch.tensor(.0), torch.tensor(.0))
@@ -183,7 +184,7 @@ def finetune(
         early_stopping_patience=10, early_stopping_threshold=0.001
     )
 
-    trainer = CustomTrainer(
+    trainer = MARETrainer(
         # trainer = Trainer(
         model=model,
         args=training_args,
@@ -391,11 +392,11 @@ if __name__ == "__main__":
                 "test_batch_size": 2,
                 "gradient_checkpointing": True,
             }
-            create_model(
-                # run_name="dense_epochs5",
-                **common_args,
-                push_to_hub=True,
-            )
+            # create_model(
+            #     # run_name="dense_epochs5",
+            #     **common_args,
+            #     push_to_hub=True,
+            # )
             # create_model(
             #     use_mare_mlp=False,
             #     **common_args,
@@ -406,10 +407,10 @@ if __name__ == "__main__":
             #     num_experts=48,
             #     expert_size=32,
             # )
-            total_size = 16384
+            total_size = 3072
             expert_size = 16
-            for fixed_cost in [0.02, 0.05, 0.1, 0.2, 0.3, 0.5, ]:
-                for ratio in [0.1, 0.25, 0.5, 0.75, 0.9]:
+            for fixed_cost in [0.1, ]:
+                for ratio in [0, 0.1, 0.25, 0.5, 0.75, 0.9]:
                     total_nums = int(total_size/expert_size * fixed_cost)
                     num_generalists = int(total_nums * ratio) + int(int(total_nums * ratio) % 2)  # To make it even
                     num_experts = total_nums - num_generalists

@@ -14,10 +14,10 @@ class MLPRouter(nn.Module):
         super().__init__()
         self.router = nn.Sequential(
             nn.Linear(input_dims, low_rank),
-            nn.ReLU(),
+            nn.Hardtanh(-1, 1),
             # nn.LayerNorm(low_rank),
             nn.Linear(low_rank, output_dims),
-            nn.Sigmoid(),
+            nn.Hardtanh(0, 1)
         )
 
     def forward(self, x):
@@ -50,7 +50,7 @@ class MLPSparsityCheck(T5DenseActDense):
         self.router = MLPRouter(
             config.d_model,
             config.d_ff - num_all_rounders * expert_dim,
-            expert_dim * (num_all_rounders + num_experts),
+            int(expert_dim * (num_all_rounders + num_experts) / 4),
         )
         self.router.to(self.wo.weight.dtype)
         self.routing_probs = None
@@ -136,6 +136,11 @@ class MLPSparsityCheck(T5DenseActDense):
         self.count += 1
         if hidden_states.requires_grad:
             self.activation = self.act(self.wi(hidden_states)) != 0
+
+        # @Jay: Should be deleted
+        self.routing_probs = self.router(hidden_states)
+        self.activation = self.activation.to(self.routing_probs.dtype).detach()
+        print(self.routing_probs[0, 0, :30], self.activation[0, 0: 30])
 
         if self.is_mare is False:
             hidden_states = self.wi(hidden_states)
