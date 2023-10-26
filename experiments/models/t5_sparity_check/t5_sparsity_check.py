@@ -185,19 +185,19 @@ class MLPSparsityCheck(T5DenseActDense):
                     activation, -1, self.non_mare_idcs
                 )
 
+            # if self.count % 20 == 0:
+            #     a = self.routing_probs[0, 0, :]
+            #     b = self.activation
+            #     b = b[0, 0, :]
+            #     idcs = torch.nonzero(b)
+            #     topk_idcs = torch.topk(a, k=self.num_experts * self.expert_dim).indices
+            #     print(
+            #         f"accuracy: {len(np.intersect1d(idcs.detach().cpu(), topk_idcs.detach().cpu())) / len(idcs.detach().cpu())}")
+            #     print(len(idcs))
+            # self.count += 1
+
             hidden_states = hidden_states * mask
         hidden_states = self.act(hidden_states)
-
-        if self.count % 20 == 0:
-            a = self.routing_probs[0, 0, :]
-            b = self.activation
-            b = b[0, 0, :]
-            idcs = torch.nonzero(b)
-            topk_idcs = torch.topk(a, k=self.num_experts * self.expert_dim).indices
-            print(
-                f"accuracy: {len(np.intersect1d(idcs.detach().cpu(), topk_idcs.detach().cpu())) / len(idcs.detach().cpu())}")
-            print(len(idcs))
-        self.count += 1
 
         # Collecting stats
         if self.is_collecting_stats is True:
