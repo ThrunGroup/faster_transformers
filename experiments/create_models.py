@@ -269,8 +269,8 @@ def finetune(
         if save_stats:
             model.activate_stats(model, True)
 
-        if use_mare_mlp:
-            model.activate_mare_mlp(model)
+        # if use_mare_mlp:
+        #     model.activate_mare_mlp(model)
         trainer.evaluate()
         if save_stats:
             dir_path = os.path.join(
