@@ -131,6 +131,7 @@ class MLPSparsityCheck(T5DenseActDense):
         ax.margins(x=0.01, y=0.1)
         plt.savefig(filepath)
         plt.show()
+        print(f"Sparsity: {round(self.num_zeros / self.num_params, 5)}")
 
     def forward(self, hidden_states):
         # print(hidden_states.requires_grad," ", self.block_idx, " ", self.is_decoder, " ", hidden_states.shape, f"count: {self.count}")
