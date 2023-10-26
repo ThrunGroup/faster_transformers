@@ -140,7 +140,7 @@ class MLPSparsityCheck(T5DenseActDense):
             # idcs = self.activation > 0
             self.activation = self.activation
             # @Jay: Should be deleted
-            self.routing_probs = self.router(hidden_states)
+            self.routing_probs = self.router(hidden_states.detach())
             self.activation = self.activation.to(self.routing_probs.dtype).detach()
             print(self.routing_probs)
         if self.count % 100 == 0:
