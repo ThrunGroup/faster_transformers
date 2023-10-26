@@ -271,9 +271,9 @@ def finetune(
 
         # if use_mare_mlp:
         #     model.activate_mare_mlp(model)
-        if use_mare_mlp:
+        if use_mare_mlp and save_stats:
             trainer.train_router = False
-        trainer.evaluate()
+        print(trainer.evaluate())
         if save_stats:
             dir_path = os.path.join(
                 os.path.dirname(os.path.abspath(__file__)), "mare mlp stats histograms"

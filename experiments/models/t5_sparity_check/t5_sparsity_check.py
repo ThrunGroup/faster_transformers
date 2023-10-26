@@ -251,9 +251,9 @@ def plot_stats(model, filepath: str = None):
                 mlp_layer = block.layer[2]
             else:
                 mlp_layer = block.layer[1]
-            mlp_layer.DenseReluDense: MLPSparsityCheck
-            mlp_layer.DenseReluDense.plot_stats(
-                filepath=filepath + f"block_idx{block_idx}"
+            layer = mlp_layer.DenseReluDense
+            layer.plot_stats(
+                filepath=filepath + f"decoder-{layer.is_decoder}_block_idx{layer.block_idx}"
             )
 
 
