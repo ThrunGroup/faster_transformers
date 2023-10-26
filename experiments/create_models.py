@@ -51,6 +51,9 @@ class CustomTrainer(Trainer):
 
 
 class MARETrainer(Trainer):
+    def __int__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.train_router = True
     def compute_penalty(self, model):
         loss = None
         for is_decoder, network in enumerate(
@@ -87,7 +90,10 @@ class MARETrainer(Trainer):
         # # get penalty term
         # lambda_coeff = 1
         # regularizer = lambda_coeff * self.compute_penalty(model)
-        loss = self.compute_penalty(model)
+        if self.train_router:
+            loss = self.compute_penalty(model)
+        else:
+            loss = F.binary_cross_entropy(logits, labels)
         # loss = F.binary_cross_entropy(logits, labels)
         # loss = 1 / 20 * self.compute_penalty(model) + F.binary_cross_entropy(
         #     logits, labels
@@ -224,7 +230,9 @@ def finetune(
                 # Collect Stats
                 if use_collect_stats:
                     model.activate_stats(model, True)
+                    trainer.train_router = False
                     trainer.evaluate(train_dataset)
+                    trainer.train_router = True
             model.activate_mare_mlp(model)
 
             # Freeze model params
