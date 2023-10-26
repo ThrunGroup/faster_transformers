@@ -142,10 +142,8 @@ class MLPSparsityCheck(T5DenseActDense):
         for name, param in self.router.named_parameters():
             print(name, ": ", param.requires_grad)
         print(self.routing_probs)
-        self.routing_probs.sum().backward()
         for name, param in self.router.named_parameters():
             print(name, ": ", param.grad)
-        print(hidden_states.requires_grad)
         if self.count % 20 == 0:
             a = self.router(hidden_states)[0, 0, :]
             b = self.act(self.wi(hidden_states)) != 0
