@@ -229,14 +229,14 @@ def finetune(
 
             # Freeze model params
             for (
-                _,
+                name,
                 module,
             ) in (
                 model.transformer.named_modules()
             ):  # @Jay: Should be removed after the experiment
                 if "attention" not in name:
-                    for name, param in module.named_parameters():
-                        print(f"{name} is frozen.")
+                    for name_, param in module.named_parameters():
+                        print(f"{name_} is frozen.")
                         param.requires_grad = False
             for (
                 _,
