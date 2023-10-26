@@ -134,7 +134,7 @@ class MLPSparsityCheck(T5DenseActDense):
 
     def forward(self, hidden_states):
         # print(hidden_states.requires_grad," ", self.block_idx, " ", self.is_decoder, " ", hidden_states.shape, f"count: {self.count}")
-        if hidden_states.requires_grad:
+        if True: #hidden_states.requires_grad:
             self.activation = self.act(self.wi(hidden_states)) != 0
             # idcs = self.activation > 0
             self.activation = self.activation
