@@ -403,7 +403,7 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [T5_3B]
+    model_types = [T5]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
