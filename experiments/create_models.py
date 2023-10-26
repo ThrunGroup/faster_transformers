@@ -211,13 +211,6 @@ def finetune(
     print("Training ", model_name)
     print("*********************\n")
 
-    # Collect Stats
-    if use_collect_stats:
-        model.activate_stats(model, True)
-        trainer.train_router = False
-        trainer.evaluate(train_dataset)
-        trainer.train_router = True
-
     if num_epochs != 0:
         if use_collect_stats and not use_mare_mlp:
             model.activate_stats(model)
@@ -236,6 +229,13 @@ def finetune(
                 # )
                 model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
             model.activate_mare_mlp(model)
+
+            # Collect Stats
+            if use_collect_stats:
+                model.activate_stats(model, True)
+                trainer.train_router = False
+                trainer.evaluate(train_dataset)
+                trainer.train_router = True
 
             # Freeze model params
             for name, param in model.named_parameters():
