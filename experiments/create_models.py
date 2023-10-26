@@ -20,6 +20,7 @@ from utils.constants import (
     GPT2,
     GPT2_XL,
     T5,
+    T5_LARGE,
     T5_3B,
     # Datasets
     # SST2,
@@ -215,17 +216,18 @@ def finetune(
             model.activate_stats(model)
         elif use_mare_mlp:
             # Load pre-trained weights except parameters in routers
-            if True or num_generalists > 0:
-                print(f"thrunlab/{pre_trained_model_name}.pt")
-                state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
-                print(state_dict.keys())
-                # for key in list(state_dict.keys()):
-                #     if "router" in key:
-                #         state_dict.pop(key)
-                model.load_state_dict(
-                    state_dict,
-                    strict=False,
-                )
+            if True:
+                # print(f"thrunlab/{pre_trained_model_name}.pt")
+                # state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
+                # print(state_dict.keys())
+                # # for key in list(state_dict.keys()):
+                # #     if "router" in key:
+                # #         state_dict.pop(key)
+                # model.load_state_dict(
+                #     state_dict,
+                #     strict=False,
+                # )
+                model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
 
                 # Collect Stats
                 if use_collect_stats:
@@ -294,7 +296,7 @@ def finetune(
         trainer.push_to_hub()
         os.makedirs("thrunlab", exist_ok=True)
         torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
-        model.from_pretrained(f"thrunlab/{model_name}")
+        # model.from_pretrained(f"thrunlab/{model_name}")
 
     # Empty out gpu memory
     del trainer
