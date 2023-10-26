@@ -143,8 +143,9 @@ class MLPSparsityCheck(T5DenseActDense):
             self.routing_probs = self.router(hidden_states)[idcs]
             self.activation = self.activation.to(self.routing_probs.dtype).detach()
         if self.count % 100 == 0:
-            a = self.routing_probs[0, 0, :]
-            b = self.activation[0, 0, :]
+            a = self.router(hidden_states)[0, 0, :]
+            b = self.act(self.wi(hidden_states)) != 0
+            b = b[0, 0, :]
             idcs = torch.nonzero(b)
             topk_idcs = torch.topk(a, k=self.num_experts * self.expert_dim).indices
             print(f"accuracy: {len(np.setdiff1d(idcs.detach(), topk_idcs.detach()))/len(idcs.detach())}")
