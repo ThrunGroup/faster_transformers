@@ -137,15 +137,16 @@ class MLPSparsityCheck(T5DenseActDense):
         self.count += 1
         if hidden_states.requires_grad:
             self.activation = self.act(self.wi(hidden_states)) != 0
+            self.activation = self.activation[self.activaiton > 0]
             # @Jay: Should be deleted
-            self.routing_probs = self.router(hidden_states)
-            self.routing_probs[self.activation==0] = 0
+            self.routing_probs = self.router(hidden_states)[self.activation > 0]
             self.activation = self.activation.to(self.routing_probs.dtype).detach()
         if self.count % 100 == 0:
             a = self.routing_probs[0, 0, :]
             b = self.activation[0, 0, :]
-            idcs = torch.topk(b, k=30).indices
-            print(a[idcs], b[idcs])
+            idcs = torch.nonzero(b)
+            topk_idcs = torch.topk(a, k=self.num_experts * self.expert_dim).indices
+            print(f"accuracy: {len(np.setdiff1d(idcs.detach(), topk_idcs.detach()))/len(idcs.detach())}")
 
         if self.is_mare is False:
             hidden_states = self.wi(hidden_states)

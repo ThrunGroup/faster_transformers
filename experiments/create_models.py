@@ -58,20 +58,20 @@ class MARETrainer(Trainer):
         ):
             for block_idx, block in enumerate(network.block):
                 if is_decoder:
-                    mlp_layer = block.layer[2]
+                    mlp_layer = block.layer[2].DenseReluDense
                 else:
-                    mlp_layer = block.layer[1]
+                    mlp_layer = block.layer[1].DenseReluDense
                 if loss is None:
                     if mlp_layer.DenseReluDense.routing_probs is None:
                         continue
                     loss = F.binary_cross_entropy(
-                        mlp_layer.DenseReluDense.routing_probs,
-                        mlp_layer.DenseReluDense.activation,
+                        mlp_layer.routing_probs,
+                        mlp_layer.activation,
                     )
                 else:
                     loss += F.binary_cross_entropy(
-                        mlp_layer.DenseReluDense.routing_probs,
-                        mlp_layer.DenseReluDense.activation,
+                        mlp_layer.routing_probs,
+                        mlp_layer.activation,
                     )
 
         return loss
