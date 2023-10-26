@@ -15,9 +15,9 @@ class MLPRouter(nn.Module):
         self.router = nn.Sequential(
             nn.Linear(input_dims, low_rank),
             nn.ReLU(),
-            # nn.LayerNorm(low_rank),
             nn.Linear(low_rank, output_dims),
             nn.Sigmoid(),
+            # nn.Softmax(),
         )
 
     def forward(self, x):
@@ -46,7 +46,9 @@ class MLPSparsityCheck(T5DenseActDense):
 
         self.num_zeros = 0
         self.num_params = 0
-        self.counts_per_idx = nn.Parameter(torch.zeros(config.d_ff), requires_grad=False)
+        self.counts_per_idx = nn.Parameter(
+            torch.zeros(config.d_ff), requires_grad=False
+        )
         self.router = MLPRouter(
             config.d_model,
             config.d_ff - num_all_rounders * expert_dim,
@@ -63,7 +65,9 @@ class MLPSparsityCheck(T5DenseActDense):
         # Collecting stats
         self.num_zeros += int(torch.sum(intermediate_states == 0))
         self.num_params += int(torch.numel(intermediate_states))
-        self.counts_per_idx = self.counts_per_idx.to(intermediate_states.device)
+        self.counts_per_idx = self.counts_per_idx.to(
+            intermediate_states.device
+        )
         self.counts_per_idx += torch.sum(intermediate_states != 0, dim=(0, 1))
 
     def init_stats(self):
@@ -76,7 +80,9 @@ class MLPSparsityCheck(T5DenseActDense):
         self.mare_idcs = torch.topk(
             self.counts_per_idx, k=self.num_all_rounders * self.expert_dim
         ).indices.to(self.wi.weight.device)
-        self.mare_mask = torch.zeros_like(self.counts_per_idx, requires_grad=False)
+        self.mare_mask = torch.zeros_like(
+            self.counts_per_idx, requires_grad=False
+        )
         self.mare_mask[self.mare_idcs] = 1
 
         self.non_mare_idcs = np.arange(self.config.d_ff)
@@ -88,7 +94,10 @@ class MLPSparsityCheck(T5DenseActDense):
         self.is_collecting_stats = False  # Turning off collecting stats
         print(self.mare_idcs)
         print(
-            "ar, exp, dim: ", self.num_all_rounders, self.num_experts, self.expert_dim
+            "ar, exp, dim: ",
+            self.num_all_rounders,
+            self.num_experts,
+            self.expert_dim,
         )
         print("counted_idx:", self.counts_per_idx)
 
@@ -134,26 +143,23 @@ class MLPSparsityCheck(T5DenseActDense):
     def forward(self, hidden_states):
         # print(hidden_states.requires_grad," ", self.block_idx, " ", self.is_decoder, " ", hidden_states.shape, f"count: {self.count}")
         self.count += 1
-        if hidden_states.requires_grad:
-            self.activation = self.act(self.wi(hidden_states)) != 0
 
         if self.is_mare is False:
             hidden_states = self.wi(hidden_states)
         else:
-            # mask = torch.zeros_like(self.counts_per_idx, device=hidden_states.device)
             routing_probs = self.router(
                 hidden_states
             )  # shape: ..., d_ff - num_all_rounders * expert_dim
-            # print("jheyyy", routing_probs.requires_grad)
             mask = torch.zeros(
                 hidden_states.shape[:-1] + (self.config.d_ff,),
                 dtype=routing_probs.dtype,
                 device=routing_probs.device,
             )
             # routing_probs = torch.sum(routing_probs, dim=(0, 1))  # shape: d_ff - num_all_rounders * expert_dim
+            K = self.num_experts * self.expert_dim
             topk_values, topk_idcs = torch.topk(
                 routing_probs,
-                k=self.num_experts * self.expert_dim,
+                k=K,
                 dim=-1,
             )
             topk_idcs = self.non_mare_idcs[topk_idcs]
@@ -161,12 +167,20 @@ class MLPSparsityCheck(T5DenseActDense):
             mask = mask.scatter(-1, topk_idcs, topk_values)
             # mask[..., self.mare_idcs] = torch.finfo(mask.dtype).max
             # mask = F.sigmoid(mask)
-            hidden_states = self.wi(hidden_states) * mask
+            hidden_states = self.wi(hidden_states)
+
             # mask = mask.unsqueeze(-1)
             # hidden_states = F.linear(hidden_states, self.wi.weight * mask)
             if hidden_states.requires_grad:
                 self.routing_probs = routing_probs
-                self.activation = self.activation.to(routing_probs.dtype).detach()
+                activation = (self.act(hidden_states) != 0).to(
+                    routing_probs.dtype
+                )
+                self.activation = torch.index_select(
+                    activation, 2, self.non_mare_idcs
+                )
+
+            hidden_states = hidden_states * mask
         hidden_states = self.act(hidden_states)
 
         # Collecting stats

@@ -87,11 +87,15 @@ def build_model(
         function_to_apply = (
             apply_mare_attention if num_generalists else apply_gated_attention
         )
-        function_to_apply(model, config, random_token_selection, num_generalists)
+        function_to_apply(
+            model, config, random_token_selection, num_generalists
+        )
 
     if use_mare_upcycling:
         function_to_apply = (
-            apply_mare_upcycling_gpt2 if GPT2 in model_type else apply_mare_upcycling_t5
+            apply_mare_upcycling_gpt2
+            if GPT2 in model_type
+            else apply_mare_upcycling_t5
         )
         function_to_apply(
             model,
@@ -120,7 +124,9 @@ def build_model(
         new_out_proj = nn.Linear(config.d_model, 4)
         new_out_proj.weight.data = original_out_proj.weight.data.repeat(4, 1)
         new_out_proj.bias.data = original_out_proj.bias.data.repeat(4)
-        model.classification_head.out_proj = nn.Sequential(new_out_proj, nn.Sigmoid())
+        model.classification_head.out_proj = nn.Sequential(
+            new_out_proj, nn.Sigmoid()
+        )
 
     return model
 

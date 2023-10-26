@@ -34,51 +34,68 @@ from utils.constants import (
 )
 
 
-os.environ["MASTER_PORT"] = "29509"
-
-
 class CustomTrainer(Trainer):
     def compute_loss(self, model, inputs, return_outputs=False):
         labels = inputs.pop("labels")
+
         # forward pass
         outputs = model(**inputs)
 
         logits = outputs.get("logits")[:, 0]
         labels = labels.to(logits.dtype)
 
-        loss = F.binary_cross_entropy(logits, labels)
+        # Check if there are any NaN values in logits
+        if torch.isnan(logits).any():
+            # If there are NaN values, return a zero loss for this batch
+            # This effectively "skips" optimizing this batch.
+            # The zero gradients won't affect the optimizer update.
+            print("NAN")
+            loss = torch.tensor(0.0).to(logits.device).requires_grad_()
+        else:
+            loss = F.binary_cross_entropy(logits, labels)
+
         return (loss, outputs) if return_outputs else loss
 
 
 class MARETrainer(Trainer):
     def compute_penalty(self, model):
         loss = None
+        count = 0
+
         for is_decoder, network in enumerate(
             [model.transformer.encoder, model.transformer.decoder]
         ):
             for block_idx, block in enumerate(network.block):
                 if is_decoder:
-                    mlp_layer = block.layer[2]
+                    mlp_layer = block.layer[2].DenseReluDense
                 else:
-                    mlp_layer = block.layer[1]
+                    mlp_layer = block.layer[1].DenseReluDense
+
+                count += 1
+
                 if loss is None:
-                    if mlp_layer.DenseReluDense.routing_probs is None:
+                    if mlp_layer.routing_probs is None:
                         continue
                     loss = F.binary_cross_entropy(
-                        mlp_layer.DenseReluDense.routing_probs,
-                        mlp_layer.DenseReluDense.activation,
+                        # loss = F.cross_entropy(
+                        mlp_layer.routing_probs,
+                        mlp_layer.activation,
                     )
                 else:
                     loss += F.binary_cross_entropy(
-                        mlp_layer.DenseReluDense.routing_probs,
-                        mlp_layer.DenseReluDense.activation,
+                        mlp_layer.routing_probs,
+                        mlp_layer.activation,
                     )
+
+        if loss is not None:
+            loss = loss / count
 
         return loss
 
     def compute_loss(self, model, inputs, return_outputs=False):
         labels = inputs.pop("labels")
         # forward pass
+
         outputs = model(**inputs)
 
         logits = outputs.get("logits")[:, 0]
@@ -88,9 +105,13 @@ class MARETrainer(Trainer):
         # lambda_coeff = 1
         # regularizer = lambda_coeff * self.compute_penalty(model)
         # loss = F.binary_cross_entropy(logits, labels)
-        loss = 1 / 20 * self.compute_penalty(model) + F.binary_cross_entropy(
-            logits, labels
-        )  # + self.compute_penalty(model)
+        alpha = 0.0
+        penalty = self.compute_penalty(model)
+        loss = F.binary_cross_entropy(logits, labels)
+
+        if penalty:
+            loss = loss + alpha * penalty
+
         # if loss is None:
         #     # loss = F.binary_cross_entropy(logits, labels)
         #     loss = F.binary_cross_entropy(torch.tensor(.0), torch.tensor(.0))
@@ -141,13 +162,15 @@ def finetune(
     compute_metrics = dataset.get_compute_metrics()
     preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
 
-    # if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
-    wandb_run = wandb.init(
-        project=f"{model_type}_{dataset_type}",
-        name=model_name,
-        reinit=True,
-        config=config,
-    )
+    if True or (
+        "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0
+    ):
+        wandb_run = wandb.init(
+            project=f"{model_type}_{dataset_type}_mlp",
+            name=model_name,
+            reinit=True,
+            config=config,
+        )
 
     training_args = TrainingArguments(
         output_dir=model_name,
@@ -166,25 +189,25 @@ def finetune(
         run_name=model_name,
         # for memory issues
         gradient_accumulation_steps=2,
-        # deepspeed="ds_config.json",
+        deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
-        # bf16=True,
-        fp16=True,
+        bf16=True,
+        # fp16=True,
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
         push_to_hub=True,
-        seed=0,
-        data_seed=0,
+        seed=1,
+        data_seed=1,
     )
 
     early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=10, early_stopping_threshold=0.001
+        early_stopping_patience=8, early_stopping_threshold=0.03
     )
 
     trainer = CustomTrainer(
-        # trainer = Trainer(
+        # trainer = MARETrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
@@ -192,7 +215,7 @@ def finetune(
         tokenizer=tokenizer,
         data_collator=data_collator,
         callbacks=[early_stopping],
-        # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         compute_metrics=compute_metrics,
     )
 
@@ -205,16 +228,21 @@ def finetune(
             model.activate_stats(model)
         elif use_mare_mlp:
             # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
+            model.from_pretrained(f"thrunlab/t5-base_cola_dense_epochs-6")
             # pre_trained_model_name = "t5-base_cola_mare_ar16_ex32_size-32_epochs-5_collected-stats"
 
             # Load pre-trained weights except parameters in routers
             print(f"thrunlab/{pre_trained_model_name}.pt")
-            state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
+            # state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
+            state_dict = torch.load(f"thrunlab/t5-base_cola_dense_epochs-6.pt")
             print(state_dict.keys())
-            # for key in list(state_dict.keys()):
-            #     if "router" in key:
-            #         state_dict.pop(key)
-            model.load_state_dict(state_dict, strict=False,)
+            # # for key in list(state_dict.keys()):
+            # #     if "router" in key:
+            # #         state_dict.pop(key)
+            model.load_state_dict(
+                state_dict,
+                strict=False,
+            )
 
             # Collect Stats
             if use_collect_stats:
@@ -222,21 +250,18 @@ def finetune(
                 trainer.evaluate(train_dataset)
             model.activate_mare_mlp(model)
 
-
             # Freeze model params
-            # for (
-            #     module
-            # ) in (
-            #     model.transformer.modules()
-            # ):  # @Jay: Should be removed after the experiment
-            #     for name, param in module.named_parameters():
-            #         print(f"{name} is frozen.")
-            #         param.requires_grad = False
+            for name, param in model.named_parameters():
+                if "router" not in name:
+                    param.requires_grad = False
+                else:
+                    print(name)
             # for module in model.transformer.modules():
             #     if isinstance(module, MLPRouter):
             #         for name, param in module.transformer.named_parameters():
             #             print(f"{name} is unfrozen.")
             #             param.requires_grad = True
+    print("Training")
     trainer.train()
     if do_evaluation:
         if save_stats:
@@ -244,9 +269,12 @@ def finetune(
         trainer.evaluate()
         if save_stats:
             dir_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)), "mare mlp stats histograms"
+                os.path.dirname(os.path.abspath(__file__)),
+                "mare mlp stats histograms",
             )
-            filename = f"data-{dataset_name}_epochs-{num_epochs}_int ff activations_"
+            filename = (
+                f"data-{dataset_name}_epochs-{num_epochs}_int ff activations_"
+            )
             model.plot_stats(model, os.path.join(dir_path, filename))
     wandb_run.finish()
     # if do_evaluation:
@@ -259,13 +287,15 @@ def finetune(
     #         trainer=trainer,
     #     )
 
-    # if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
-    #     wandb_run.finish()
-    if push_to_hub:
-        print("pushing to hub")
-        trainer.push_to_hub()
-        os.makedirs("thrunlab", exist_ok=True)
-        torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
+    if True or (
+        "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0
+    ):
+        wandb_run.finish()
+        if push_to_hub:
+            print("pushing to hub")
+            trainer.push_to_hub()
+            os.makedirs("thrunlab", exist_ok=True)
+            torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
         # model.from_pretrained(f"thrunlab/{model_name}")
 
     # Empty out gpu memory
@@ -321,10 +351,12 @@ def create_model(
     else:
         model_name += f"_dense"
 
-    model_name += f"_epochs-{num_epochs}"
+    model_name += f"_epochs-{num_epochs}_without_distillation_50"
 
     if use_mare_mlp:
-        pre_trained_model_name += f"_dense_epochs-{num_epochs}" # + "_collected-stats"
+        pre_trained_model_name += (
+            f"_dense_epochs-{num_epochs}"  # + "_collected-stats"
+        )
         model_name += "_mare_mlp"
     model_name += run_name  # optional
 
@@ -380,38 +412,56 @@ if __name__ == "__main__":
         # MULTIRC,
         # WIC,
     ]
+
+    total_sizes = {
+        T5: 3072,
+        T5_3B: 16384,
+    }
+
     model_types = [T5_3B]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 5,
-                "train_batch_size": 2,
-                "test_batch_size": 2,
-                "gradient_checkpointing": True,
+                "num_epochs": 8,
+                "train_batch_size": 16,
+                "test_batch_size": 32,
+                "gradient_checkpointing": False,
             }
             create_model(
                 # run_name="dense_epochs5",
                 **common_args,
                 push_to_hub=True,
             )
-            # create_model(
-            #     use_mare_mlp=False,
-            #     **common_args,
-            #     save_stats=True,
-            #     use_collect_stats=True,
-            #     push_to_hub=True,
-            #     num_generalists=16,
-            #     num_experts=48,
-            #     expert_size=32,
-            # )
-            total_size = 16384
+            total_size = total_sizes[model_type]
             expert_size = 16
-            for fixed_cost in [0.02, 0.05, 0.1, 0.2, 0.3, 0.5, ]:
-                for ratio in [0.1, 0.25, 0.5, 0.75, 0.9]:
-                    total_nums = int(total_size/expert_size * fixed_cost)
-                    num_generalists = int(total_nums * ratio) + int(int(total_nums * ratio) % 2)  # To make it even
+            fixed_costs = [
+                # 0.02,
+                # 0.05,
+                # 0.1,
+                0.2,
+                # 0.3,
+                0.5,
+            ]
+            generalist_ratios = [
+                0.0,
+                # 0.1,
+                # 0.25,
+                0.5,
+                # 0.75,
+                # 0.9,
+                1.0,
+            ]
+
+            print("______MARE_______")
+
+            for fixed_cost in fixed_costs:
+                for generalist_ratio in generalist_ratios:
+                    total_nums = int(total_size / expert_size * fixed_cost)
+                    num_generalists = (
+                        int(total_nums * generalist_ratio) * 2 // 2
+                    )  # To make it even
                     num_experts = total_nums - num_generalists
                     create_model(
                         use_mare_mlp=True,
