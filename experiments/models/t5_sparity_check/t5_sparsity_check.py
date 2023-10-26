@@ -17,7 +17,8 @@ class MLPRouter(nn.Module):
             nn.Hardtanh(-1, 1),
             # nn.LayerNorm(low_rank),
             nn.Linear(low_rank, output_dims),
-            nn.Hardtanh(0, 1)
+            # nn.Hardtanh(0, 1)
+            nn.Sigmoid()
         )
 
     def forward(self, x):
