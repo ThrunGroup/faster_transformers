@@ -425,11 +425,12 @@ if __name__ == "__main__":
                 "test_batch_size": 64,
                 "gradient_checkpointing": False,
             }
-            # create_model(
-            #     # run_name="dense_epochs5",
-            #     **common_args,
-            #     push_to_hub=True,
-            # )
+            create_model(
+                # run_name="dense_epochs5",
+                **common_args,
+                push_to_hub=True,
+                save_stats=True,
+            )
             # create_model(
             #     use_mare_mlp=False,
             #     **common_args,
@@ -442,26 +443,26 @@ if __name__ == "__main__":
             # )
             total_size = 3072
             expert_size = 16
-            for fixed_cost in [
-                0.2,
-            ]:
-                for ratio in [0.5, 0.9]:
-                    total_nums = int(total_size / expert_size * fixed_cost)
-                    total_nums += total_nums % 2
-                    num_generalists = int(total_nums * ratio) + int(
-                        int(total_nums * ratio) % 2
-                    )  # To make it even
-                    num_experts = total_nums - num_generalists
-                    create_model(
-                        use_mare_mlp=True,
-                        **common_args,
-                        save_stats=False,
-                        use_collect_stats=True,
-                        push_to_hub=False,
-                        num_generalists=num_generalists,
-                        num_experts=num_experts,
-                        expert_size=expert_size,
-                    )
+            # for fixed_cost in [
+            #     0.2,
+            # ]:
+            #     for ratio in [0.5, 0.9]:
+            #         total_nums = int(total_size / expert_size * fixed_cost)
+            #         total_nums += total_nums % 2
+            #         num_generalists = int(total_nums * ratio) + int(
+            #             int(total_nums * ratio) % 2
+            #         )  # To make it even
+            #         num_experts = total_nums - num_generalists
+            #         create_model(
+            #             use_mare_mlp=True,
+            #             **common_args,
+            #             save_stats=False,
+            #             use_collect_stats=True,
+            #             push_to_hub=False,
+            #             num_generalists=num_generalists,
+            #             num_experts=num_experts,
+            #             expert_size=expert_size,
+            #         )
 
             # create_model(
             #     use_mare_upcycling=True,

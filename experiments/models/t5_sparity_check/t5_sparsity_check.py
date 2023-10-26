@@ -107,7 +107,7 @@ class MLPSparsityCheck(T5DenseActDense):
             filepath = os.path.join(
                 os.path.dirname(os.path.abspath(__file__)),
                 "mare_mlp_histograms",
-                f"block{self.block_idx}_histogram",
+                f"{self.is_decoder}_block{self.block_idx}_histogram",
             )
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         data = self.counts_per_idx.clone().detach().cpu()
