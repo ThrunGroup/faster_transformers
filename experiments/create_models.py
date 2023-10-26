@@ -184,7 +184,7 @@ def finetune(
         early_stopping_patience=10, early_stopping_threshold=0.001
     )
 
-    trainer = MARETrainer(
+    trainer = CustomTrainer(
         # trainer = Trainer(
         model=model,
         args=training_args,
