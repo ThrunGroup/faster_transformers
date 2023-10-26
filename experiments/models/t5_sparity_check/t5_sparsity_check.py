@@ -136,10 +136,9 @@ class MLPSparsityCheck(T5DenseActDense):
         self.count += 1
         if hidden_states.requires_grad:
             self.activation = self.act(self.wi(hidden_states)) != 0
-
-        # @Jay: Should be deleted
-        self.routing_probs = self.router(hidden_states)
-        self.activation = self.activation.to(self.routing_probs.dtype).detach()
+            # @Jay: Should be deleted
+            self.routing_probs = self.router(hidden_states)
+            self.activation = self.activation.to(self.routing_probs.dtype).detach()
         if self.count % 100 == 0:
             print(self.routing_probs[0, 0, :30], self.activation[0, 0: 30])
 

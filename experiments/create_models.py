@@ -222,7 +222,7 @@ def finetune(
                 if use_collect_stats:
                     model.activate_stats(model, True)
                     trainer.evaluate(train_dataset)
-            model.activate_mare_mlp(model)
+                model.activate_mare_mlp(model)
 
 
             # Freeze model params
