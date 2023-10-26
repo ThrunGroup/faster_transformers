@@ -410,7 +410,7 @@ if __name__ == "__main__":
             # )
             total_size = 3072
             expert_size = 16
-            for fixed_cost in [0.1, ]:
+            for fixed_cost in [0.3, ]:
                 for ratio in [0, 0.1, 0.25, 0.5, 0.75, 0.9]:
                     total_nums = int(total_size/expert_size * fixed_cost)
                     num_generalists = int(total_nums * ratio) + int(int(total_nums * ratio) % 2)  # To make it even
