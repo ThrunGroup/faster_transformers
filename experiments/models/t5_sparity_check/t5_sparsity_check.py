@@ -17,8 +17,8 @@ class MLPRouter(nn.Module):
             nn.Hardtanh(-1, 1),
             # nn.LayerNorm(low_rank),
             nn.Linear(low_rank, output_dims),
-            nn.Hardtanh(0, 1),
-            # nn.Sigmoid()
+            # nn.Hardtanh(0, 1),
+            nn.Sigmoid()
         )
 
     def forward(self, x):
@@ -139,6 +139,7 @@ class MLPSparsityCheck(T5DenseActDense):
             self.activation = self.act(self.wi(hidden_states)) != 0
             # @Jay: Should be deleted
             self.routing_probs = self.router(hidden_states)
+            self.routing_probs[self.activation==0] = 0
             self.activation = self.activation.to(self.routing_probs.dtype).detach()
         if self.count % 100 == 0:
             a = self.routing_probs[0, 0, :]
