@@ -155,20 +155,19 @@ class MLPSparsityCheck(T5DenseActDense):
         if self.is_mare is False:
             hidden_states = self.wi(hidden_states)
         else:
-            # mask = torch.zeros_like(self.counts_per_idx, device=hidden_states.device)
             routing_probs = self.router(
                 hidden_states
             )  # shape: ..., d_ff - num_all_rounders * expert_dim
-            # print("jheyyy", routing_probs.requires_grad)
             mask = torch.zeros(
                 hidden_states.shape[:-1] + (self.config.d_ff,),
                 dtype=routing_probs.dtype,
                 device=routing_probs.device,
             )
             # routing_probs = torch.sum(routing_probs, dim=(0, 1))  # shape: d_ff - num_all_rounders * expert_dim
+            K = self.num_experts * self.expert_dim
             topk_values, topk_idcs = torch.topk(
                 routing_probs,
-                k=self.num_experts * self.expert_dim,
+                k=K,
                 dim=-1,
             )
             topk_idcs = self.non_mare_idcs[topk_idcs]
@@ -176,12 +175,20 @@ class MLPSparsityCheck(T5DenseActDense):
             mask = mask.scatter(-1, topk_idcs, topk_values)
             # mask[..., self.mare_idcs] = torch.finfo(mask.dtype).max
             # mask = F.sigmoid(mask)
-            hidden_states = self.wi(hidden_states) * mask
+            hidden_states = self.wi(hidden_states)
+
             # mask = mask.unsqueeze(-1)
             # hidden_states = F.linear(hidden_states, self.wi.weight * mask)
             if hidden_states.requires_grad:
                 self.routing_probs = routing_probs
-                self.activation = self.activation.to(routing_probs.dtype).detach()
+                activation = (self.act(hidden_states) != 0).to(
+                    routing_probs.dtype
+                )
+                self.activation = torch.index_select(
+                    activation, -1, self.non_mare_idcs
+                )
+
+            hidden_states = hidden_states * mask
         hidden_states = self.act(hidden_states)
 
         # Collecting stats

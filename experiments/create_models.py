@@ -184,7 +184,7 @@ def finetune(
         early_stopping_patience=10, early_stopping_threshold=0.001
     )
 
-    trainer = CustomTrainer(
+    trainer = MARETrainer(
         # trainer = Trainer(
         model=model,
         args=training_args,
@@ -193,7 +193,7 @@ def finetune(
         tokenizer=tokenizer,
         data_collator=data_collator,
         callbacks=[early_stopping],
-        # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         compute_metrics=compute_metrics,
     )
 
@@ -397,7 +397,13 @@ if __name__ == "__main__":
         # MULTIRC,
         # WIC,
     ]
-    model_types = [T5]
+
+    total_sizes = {
+        T5: 3072,
+        T5_3B: 16384,
+    }
+
+    model_types = [T5_3B]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
