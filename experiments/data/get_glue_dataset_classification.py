@@ -45,7 +45,8 @@ class GLUEDataset(Dataset):
         try:
             # Try to load preprocessed data
             with open(
-                f"{self.model_type}_{self.dataset_type}_dataset.pkl", "rb"
+                f"{self.model_type}_{self.dataset_type}_dataset.pkl",
+                "rb",
             ) as f:
                 tokenized_dataset = pickle.load(f)
             print("Loaded preprocessed data from disk.")
@@ -65,7 +66,8 @@ class GLUEDataset(Dataset):
 
             # Save the preprocessed data
             with open(
-                f"{self.model_type}_{self.dataset_type}_dataset.pkl", "wb"
+                f"{self.model_type}_{self.dataset_type}_dataset.pkl",
+                "wb",
             ) as f:
                 pickle.dump(tokenized_dataset, f)
             print("Preprocessed and saved data to disk.")
@@ -96,10 +98,17 @@ class GLUEDataset(Dataset):
         # preds = preds[0].argmax(-1)
         # print(preds[0].shape)
         # print(preds[0])
-        print(preds[0].shape, labels.shape)
-        preds = np.array(
-            preds[0][:, 0] > 1 / 2, dtype=float
-        )  # the output is sigmoid
+        # print(preds.shape, labels.shape)
+        # print(preds)
+
+        # preds = np.array(
+        #     preds[0][:, 0] > 1 / 2, dtype=float
+        # )  # the output is sigmoid
+        preds = np.array(preds > 1 / 2, dtype=float)  # the output is sigmoid
+        # print("preds: ", preds)
+        # print("labels: ", labels)
+        # print("preds : ", preds)
+        # print("labels: ", labels)
         # print(preds)
         return self.metrics.compute(predictions=preds, references=labels)
 
@@ -156,5 +165,11 @@ class GLUEDataset(Dataset):
 
         return inputs
 
-    def preprocess_logits_for_metrics(self, **args):
-        pass
+    def preprocess_logits_for_metrics(self, logits, labels):
+        """
+        Original Trainer may have a memory leak.
+        This is a workaround to avoid storing too many tensors that are not needed.
+        """
+        # pred_ids = torch.argmax(logits[0], dim=-1)
+        pred_ids = logits[0][:, 0]
+        return pred_ids

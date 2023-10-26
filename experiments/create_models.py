@@ -193,7 +193,7 @@ def finetune(
         tokenizer=tokenizer,
         data_collator=data_collator,
         callbacks=[early_stopping],
-        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         compute_metrics=compute_metrics,
     )
 
