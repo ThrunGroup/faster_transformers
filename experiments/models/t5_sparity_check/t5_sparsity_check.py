@@ -1,5 +1,6 @@
 from transformers import T5Config, PretrainedConfig, PreTrainedModel
 from transformers.models.t5.modeling_t5 import T5DenseActDense
+import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -140,9 +141,8 @@ class MLPSparsityCheck(T5DenseActDense):
             # idcs = self.activation > 0
             self.activation = self.activation
             # @Jay: Should be deleted
-            self.routing_probs = self.router(hidden_states.detach())
+            self.routing_probs = self.router(copy.deepcopy(hidden_states))
             self.activation = self.activation.to(self.routing_probs.dtype).detach()
-            print(self.routing_probs)
         if self.count % 100 == 0:
             a = self.router(hidden_states)[0, 0, :]
             b = self.act(self.wi(hidden_states)) != 0
