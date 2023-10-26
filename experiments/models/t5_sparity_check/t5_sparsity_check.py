@@ -134,16 +134,16 @@ class MLPSparsityCheck(T5DenseActDense):
 
     def forward(self, hidden_states):
         # print(hidden_states.requires_grad," ", self.block_idx, " ", self.is_decoder, " ", hidden_states.shape, f"count: {self.count}")
-        if True:
-            self.activation = self.act(self.wi(hidden_states)) != 0
-            # idcs = self.activation > 0
-            self.routing_probs = self.router(hidden_states)
-            activation = (self.act(hidden_states) != 0).to(
-                self.routing_probs.dtype
-            )
-            self.activation = torch.index_select(
-                activation, -1, self.non_mare_idcs
-            )
+        # if :
+        #     self.activation = self.act(self.wi(hidden_states)) != 0
+        #     # idcs = self.activation > 0
+        #     self.routing_probs = self.router(hidden_states)
+        #     activation = (self.act(hidden_states) != 0).to(
+        #         self.routing_probs.dtype
+        #     )
+        #     self.activation = torch.index_select(
+        #         activation, -1, self.non_mare_idcs
+        #     )
         # for name, param in self.router.named_parameters():
         #     print(name, ": ", param.requires_grad)
         # print(self.routing_probs)
@@ -185,7 +185,7 @@ class MLPSparsityCheck(T5DenseActDense):
 
             # mask = mask.unsqueeze(-1)
             # hidden_states = F.linear(hidden_states, self.wi.weight * mask)
-            if hidden_states.requires_grad:
+            if True or hidden_states.requires_grad:
                 self.routing_probs = routing_probs
                 activation = (self.act(hidden_states) != 0).to(
                     routing_probs.dtype
