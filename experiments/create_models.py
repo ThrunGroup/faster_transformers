@@ -216,7 +216,10 @@ def finetune(
                 # for key in list(state_dict.keys()):
                 #     if "router" in key:
                 #         state_dict.pop(key)
-                model.load_state_dict(state_dict, strict=False,)
+                model.load_state_dict(
+                    state_dict,
+                    strict=False,
+                )
 
                 # Collect Stats
                 if use_collect_stats:
@@ -224,23 +227,25 @@ def finetune(
                     trainer.evaluate(train_dataset)
                 model.activate_mare_mlp(model)
 
-
             # Freeze model params
             for (
-                name, module
+                name,
+                module,
             ) in (
                 model.transformer.named_modules()
             ):  # @Jay: Should be removed after the experiment
                 for name, param in module.named_parameters():
                     print(f"{name} is frozen.")
                     param.requires_grad = False
-            for name, module in model.transformer.named_modules():
-                print(type(module), name,)
-                print(MLPRouter, isinstance(module, MLPRouter))
-                if isinstance(module, MLPRouter):
-                    print("hey")
-                    for name, param in module.named_parameters():
-                        print(f"{name} is unfrozen.")
+            for (
+                name,
+                module,
+            ) in (
+                model.transformer.named_modules()
+            ):  # @Jay: Should be removed after the experiment
+                for name, param in module.named_parameters():
+                    if "router" in name:
+                        print(f"{name} is Unfrozen.")
                         param.requires_grad = True
 
     trainer.train()
@@ -330,7 +335,7 @@ def create_model(
     model_name += f"_epochs-{num_epochs}"
 
     if use_mare_mlp:
-        pre_trained_model_name += f"_dense_epochs-{num_epochs}" # + "_collected-stats"
+        pre_trained_model_name += f"_dense_epochs-{num_epochs}"  # + "_collected-stats"
         model_name += "_mare_mlp"
     model_name += run_name  # optional
 
@@ -414,11 +419,15 @@ if __name__ == "__main__":
             # )
             total_size = 3072
             expert_size = 16
-            for fixed_cost in [0.3, ]:
+            for fixed_cost in [
+                0.3,
+            ]:
                 for ratio in [0, 0.1, 0.25, 0.5, 0.75, 0.9]:
-                    total_nums = int(total_size/expert_size * fixed_cost)
+                    total_nums = int(total_size / expert_size * fixed_cost)
                     total_nums += total_nums % 2
-                    num_generalists = int(total_nums * ratio) + int(int(total_nums * ratio) % 2)  # To make it even
+                    num_generalists = int(total_nums * ratio) + int(
+                        int(total_nums * ratio) % 2
+                    )  # To make it even
                     num_experts = total_nums - num_generalists
                     create_model(
                         use_mare_mlp=True,
