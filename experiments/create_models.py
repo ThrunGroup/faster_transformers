@@ -259,7 +259,8 @@ def finetune(
         if save_stats:
             model.activate_stats(model, True)
 
-        model.activate_mare_mlp(model)
+        if use_mare_mlp:
+            model.activate_mare_mlp(model)
         trainer.evaluate()
         if save_stats:
             dir_path = os.path.join(
@@ -285,7 +286,7 @@ def finetune(
         trainer.push_to_hub()
         os.makedirs("thrunlab", exist_ok=True)
         torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
-        # model.from_pretrained(f"thrunlab/{model_name}")
+        model.from_pretrained(f"thrunlab/{model_name}")
 
     # Empty out gpu memory
     del trainer
