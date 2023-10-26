@@ -135,24 +135,24 @@ class MLPSparsityCheck(T5DenseActDense):
 
     def forward(self, hidden_states):
         # print(hidden_states.requires_grad," ", self.block_idx, " ", self.is_decoder, " ", hidden_states.shape, f"count: {self.count}")
-        if hidden_states.requires_grad:
-            self.activation = self.act(self.wi(hidden_states)) != 0
-            # idcs = self.activation > 0
-            self.activation = self.activation
-            self.routing_probs = self.router(hidden_states)
-            self.activation = self.activation.to(self.routing_probs.dtype).detach()
-        for name, param in self.router.named_parameters():
-            print(name, ": ", param.requires_grad)
-        print(self.routing_probs.grad)
-        print(hidden_states.requires_grad)
-        if self.count % 20 == 0:
-            a = self.router(hidden_states)[0, 0, :]
-            b = self.act(self.wi(hidden_states)) != 0
-            b = b[0, 0, :]
-            idcs = torch.nonzero(b)
-            topk_idcs = torch.topk(a, k=self.num_experts * self.expert_dim).indices
-            print(f"accuracy: {len(np.setdiff1d(idcs.detach().cpu(), topk_idcs.detach().cpu()))/len(idcs.detach().cpu())}")
-            print(len(idcs))
+        # if hidden_states.requires_grad:
+        #     self.activation = self.act(self.wi(hidden_states)) != 0
+        #     # idcs = self.activation > 0
+        #     self.activation = self.activation
+        #     self.routing_probs = self.router(hidden_states)
+        #     self.activation = self.activation.to(self.routing_probs.dtype).detach()
+        # for name, param in self.router.named_parameters():
+        #     print(name, ": ", param.requires_grad)
+        # print(self.routing_probs.grad)
+        # print(hidden_states.requires_grad)
+        # if self.count % 20 == 0:
+        #     a = self.router(hidden_states)[0, 0, :]
+        #     b = self.act(self.wi(hidden_states)) != 0
+        #     b = b[0, 0, :]
+        #     idcs = torch.nonzero(b)
+        #     topk_idcs = torch.topk(a, k=self.num_experts * self.expert_dim).indices
+        #     print(f"accuracy: {len(np.setdiff1d(idcs.detach().cpu(), topk_idcs.detach().cpu()))/len(idcs.detach().cpu())}")
+        #     print(len(idcs))
         self.count += 1
         if self.is_mare is False:
             hidden_states = self.wi(hidden_states)
