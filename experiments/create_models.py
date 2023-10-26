@@ -183,8 +183,11 @@ def finetune(
     early_stopping = EarlyStoppingCallback(
         early_stopping_patience=10, early_stopping_threshold=0.001
     )
-
-    trainer = MARETrainer(
+    if use_mare_mlp:
+        t = MARETrainer
+    else:
+        t = CustomTrainer
+    trainer = t(
         # trainer = Trainer(
         model=model,
         args=training_args,
