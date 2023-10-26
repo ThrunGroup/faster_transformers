@@ -236,6 +236,7 @@ def finetune(
                     param.requires_grad = False
             for name, module in model.transformer.named_modules():
                 print(type(module), name,)
+                print(MLPRouter, isinstance(module, MLPRouter))
                 if isinstance(module, MLPRouter):
                     print("hey")
                     for name, param in module.named_parameters():
