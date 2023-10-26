@@ -209,18 +209,19 @@ def finetune(
             # pre_trained_model_name = "t5-base_cola_mare_ar16_ex32_size-32_epochs-5_collected-stats"
 
             # Load pre-trained weights except parameters in routers
-            print(f"thrunlab/{pre_trained_model_name}.pt")
-            state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
-            print(state_dict.keys())
-            # for key in list(state_dict.keys()):
-            #     if "router" in key:
-            #         state_dict.pop(key)
-            model.load_state_dict(state_dict, strict=False,)
+            if num_generalists > 0:
+                print(f"thrunlab/{pre_trained_model_name}.pt")
+                state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
+                print(state_dict.keys())
+                # for key in list(state_dict.keys()):
+                #     if "router" in key:
+                #         state_dict.pop(key)
+                model.load_state_dict(state_dict, strict=False,)
 
-            # Collect Stats
-            if use_collect_stats:
-                model.activate_stats(model, True)
-                trainer.evaluate(train_dataset)
+                # Collect Stats
+                if use_collect_stats:
+                    model.activate_stats(model, True)
+                    trainer.evaluate(train_dataset)
             model.activate_mare_mlp(model)
 
 
