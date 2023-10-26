@@ -282,10 +282,16 @@ def apply_sparsity_check_MLP(
         [model.transformer.encoder, model.transformer.decoder]
     ):
         for block_idx, block in enumerate(network.block):
+            new_expert_size = expert_size
+            constant = 1/2
+            new_expert_size *= constant
             if is_decoder:
                 mlp_layer = block.layer[2]
             else:
                 mlp_layer = block.layer[1]
+                new_expert_size *= 2
+            if block_idx < 3:
+                new_expert_size *= 4
             new_mlp = MLPSparsityCheck(
                 config,
                 block_idx,

@@ -424,7 +424,7 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 0,
+                "num_epochs": 3,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": False,
@@ -449,7 +449,7 @@ if __name__ == "__main__":
             for fixed_cost in [
                 0.2,
             ]:
-                for ratio in [0.5]:
+                for ratio in [0.5, 1.0]:
                     total_nums = int(total_size / expert_size * fixed_cost)
                     total_nums += total_nums % 2
                     num_generalists = int(total_nums * ratio) + int(
@@ -459,7 +459,7 @@ if __name__ == "__main__":
                     create_model(
                         use_mare_mlp=True,
                         **common_args,
-                        save_stats=True,
+                        save_stats=False,
                         use_collect_stats=True,
                         push_to_hub=False,
                         num_generalists=num_generalists,
