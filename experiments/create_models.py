@@ -264,7 +264,7 @@ def finetune(
             #             print(f"{name} is Unfrozen.")
             #             param.requires_grad = True
 
-    trainer.train()
+        trainer.train()
     if do_evaluation:
         if save_stats:
             model.activate_stats(model, True)
