@@ -138,7 +138,12 @@ class MLPSparsityCheck(T5DenseActDense):
             self.activation = self.act(self.wi(hidden_states)) != 0
             # idcs = self.activation > 0
             self.routing_probs = self.router(hidden_states)
-            self.activation = self.activation.to(self.routing_probs.dtype).detach()
+            activation = (self.act(hidden_states) != 0).to(
+                self.routing_probs.dtype
+            )
+            self.activation = torch.index_select(
+                activation, -1, self.non_mare_idcs
+            )
         # for name, param in self.router.named_parameters():
         #     print(name, ": ", param.requires_grad)
         # print(self.routing_probs)
