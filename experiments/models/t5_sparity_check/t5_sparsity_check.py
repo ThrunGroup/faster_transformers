@@ -144,7 +144,7 @@ class MLPSparsityCheck(T5DenseActDense):
             a = self.routing_probs[0, 0, :]
             b = self.activation[0, 0, :]
             idcs = torch.topk(b, k=30).indices
-            print(self.routing_probs[0, 0, idcs], self.activation[0, 0: idcs])
+            print(a[idcs], b[idcs])
 
         if self.is_mare is False:
             hidden_states = self.wi(hidden_states)
