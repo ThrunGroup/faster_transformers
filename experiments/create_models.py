@@ -431,7 +431,6 @@ if __name__ == "__main__":
                 # run_name="dense_epochs5",
                 **common_args,
                 push_to_hub=True,
-                save_stats=True,
             )
             # create_model(
             #     use_mare_mlp=False,
