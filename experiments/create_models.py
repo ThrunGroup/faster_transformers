@@ -228,6 +228,11 @@ def finetune(
                 model.activate_mare_mlp(model)
 
             # Freeze model params
+            for name, param in model.named_parameters():
+                if "router" not in name:
+                    param.requires_grad = False
+                else:
+                    print(name)
             # for (
             #     name,
             #     module,
