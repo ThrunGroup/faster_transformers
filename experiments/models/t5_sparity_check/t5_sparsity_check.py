@@ -51,7 +51,7 @@ class MLPSparsityCheck(T5DenseActDense):
         self.router = MLPRouter(
             config.d_model,
             config.d_ff - num_all_rounders * expert_dim,
-            int(expert_dim * (num_all_rounders + num_experts) / 4),
+            expert_dim * (num_all_rounders + num_experts),
         )
         self.router.to(self.wo.weight.dtype)
         self.routing_probs = None
