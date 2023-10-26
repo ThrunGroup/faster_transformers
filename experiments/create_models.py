@@ -228,26 +228,26 @@ def finetune(
                 model.activate_mare_mlp(model)
 
             # Freeze model params
-            for (
-                name,
-                module,
-            ) in (
-                model.transformer.named_modules()
-            ):  # @Jay: Should be removed after the experiment
-                if "attention" not in name:
-                    for name_, param in module.named_parameters():
-                        print(f"{name_} is frozen.")
-                        param.requires_grad = False
-            for (
-                _,
-                module,
-            ) in (
-                model.transformer.named_modules()
-            ):  # @Jay: Should be removed after the experiment
-                for name, param in module.named_parameters():
-                    if "router" in name:
-                        print(f"{name} is Unfrozen.")
-                        param.requires_grad = True
+            # for (
+            #     name,
+            #     module,
+            # ) in (
+            #     model.transformer.named_modules()
+            # ):  # @Jay: Should be removed after the experiment
+            #     if "attention" not in name:
+            #         for name_, param in module.named_parameters():
+            #             print(f"{name_} is frozen.")
+            #             param.requires_grad = False
+            # for (
+            #     _,
+            #     module,
+            # ) in (
+            #     model.transformer.named_modules()
+            # ):  # @Jay: Should be removed after the experiment
+            #     for name, param in module.named_parameters():
+            #         if "router" in name:
+            #             print(f"{name} is Unfrozen.")
+            #             param.requires_grad = True
 
     trainer.train()
     if do_evaluation:
