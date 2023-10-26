@@ -52,7 +52,7 @@ class CustomTrainer(Trainer):
 
 
 class MARETrainer(Trainer):
-    def __int__(self, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.train_router = True
     def compute_penalty(self, model):
