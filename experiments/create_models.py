@@ -226,19 +226,19 @@ def finetune(
 
 
             # Freeze model params
-            for (
-                module
-            ) in (
-                model.transformer.modules()
-            ):  # @Jay: Should be removed after the experiment
-                for name, param in module.named_parameters():
-                    print(f"{name} is frozen.")
-                    param.requires_grad = False
-            for module in model.transformer.modules():
-                if isinstance(module, MLPRouter):
-                    for name, param in module.transformer.named_parameters():
-                        print(f"{name} is unfrozen.")
-                        param.requires_grad = True
+            # for (
+            #     module
+            # ) in (
+            #     model.transformer.modules()
+            # ):  # @Jay: Should be removed after the experiment
+            #     for name, param in module.named_parameters():
+            #         print(f"{name} is frozen.")
+            #         param.requires_grad = False
+            # for module in model.transformer.modules():
+            #     if isinstance(module, MLPRouter):
+            #         for name, param in module.transformer.named_parameters():
+            #             print(f"{name} is unfrozen.")
+            #             param.requires_grad = True
     trainer.train()
     if do_evaluation:
         if save_stats:
