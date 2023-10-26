@@ -203,7 +203,6 @@ class MLPSparsityCheck(T5DenseActDense):
         # Collecting stats
         if self.is_collecting_stats is True:
             self.collect_stats(hidden_states)
-        print(self.num_params, self.num_zeros)
         # print(f"block idx: {self.block_idx} / sparsity:{self.num_zeros/self.num_params}")
         # sorted_values, sorted_idcs = self.counts_per_idx.clone().detach().sort()
         # # print(torch.histogram(self.counts_per_idx.to('cpu'), 32, density=True))
