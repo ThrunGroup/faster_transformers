@@ -205,11 +205,8 @@ def finetune(
         if use_collect_stats and not use_mare_mlp:
             model.activate_stats(model)
         elif use_mare_mlp:
-            # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
-            # pre_trained_model_name = "t5-base_cola_mare_ar16_ex32_size-32_epochs-5_collected-stats"
-
             # Load pre-trained weights except parameters in routers
-            if num_generalists > 0:
+            if True or num_generalists > 0:
                 print(f"thrunlab/{pre_trained_model_name}.pt")
                 state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
                 print(state_dict.keys())
@@ -225,7 +222,7 @@ def finetune(
                 if use_collect_stats:
                     model.activate_stats(model, True)
                     trainer.evaluate(train_dataset)
-            model.activate_mare_mlp(model)
+            # model.activate_mare_mlp(model)
 
             # Freeze model params
             for name, param in model.named_parameters():
@@ -258,6 +255,8 @@ def finetune(
     if do_evaluation:
         if save_stats:
             model.activate_stats(model, True)
+
+        model.activate_mare_mlp(model)
         trainer.evaluate()
         if save_stats:
             dir_path = os.path.join(
@@ -409,16 +408,16 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 5,
+                "num_epochs": 3,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": False,
             }
-            # create_model(
-            #     # run_name="dense_epochs5",
-            #     **common_args,
-            #     push_to_hub=True,
-            # )
+            create_model(
+                # run_name="dense_epochs5",
+                **common_args,
+                push_to_hub=True,
+            )
             # create_model(
             #     use_mare_mlp=False,
             #     **common_args,
@@ -432,7 +431,7 @@ if __name__ == "__main__":
             total_size = 3072
             expert_size = 16
             for fixed_cost in [
-                0.3,
+                0.2,
             ]:
                 for ratio in [0, 0.1, 0.25, 0.5, 0.75, 0.9]:
                     total_nums = int(total_size / expert_size * fixed_cost)
