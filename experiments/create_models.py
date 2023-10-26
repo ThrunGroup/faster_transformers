@@ -223,7 +223,6 @@ def finetune(
                     model.activate_stats(model, True)
                     trainer.evaluate(train_dataset)
                 model.activate_mare_mlp(model)
-            print("++++++ ", model.is_mare)
 
 
             # Freeze model params
