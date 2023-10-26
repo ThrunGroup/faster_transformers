@@ -104,7 +104,7 @@ class GLUEDataset(Dataset):
         # preds = np.array(
         #     preds[0][:, 0] > 1 / 2, dtype=float
         # )  # the output is sigmoid
-        preds = np.array(preds > 1 / 2, dtype=float)  # the output is sigmoid
+        preds = np.array(np.array(preds) > 1 / 2, dtype=float)  # the output is sigmoid
         # print("preds: ", preds)
         # print("labels: ", labels)
         # print("preds : ", preds)

@@ -150,7 +150,7 @@ class MLPSparsityCheck(T5DenseActDense):
             b = b[0, 0, :]
             idcs = torch.nonzero(b)
             topk_idcs = torch.topk(a, k=self.num_experts * self.expert_dim).indices
-            print(f"accuracy: {len(np.setdiff1d(idcs.detach().cpu(), topk_idcs.detach().cpu()))/len(idcs.detach().cpu())}")
+            print(f"accuracy: {len(np.intersect1d(idcs.detach().cpu(), topk_idcs.detach().cpu()))/len(idcs.detach().cpu())}")
             print(len(idcs))
         self.count += 1
         if self.is_mare is False:
