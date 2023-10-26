@@ -417,11 +417,11 @@ if __name__ == "__main__":
                 "test_batch_size": 64,
                 "gradient_checkpointing": False,
             }
-            create_model(
-                # run_name="dense_epochs5",
-                **common_args,
-                push_to_hub=True,
-            )
+            # create_model(
+            #     # run_name="dense_epochs5",
+            #     **common_args,
+            #     push_to_hub=True,
+            # )
             # create_model(
             #     use_mare_mlp=False,
             #     **common_args,
