@@ -236,14 +236,10 @@ def finetune(
                     param.requires_grad = False
             for module in model.transformer.modules():
                 if isinstance(module, MLPRouter):
-                    for name, param in module.transformer.named_parameters():
+                    for name, param in module.named_parameters():
                         print(f"{name} is unfrozen.")
                         param.requires_grad = True
-            for name, module in model.transformer.named_modules():
-                print(name)
-                if isinstance(module, MLPRouter):
-                    for name, param in module.transformer.named_parameters():
-                        print(f"{name} is {param.requires_grad}.")
+
     trainer.train()
     if do_evaluation:
         if save_stats:
