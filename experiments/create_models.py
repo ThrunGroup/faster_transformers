@@ -514,7 +514,8 @@ if __name__ == "__main__":
             #     dataset_name=dataset_type,
             #     num_epochs=num_epochs,
             # )
-            if not os.path.exists(f"{get_model_name(model_type, dataset_type, num_epochs)}.pt"):
+            print(f"{get_model_name(model_type, dataset_type, num_epochs)}.pt")
+            if False: # not os.path.exists(f"{get_model_name(model_type, dataset_type, num_epochs)}.pt"):
                 create_model(
                     # run_name="dense_epochs5",
                     **common_args,
