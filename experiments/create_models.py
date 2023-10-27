@@ -504,8 +504,8 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": num_epochs,
-                "train_batch_size": 64,
-                "test_batch_size": 64,
+                "train_batch_size": 32,
+                "test_batch_size": 32,
                 "gradient_checkpointing": False,
             }
             # Download model in local folder
