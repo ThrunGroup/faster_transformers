@@ -334,7 +334,6 @@ def get_model_name(
     use_mare_mlp: bool = False,
     run_name: str = "",
 ):
-    pre_trained_model_name = model_name
     # Build a Gated Attention model
     model_name = f"{model_type}_{dataset_name}"
     pre_trained_model_name = model_name
@@ -450,8 +449,8 @@ def download_model(
         model_type,
         dataset_name,
     )
-    model_name = get_model_name(
-        model_name=model_name, dataset_name=dataset_name, num_epochs=num_epochs
+    model_name, _ = get_model_name(
+        model_name=model_name, dataset_name=dataset_name, num_epochs=num_epochs,
     )
     if not os.path.exists(f"thrunlab/{model_name}.pt"):
         model.from_pretrained(f"thrunlab/{model_name}")
