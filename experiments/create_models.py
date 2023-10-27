@@ -316,6 +316,7 @@ def finetune(
 
     # Empty out gpu memory
     del trainer
+    del model
     gc.collect()
     torch.cuda.empty_cache()
     gc.collect()
