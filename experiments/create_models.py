@@ -433,8 +433,8 @@ if __name__ == "__main__":
         # MULTIRC,
         # WIC,
     ]
-    if hasattr(args, "datasets"):
-        dataset_types = args.datasets
+    # if hasattr(args, "datasets"):
+    #     dataset_types = args.datasets
 
     total_sizes = {
         T5: 3072,
