@@ -151,10 +151,10 @@ class MLPSparsityCheck(T5DenseActDense):
         # for name, param in self.router.named_parameters():
         #     print(name, ": ", param.grad)
         if self.is_mare is False:
-            hidden_states = self.wi(hidden_states)
             routing_probs = self.router(
                 hidden_states
             )  # shape: ..., d_ff - num_all_rounders * expert_dim
+            hidden_states = self.wi(hidden_states)
         else:
             routing_probs = self.router(
                 hidden_states
