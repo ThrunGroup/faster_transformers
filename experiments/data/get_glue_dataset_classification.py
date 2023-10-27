@@ -74,12 +74,12 @@ class GLUEDataset(Dataset):
             pickle.dump(tokenized_dataset, f)
         print("Preprocessed and saved data to disk.")
 
-        if len(dataset.column_names.keys()) == 2:
+        if len(tokenized_dataset.column_names.keys()) == 2:
             train_val_dataset = tokenized_dataset["train"].train_test_split(0.2, seed=0)
             train_dataset = train_val_dataset["train"]
             val_dataset = train_val_dataset["test"]
             test_dataset = tokenized_dataset["validation"]
-        elif len(dataset.column_names.keys()) == 3:
+        elif len(tokenized_dataset.column_names.keys()) == 3:
             train_dataset = tokenized_dataset["train"]
             val_dataset = tokenized_dataset["validation"]
             test_dataset = tokenized_dataset["test"]
