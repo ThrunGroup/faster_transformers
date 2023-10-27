@@ -56,7 +56,7 @@ WIC = "wic"
 BOOLQ = "boolq"
 MULTIRC = "multirc"
 AXB = "axb"
-SUPERGLUE = [WIC, BOOLQ, MULTIRC]
+SUPERGLUE = [WIC, BOOLQ, MULTIRC, AXB]
 
 # Number of blocks
 NUM_BLOCKS_GPT2 = 12
