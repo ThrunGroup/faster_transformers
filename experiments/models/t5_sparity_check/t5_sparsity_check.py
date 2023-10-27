@@ -182,9 +182,8 @@ class MLPSparsityCheck(T5DenseActDense):
             # mask[..., self.mare_idcs] = torch.finfo(mask.dtype).max
             # mask = F.sigmoid(mask)
             hidden_states = self.wi(hidden_states)
+            hidden_states = hidden_states * mask
 
-            # mask = mask.unsqueeze(-1)
-            # hidden_states = F.linear(hidden_states, self.wi.weight * mask)
         if self.dummy:
             self.routing_probs = routing_probs
             # activation = (self.act(hidden_states) != 0).to(
@@ -208,7 +207,6 @@ class MLPSparsityCheck(T5DenseActDense):
         #     print(len(idcs))
         # self.count += 1
 
-            hidden_states = hidden_states * mask
         hidden_states = self.act(hidden_states)
 
         # Collecting stats
