@@ -442,7 +442,7 @@ if __name__ == "__main__":
                 "num_epochs": 5,
                 "train_batch_size": 16,
                 "test_batch_size": 16,
-                "gradient_checkpointing": True,
+                "gradient_checkpointing": False,
             }
             if dataset_type != SST2:
                 create_model(
