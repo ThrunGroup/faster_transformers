@@ -92,6 +92,7 @@ class MLPSparsityCheck(T5DenseActDense):
             "ar, exp, dim: ", self.num_all_rounders, self.num_experts, self.expert_dim
         )
         print("counted_idx:", self.counts_per_idx)
+        self.deactivate_mare()
 
     def deactivate_mare(self):
         self.is_mare = False
