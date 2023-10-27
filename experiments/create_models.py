@@ -105,6 +105,14 @@ class MARETrainer(Trainer):
         # # get penalty term
         # lambda_coeff = 1
         # regularizer = lambda_coeff * self.compute_penalty(model)
+
+        # alpha = 0.1
+        # penalty = self.compute_penalty(model)
+        # loss = F.binary_cross_entropy(logits, labels)
+        #
+        # if penalty:
+        #     loss = loss + alpha * penalty
+
         if self.train_router:
             loss = self.compute_penalty(model)
         else:
@@ -204,11 +212,11 @@ def finetune(
     early_stopping = EarlyStoppingCallback(
         early_stopping_patience=4, early_stopping_threshold=0.001
     )
-    # if use_mare_mlp:
-    #     t = MARETrainer
-    # else:
-    #     t = CustomTrainer
-    t = CustomTrainer
+    if use_mare_mlp:
+        t = MARETrainer
+    else:
+        t = CustomTrainer
+    # t = CustomTrainer
     trainer = t(
         # trainer = Trainer(
         model=model,
@@ -250,11 +258,11 @@ def finetune(
             model.activate_mare_mlp(model)
 
             # Freeze model params
-            # for name, param in model.named_parameters():
-            #     if "router" not in name:
-            #         param.requires_grad = False
-            #     else:
-            #         print(name)
+            for name, param in model.named_parameters():
+                if "router" not in name:
+                    param.requires_grad = False
+                else:
+                    print(name)
             # for (
             #     name,
             #     module,
@@ -470,7 +478,7 @@ if __name__ == "__main__":
     dataset_types = [
         # BILLSUM,
         #COLA,
-        SST2,
+        COLA,
         # BOOLQ,
         # MULTIRC,
         # WIC,
@@ -494,7 +502,7 @@ if __name__ == "__main__":
                 "num_epochs": num_epochs,
                 "train_batch_size": 64,
                 "test_batch_size": 64,
-                "gradient_checkpointing": True,
+                "gradient_checkpointing": False,
             }
             # Download model in local folder
             # download_model(
@@ -521,9 +529,9 @@ if __name__ == "__main__":
             total_size = total_sizes[model_type]
             expert_size = 16
             for fixed_cost in [
-                0.05, 0.2, 0.5,
+                0.2, 0.3,
             ]:
-                for ratio in [0, 0.25, 0.5, 0.75, 0.9, 1.0]:
+                for ratio in [0,  0.5, 0.9, 1.0]:
                     total_nums = int(total_size / expert_size * fixed_cost)
                     total_nums += total_nums % 2
                     num_generalists = int(total_nums * ratio) + int(

@@ -18,7 +18,7 @@ class MLPRouter(nn.Module):
             nn.Tanh(),
             nn.Linear(low_rank, output_dims),
             # nn.Hardtanh(0, 1),
-            nn.Sigmoid()
+            nn.ReLU()
         )
 
     def forward(self, x):
@@ -180,7 +180,10 @@ class MLPSparsityCheck(T5DenseActDense):
             # hidden_states = F.linear(hidden_states, self.wi.weight * mask)
             if False:
                 self.routing_probs = routing_probs
-                activation = (self.act(hidden_states) != 0).to(
+                # activation = (self.act(hidden_states) != 0).to(
+                #     routing_probs.dtype
+                # )
+                activation = self.act(hidden_states).to(
                     routing_probs.dtype
                 )
                 self.activation = torch.index_select(
