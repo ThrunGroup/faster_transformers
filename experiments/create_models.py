@@ -472,7 +472,7 @@ if __name__ == "__main__":
             total_size = total_sizes[model_type]
             expert_size = 16
             for fixed_cost in [
-                0.05, 0.1, 0.2, 0.5,
+                0.2, 0.5,
             ]:
                 for ratio in [0, 0.25, 0.5, 0.75, 0.9, 1.0]:
                     total_nums = int(total_size / expert_size * fixed_cost)
