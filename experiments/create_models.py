@@ -253,11 +253,11 @@ def finetune(
                 # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
 
             # Collect Stats
-            if use_collect_stats:
-                model.activate_stats(model, True)
-                trainer.train_router = False
-                print(trainer.evaluate(train_dataset, metric_key_prefix="train"))
-                trainer.train_router = True
+            # if use_collect_stats:
+            #     model.activate_stats(model, True)
+            #     trainer.train_router = False
+            #     print(trainer.evaluate(train_dataset, metric_key_prefix="train"))
+            #     trainer.train_router = True
             model.activate_mare_mlp(model)
             # if True or not use_distillation:
             #     model.activate_mare_mlp(model)
