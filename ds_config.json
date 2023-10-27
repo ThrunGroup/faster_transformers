@@ -5,17 +5,17 @@
             "lr": "auto",
             "betas": "auto",
             "eps": "auto",
-            "weight_decay": "auto"
-        }
+            "weight_decay": "auto",
+        },
     },
-   "scheduler": {
-         "type": "WarmupLR",
-         "params": {
-             "warmup_min_lr": "auto",
-             "warmup_max_lr": "auto",
-             "warmup_num_steps": "auto"
-         }
-     },
+    "scheduler": {
+        "type": "WarmupLR",
+        "params": {
+            "warmup_min_lr": "auto",
+            "warmup_max_lr": "auto",
+            "warmup_num_steps": "auto",
+        },
+    },
     "zero_optimization": {
         "stage": 2,
         "allgather_partitions": true,
@@ -25,10 +25,25 @@
         "reduce_bucket_size": 2e8,
         "contiguous_gradients": true,
         "round_robin_gradients": true,
-        "cpu_offload": true
+        "cpu_offload": true,
+        "offload_param": {
+            "device": "[cpu|nvme]",
+            "nvme_path": "/local_nvme",
+            "pin_memory": [true | false],
+            "buffer_count": 5,
+            "buffer_size": 1e8,
+            "max_in_cpu": 1e9,
+        },
+        "offload_optimizer": {
+            "device": "[cpu|nvme]",
+            "nvme_path": "/local_nvme",
+            "pin_memory": [true | false],
+            "buffer_count": 4,
+            "fast_init": false,
+        },
     },
     "gradient_accumulation_steps": "auto",
     "gradient_clipping": "auto",
     "train_batch_size": "auto",
-    "train_micro_batch_size_per_gpu": "auto"
+    "train_micro_batch_size_per_gpu": "auto",
 }
