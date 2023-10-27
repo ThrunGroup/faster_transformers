@@ -460,7 +460,7 @@ if __name__ == "__main__":
             #     num_experts=48,
             #     expert_size=32,
             # )
-            total_size = 4096
+            total_size = total_sizes[model_type]
             expert_size = 16
             for fixed_cost in [
                 0.05, 0.1, 0.2, 0.5,
