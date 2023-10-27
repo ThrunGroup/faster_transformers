@@ -84,12 +84,12 @@ class MARETrainer(Trainer):
                 if loss is None:
                     if mlp_layer.routing_probs is None:
                         continue
-                    loss = F.binary_cross_entropy(
+                    loss = F.mse_loss(
                         mlp_layer.routing_probs,
                         mlp_layer.activation,
                     )
                 else:
-                    loss += F.binary_cross_entropy(
+                    loss += F.mse_loss(
                         mlp_layer.routing_probs,
                         mlp_layer.activation,
                     )
@@ -118,7 +118,7 @@ class MARETrainer(Trainer):
         if self.train_router:
             loss = self.compute_penalty(model)
         else:
-            loss = F.mse_loss(logits, labels)  # @JAy: fix it
+            loss = F.binary_cross_entropy(logits, labels)
         # loss = F.binary_cross_entropy(logits, labels)
         # loss = 1 / 20 * self.compute_penalty(model) + F.binary_cross_entropy(
         #     logits, labels
