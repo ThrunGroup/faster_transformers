@@ -198,7 +198,7 @@ def finetune(
         report_to="wandb",
         run_name=model_name,
         # for memory issues
-        gradient_accumulation_steps=2,
+        gradient_accumulation_steps=4,
         # deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
@@ -504,8 +504,8 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": num_epochs,
-                "train_batch_size": 16,
-                "test_batch_size": 32,
+                "train_batch_size": 4,
+                "test_batch_size": 8,
                 "gradient_checkpointing": False,
             }
             # Download model in local folder
