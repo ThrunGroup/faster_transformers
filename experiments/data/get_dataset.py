@@ -12,6 +12,7 @@ from utils.constants import (
     SQUAD,
     OPENWEBTEXT,
     SST2,
+    RTE,
     SAMSUM,
     GLUE,
     SUPERGLUE,

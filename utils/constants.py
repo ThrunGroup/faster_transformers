@@ -49,7 +49,8 @@ QNLI = "qnli"
 SST2 = "sst2"
 COLA = "cola"
 STSB = "stsb"
-GLUE = [QNLI, SST2, COLA, STSB]
+RTE = "rte"
+GLUE = [QNLI, SST2, COLA, STSB, RTE]
 
 # Super GLUE
 WIC = "wic"

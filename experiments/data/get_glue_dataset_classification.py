@@ -11,6 +11,7 @@ from utils.constants import (
     QNLI,
     SST2,
     COLA,
+    RTE,
     WIC,
     MULTIRC,
     BOOLQ,
@@ -73,10 +74,16 @@ class GLUEDataset(Dataset):
                 pickle.dump(tokenized_dataset, f)
             print("Preprocessed and saved data to disk.")
 
-        train_val_dataset = tokenized_dataset["train"].train_test_split(0.2)
-        train_dataset = train_val_dataset["train"]
-        val_dataset = train_val_dataset["test"]
-        test_dataset = tokenized_dataset["validation"]
+            if len(dataset.column_names.keys()) == 2:
+                train_val_dataset = tokenized_dataset["train"].train_test_split(0.2, seed=0)
+                train_dataset = train_val_dataset["train"]
+                val_dataset = train_val_dataset["test"]
+                test_dataset = tokenized_dataset["validation"]
+            elif len(dataset.column_names.keys()) == 3:
+                train_dataset = dataset["train"]
+                val_dataset = dataset["validation"]
+                test_dataset = dataset["test"]
+
 
         return train_dataset, val_dataset, test_dataset
 
@@ -159,6 +166,14 @@ class GLUEDataset(Dataset):
         elif self.dataset_type == AXB:
             input_text = (
                     "Does the first sentence entail second sentence?"
+                    + "\nFirst sentence: "
+                    + example["sentence1"]
+                    + "\nSecond sentence: "
+                    + example["sentence2"]
+            )
+        elif self.dataset_type == RTE:
+            input_text = (
+                    "Is the first sentence equivalent to second sentence?"
                     + "\nFirst sentence: "
                     + example["sentence1"]
                     + "\nSecond sentence: "
