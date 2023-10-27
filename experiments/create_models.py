@@ -190,10 +190,11 @@ def finetune(
     early_stopping = EarlyStoppingCallback(
         early_stopping_patience=10, early_stopping_threshold=0.001
     )
-    if use_mare_mlp:
-        t = MARETrainer
-    else:
-        t = CustomTrainer
+    # if use_mare_mlp:
+    #     t = MARETrainer
+    # else:
+    #     t = CustomTrainer
+    t = CustomTrainer
     trainer = t(
         # trainer = Trainer(
         model=model,
@@ -238,11 +239,11 @@ def finetune(
                 trainer.train_router = True
 
             # Freeze model params
-            for name, param in model.named_parameters():
-                if "router" not in name:
-                    param.requires_grad = False
-                else:
-                    print(name)
+            # for name, param in model.named_parameters():
+            #     if "router" not in name:
+            #         param.requires_grad = False
+            #     else:
+            #         print(name)
             # for (
             #     name,
             #     module,
