@@ -26,20 +26,13 @@
         "contiguous_gradients": true,
         "round_robin_gradients": true,
         "cpu_offload": true,
-        "offload_param": {
-            "device": "[cpu|nvme]",
-            "nvme_path": "/local_nvme",
-            "pin_memory": [true | false],
-            "buffer_count": 5,
-            "buffer_size": 1e8,
-            "max_in_cpu": 1e9,
-        },
         "offload_optimizer": {
-            "device": "[cpu|nvme]",
-            "nvme_path": "/local_nvme",
-            "pin_memory": [true | false],
-            "buffer_count": 4,
-            "fast_init": false,
+            "device": "cpu",
+            "pin_memory": true
+        },
+        "offload_param": {
+            "device": "cpu",
+            "pin_memory": true
         },
     },
     "gradient_accumulation_steps": "auto",
