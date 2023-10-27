@@ -204,7 +204,7 @@ def finetune(
         tokenizer=tokenizer,
         data_collator=data_collator,
         callbacks=[early_stopping],
-        # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         compute_metrics=compute_metrics,
     )
 
@@ -422,7 +422,7 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [T5_3B]
+    model_types = [T5_LARGE]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
@@ -448,7 +448,7 @@ if __name__ == "__main__":
             #     num_experts=48,
             #     expert_size=32,
             # )
-            total_size = 16384
+            total_size = 4096
             expert_size = 16
             for fixed_cost in [
                 0.05, 0.1, 0.2, 0.5,
