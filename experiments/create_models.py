@@ -419,17 +419,16 @@ def create_model(
 
 if __name__ == "__main__":
     torch.set_printoptions(threshold=300)
-    parser = argparse.ArgumentParser(description="")
-    parser.add_argument("--datasets", nargs='+', type=str, help="A list of datasets")
-
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser(description="")
+    # parser.add_argument("--datasets", nargs='+', type=str, help="A list of datasets")
+    #
+    # args = parser.parse_args()
 
 
     dataset_types = [
         # BILLSUM,
         #COLA,
         SST2,
-        BILLSUM,
         # BOOLQ,
         # MULTIRC,
         # WIC,
