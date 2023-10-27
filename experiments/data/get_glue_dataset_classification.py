@@ -74,6 +74,7 @@ class GLUEDataset(Dataset):
                 pickle.dump(tokenized_dataset, f)
             print("Preprocessed and saved data to disk.")
 
+            print(tokenized_dataset)
             if len(dataset.column_names.keys()) == 2:
                 train_val_dataset = tokenized_dataset["train"].train_test_split(0.2, seed=0)
                 train_dataset = train_val_dataset["train"]
