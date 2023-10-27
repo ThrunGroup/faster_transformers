@@ -50,8 +50,10 @@ def get_model(model_type, dataset_type):
 
     # get model
     if "t5" in model_type:
-        model = T5ForConditionalGeneration
-        model = T5ForSequenceClassification
+        if dataset_type in [BILLSUM]:
+            model = T5ForConditionalGeneration
+        else:
+            model = T5ForSequenceClassification
     elif dataset_type in [BILLSUM, SAMSUM]:
         model = AutoModelForSeq2SeqLM
         if GPT2 in model_type:
