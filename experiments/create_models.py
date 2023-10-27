@@ -215,11 +215,11 @@ def finetune(
     early_stopping = EarlyStoppingCallback(
         early_stopping_patience=4, early_stopping_threshold=0.001
     )
-    if use_mare_mlp:
-        t = MARETrainer
-    else:
-        t = CustomTrainer
-    # t = CustomTrainer
+    # if use_mare_mlp:
+    #     t = MARETrainer
+    # else:
+    #     t = CustomTrainer
+    t = CustomTrainer
     trainer = t(
         # trainer = Trainer(
         model=model,
@@ -253,11 +253,11 @@ def finetune(
                 # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
 
             # Collect Stats
-            # if use_collect_stats:
-            #     model.activate_stats(model, True)
-            #     trainer.train_router = False
-            #     print(trainer.evaluate(train_dataset, metric_key_prefix="train"))
-            #     trainer.train_router = True
+            if use_collect_stats:
+                model.activate_stats(model, True)
+                trainer.train_router = False
+                print(trainer.evaluate(train_dataset, metric_key_prefix="train"))
+                trainer.train_router = True
             model.activate_mare_mlp(model)
             # if True or not use_distillation:
             #     model.activate_mare_mlp(model)
