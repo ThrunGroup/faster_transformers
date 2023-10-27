@@ -46,8 +46,8 @@ class CustomTrainer(Trainer):
 
         logits = outputs.get("logits")[:, 0]
         labels = labels.to(logits.dtype)
-        print(logits)
-        print(labels)
+        # print(logits)
+        # print(labels)
 
         # Check if there are any NaN values in logits
         if torch.isnan(logits).any():
@@ -59,7 +59,7 @@ class CustomTrainer(Trainer):
         else:
             loss = F.binary_cross_entropy(logits, labels)
 
-        print(loss)
+        # print(loss)
 
         return (loss, outputs) if return_outputs else loss
 

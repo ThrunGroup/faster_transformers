@@ -168,6 +168,7 @@ class MLPSparsityCheck(T5DenseActDense):
                 k=K,
                 dim=-1,
             )
+            self.non_mare_idcs = self.non_mare_idcs.to(device=topk_idcs)
             topk_idcs = self.non_mare_idcs[topk_idcs]
             mask[..., self.mare_idcs] = 1
             mask = mask.scatter(-1, topk_idcs, topk_values)
