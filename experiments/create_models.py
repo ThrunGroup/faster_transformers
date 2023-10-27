@@ -450,10 +450,10 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 0,
-                "train_batch_size": 128,
-                "test_batch_size": 128,
-                "gradient_checkpointing": True,
+                "num_epochs": 5,
+                "train_batch_size": 64,
+                "test_batch_size": 64,
+                "gradient_checkpointing": False,
             }
             if dataset_type != False:
                 create_model(
