@@ -258,8 +258,9 @@ def finetune(
                 trainer.train_router = False
                 print(trainer.evaluate(train_dataset, metric_key_prefix="train"))
                 trainer.train_router = True
-            if True or not use_distillation:
-                model.activate_mare_mlp(model)
+            model.activate_mare_mlp(model)
+            # if True or not use_distillation:
+            #     model.activate_mare_mlp(model)
 
             # Freeze model params
             for name, param in model.named_parameters():
