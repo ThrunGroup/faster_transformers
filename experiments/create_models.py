@@ -494,18 +494,18 @@ if __name__ == "__main__":
                 "test_batch_size": 32,
                 "gradient_checkpointing": False,
             }
-            # Download model in local folder
-            download_model(
-                model_name=model_type,
-                dataset_name=dataset_type,
-                num_epochs=num_epochs,
-            )
-            # if dataset_type != SST2:
-            #     create_model(
-            #         # run_name="dense_epochs5",
-            #         **common_args,
-            #         push_to_hub=True,
-            #     )
+            # # Download model in local folder
+            # download_model(
+            #     model_name=model_type,
+            #     dataset_name=dataset_type,
+            #     num_epochs=num_epochs,
+            # )
+            if dataset_type != SST2:
+                create_model(
+                    # run_name="dense_epochs5",
+                    **common_args,
+                    push_to_hub=True,
+                )
             # create_model(
             #     use_mare_mlp=False,
             #     **common_args,
