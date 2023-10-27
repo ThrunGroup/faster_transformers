@@ -15,7 +15,7 @@ class MLPRouter(nn.Module):
         super().__init__()
         self.router = nn.Sequential(
             nn.Linear(input_dims, low_rank),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(low_rank, output_dims),
             # nn.Hardtanh(0, 1),
             nn.Sigmoid()
@@ -51,7 +51,7 @@ class MLPSparsityCheck(T5DenseActDense):
         self.router = MLPRouter(
             config.d_model,
             config.d_ff - num_all_rounders * expert_dim,
-            int(expert_dim * num_experts/2),
+            int(expert_dim * (num_all_rounders + num_experts)/2),
         )
         self.router.to(self.wo.weight.dtype)
         self.routing_probs = None
