@@ -3,3 +3,5 @@ experiments/checkpoints
 wandb
 **/__pycache__/
 thrunlab/*
+*pkl
+ckpt/*

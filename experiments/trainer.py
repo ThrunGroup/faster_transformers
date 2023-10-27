@@ -14,7 +14,9 @@ import torch
 
 from data.get_dataset import get_dataset
 from models.build_model import build_model
-from models.t5_sparity_check.t5_sparsity_check import MLPRouter
+from experiments.models.t5_sparity_check.t5_sparsity_check_original import (
+    MLPRouter,
+)
 from utils.constants import (
     # Models
     GPT2,
@@ -61,14 +63,17 @@ class MARETrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super(MARETrainer, self).__init__(*args, **kwargs)
         self.steps = 0
-        
+
     def compute_penalty(self, model):
         loss = None
         self.steps += 1
         count = 0
 
         for is_decoder, network in enumerate(
-            [model.transformer.encoder, model.transformer.decoder]
+            [
+                model.transformer.encoder,
+                model.transformer.decoder,
+            ]
         ):
             for block_idx, block in enumerate(network.block):
                 if is_decoder:
@@ -79,12 +84,11 @@ class MARETrainer(Trainer):
                         continue
                     mlp_layer = block.layer[1].DenseReluDense
 
-
                 if mlp_layer.__class__.__name__ != "MLPSparsityCheck":
                     continue
 
                 count += 1
-                
+
                 if loss is None:
                     if mlp_layer.routing_probs is None:
                         continue

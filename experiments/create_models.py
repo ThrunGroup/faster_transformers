@@ -14,7 +14,9 @@ import torch
 
 from data.get_dataset import get_dataset
 from models.build_model import build_model
-from models.t5_sparity_check.t5_sparsity_check import MLPRouter
+from experiments.models.t5_sparity_check.t5_sparsity_check_original import (
+    MLPRouter,
+)
 from trainer import MARETrainer, CustomTrainer
 from utils.constants import (
     # Models
@@ -92,6 +94,7 @@ def finetune(
         save_strategy="steps",
         save_steps=10000,
         learning_rate=5e-5,
+        max_steps=10,
         warmup_steps=20,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
@@ -106,8 +109,8 @@ def finetune(
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
-        # bf16=True,
-        fp16=True,
+        bf16=True,
+        # fp16=True,
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
         push_to_hub=True,
@@ -116,7 +119,7 @@ def finetune(
     )
 
     early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=5, early_stopping_threshold=0.03
+        early_stopping_patience=4, early_stopping_threshold=0.03
     )
 
     # trainer_class = MARETrainer if use_mare_mlp else CustomTrainer
@@ -144,17 +147,16 @@ def finetune(
         elif use_mare_mlp:
             # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
             print(f"thrunlab/{pre_trained_model_name}")
-            state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
-            
-            model.load_state_dict(
-                state_dict,
-                strict=False,
-            )
+            # state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
+
+            # model.load_state_dict(
+            #     state_dict,
+            #     strict=False,
+            # )
 
             # Collect Stats
             if use_collect_stats:
                 model.activate_stats(model, True)
-                trainer.deepspeed_zero_optimization = False
                 trainer.evaluate(train_dataset)
             model.activate_mare_mlp(model)
 
@@ -241,7 +243,7 @@ def create_model(
     else:
         model_name += f"_dense"
 
-    model_name += f"_epochs-{num_epochs}"
+    model_name += f"_epochs-{num_epochs}_check_speed"
 
     if use_mare_mlp:
         pre_trained_model_name += (
@@ -298,8 +300,8 @@ if __name__ == "__main__":
     dataset_types = [
         # BILLSUM,
         # SST2,
-        # COLA,
-        QNLI,
+        COLA,
+        # QNLI,
         # BOOLQ,
         # MULTIRC,
         # WIC,
@@ -317,34 +319,34 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 6,
+                "num_epochs": 1,
                 "train_batch_size": 16,
-                "test_batch_size": 32,
-                "gradient_checkpointing": False,
+                "test_batch_size": 16,
+                "gradient_checkpointing": True,
             }
-            create_model(
-                # run_name="dense_epochs5",
-                **common_args,  
-                push_to_hub=True,
-            )
+            # create_model(
+            #     # run_name="dense_epochs5",
+            #     **common_args,
+            #     push_to_hub=True,
+            # )
+
+            # continue
 
             # continue
             total_size = total_sizes[model_type]
             expert_size = 16
             fixed_costs = [
                 0.05,
-                # 0.01,
                 0.1,
                 0.2,
                 # 0.3,
                 0.5,
             ]
             generalist_ratios = [
-                0.0,
-                0.25,
-                0.5,
-                # 0.75,
-                0.9,
+                # 0.0,
+                # 0.25,
+                # 0.5,
+                # 0.9,
                 1.0,
             ]
 
@@ -363,7 +365,7 @@ if __name__ == "__main__":
                         **common_args,
                         save_stats=False,
                         use_collect_stats=True,
-                        push_to_hub=True,
+                        push_to_hub=False,
                         num_generalists=num_generalists,
                         num_experts=num_experts,
                         expert_size=expert_size,

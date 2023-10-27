@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import gc
 
 
-
 class MLPRouter(nn.Module):
     def __init__(self, input_dims, output_dims, low_rank: int = 64):
         super().__init__()
@@ -18,7 +17,7 @@ class MLPRouter(nn.Module):
             nn.Tanh(),
             nn.Linear(low_rank, output_dims),
             # nn.Hardtanh(0, 1),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
 
     def forward(self, x):
@@ -47,18 +46,19 @@ class MLPSparsityCheck(T5DenseActDense):
 
         self.num_zeros = 0
         self.num_params = 0
-        self.counts_per_idx = nn.Parameter(
-            torch.zeros(config.d_ff), requires_grad=False
-        )
+        self.counts_per_idx = torch.zeros(self.config.d_ff)
         self.router = MLPRouter(
             config.d_model,
             config.d_ff - num_all_rounders * expert_dim,
-            int(expert_dim * (num_all_rounders + num_experts)/2),
+            int(expert_dim * (num_all_rounders + num_experts) / 2),
         )
         self.router.to(self.wo.weight.dtype)
         self.routing_probs = None
         self.activation = None
         self.count: int = 0
+
+        self.ar_wi = nn.Linear(*self.wi.weight.T.shape)
+        self.ar_wo = nn.Linear(*self.wo.weight.T.shape)
 
         print("ar, exp, dim: ", num_all_rounders, num_experts, expert_dim)
 
@@ -74,7 +74,7 @@ class MLPSparsityCheck(T5DenseActDense):
     def init_stats(self):
         self.num_zeros = 0
         self.num_params = 0
-        self.counts_per_idx *= 0
+        self.counts_per_idx = torch.zeros(self.config.d_ff)
 
     def activate_mare(self):
         self.is_mare = True
@@ -90,17 +90,22 @@ class MLPSparsityCheck(T5DenseActDense):
         self.non_mare_idcs = torch.tensor(
             np.setdiff1d(self.non_mare_idcs, self.mare_idcs.cpu(), True),
             device=self.mare_idcs.device,
-            dtype=torch.int64,
         )
         self.is_collecting_stats = False  # Turning off collecting stats
-        print(self.mare_idcs)
-        print(
-            "ar, exp, dim: ",
-            self.num_all_rounders,
-            self.num_experts,
-            self.expert_dim,
-        )
-        print("counted_idx:", self.counts_per_idx)
+
+        # print("self.mare_idcs: ", self.mare_idcs.shape)
+        if len(self.mare_idcs) != 0:
+            # self.ar_wi.weight = self.wi.weight[self.mare_idcs]
+            # self.ar_wo.weight = self.wo.weight[:, self.mare_idcs]
+            C, D = self.wi.weight.T.shape
+            num_ars = len(self.mare_idcs)
+            self.ar_wi = nn.Linear(C, num_ars).to(self.wi.weight.device)
+            self.ar_wo = nn.Linear(num_ars, C).to(self.wi.weight.device)
+
+            # print(self.ar_wi.weight.device)
+        else:
+            self.ar_wi = None
+            self.ar_wo = None
 
     def deactivate_mare(self):
         self.is_mare = False
@@ -142,55 +147,78 @@ class MLPSparsityCheck(T5DenseActDense):
         plt.show()
 
     def forward(self, hidden_states):
-        self.count += 1
+        B, T, C = hidden_states.shape
+        ar_hidden_states = None
 
-        if self.is_mare is False:
-            hidden_states = self.wi(hidden_states)
-        else:
-            routing_probs = self.router(
-                hidden_states
-            )  # shape: ..., d_ff - num_all_rounders * expert_dim
-            mask = torch.zeros(
-                hidden_states.shape[:-1] + (self.config.d_ff,),
-                dtype=routing_probs.dtype,
-                device=routing_probs.device,
-            )
+        # experts
+        if self.num_experts:
             K = self.num_experts * self.expert_dim
+
+            router_probs = self.router(hidden_states)  # (B, T, 4D)
             topk_values, topk_idcs = torch.topk(
-                routing_probs,
+                router_probs,
                 k=K,
                 dim=-1,
-            )
-            self.non_mare_idcs = self.non_mare_idcs.to(device=topk_idcs.device)
-            topk_idcs = self.non_mare_idcs[topk_idcs]
-            mask[..., self.mare_idcs] = 1
-            mask = mask.scatter(-1, topk_idcs, topk_values)
-            hidden_states = self.wi(hidden_states)
-            
-            if hidden_states.requires_grad:
-                self.routing_probs = routing_probs
-                activation = (self.act(hidden_states) != 0).to(
-                    routing_probs.dtype
-                )
-                self.activation = torch.index_select(
-                    activation, 2, self.non_mare_idcs
-                )
+            )  # (B, T, E)
 
-            hidden_states = hidden_states * mask
-        hidden_states = self.act(hidden_states)
+            # get first intermediate results first
+            DI, DO = self.wi.weight.T.shape
 
-        # Collecting stats
-        if self.is_collecting_stats is True:
-            self.collect_stats(hidden_states)
-    
-        hidden_states = self.dropout(hidden_states)
-        if (
-            isinstance(self.wo.weight, torch.Tensor)
-            and hidden_states.dtype != self.wo.weight.dtype
-            and self.wo.weight.dtype != torch.int8
-        ):
-            hidden_states = hidden_states.to(self.wo.weight.dtype)
-        hidden_states = self.wo(hidden_states)
+            wi_selected = torch.gather(
+                self.wi.weight.T.unsqueeze(0)
+                .unsqueeze(0)
+                .expand(B, T, -1, -1),  # (B_, T_, DI, DO)
+                -1,
+                topk_idcs.unsqueeze(-2).expand(
+                    -1, -1, DI, -1
+                ),  # (B, T, DI_, K)
+            ).view(
+                B, T, -1, K
+            )  # (B, T, C, K)
+
+            hidden_states = torch.einsum(
+                "btca,btce->btae", hidden_states[:, :, :, None], wi_selected
+            ).reshape(B, T, K)
+            hidden_states = self.act(hidden_states)
+            hidden_states = hidden_states * topk_values
+            #  * K  # (B, T, K)
+            hidden_states = self.dropout(hidden_states)
+            if (
+                isinstance(self.wo.weight, torch.Tensor)
+                and hidden_states.dtype != self.wo.weight.dtype
+                and self.wo.weight.dtype != torch.int8
+            ):
+                hidden_states = hidden_states.to(self.wo.weight.dtype)
+
+            # get final intermediates results
+            DI, DO = self.wo.weight.T.shape
+
+            wo_selected = torch.gather(
+                self.wo.weight.T.unsqueeze(0)
+                .unsqueeze(0)
+                .expand(B, T, -1, -1),  # (B_, T_, DI, DO)
+                -2,
+                topk_idcs.unsqueeze(-1).expand(
+                    -1, -1, -1, DO
+                ),  # (B, T, K, DO_)
+            ).view(
+                B, T, K, -1
+            )  # (B, T, K, C)
+
+            hidden_states = torch.einsum(
+                "btea,btec->btac", hidden_states[:, :, :, None], wo_selected
+            ).reshape(B, T, -1)
+
+        # all_rounders
+        if hidden_states.requires_grad == True and self.num_all_rounders:
+            ar_hidden_states = hidden_states @ self.ar_wi.weight.T
+            ar_hidden_states = self.act(ar_hidden_states)
+            ar_hidden_states = ar_hidden_states @ self.ar_wo.weight.T
+            # print("ar_hidden_states: ", ar_hidden_states.shape, (B, T, C))
+            if self.num_experts == 0:
+                return ar_hidden_states
+            else:
+                hidden_states = hidden_states + ar_hidden_states
 
         return hidden_states
 
