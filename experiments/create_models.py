@@ -426,8 +426,8 @@ if __name__ == "__main__":
 
 
     dataset_types = [
-        SQUAD,
-        #COLA,
+        # SQUAD,
+        COLA,
         # SST2,
         # BOOLQ,
         # MULTIRC,
