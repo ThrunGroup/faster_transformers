@@ -11,6 +11,7 @@ import copy
 
 import gc
 import torch
+import argparse
 
 from data.get_dataset import get_dataset
 from models.build_model import build_model
@@ -418,6 +419,12 @@ def create_model(
 
 if __name__ == "__main__":
     torch.set_printoptions(threshold=300)
+    parser = argparse.ArgumentParser(description="")
+    parser.add_argument("--datasets", nargs='+', type=str, help="A list of datasets")
+
+    args = parser.parse_args()
+
+
     dataset_types = [
         # BILLSUM,
         #COLA,
@@ -427,6 +434,8 @@ if __name__ == "__main__":
         # MULTIRC,
         # WIC,
     ]
+    if hasattr(args, "datasets"):
+        dataset_types = args.datasets
 
     total_sizes = {
         T5: 3072,
@@ -443,7 +452,7 @@ if __name__ == "__main__":
                 "num_epochs": 5,
                 "train_batch_size": 128,
                 "test_batch_size": 128,
-                "gradient_checkpointing": False,
+                "gradient_checkpointing": True,
             }
             if dataset_type != SST2:
                 create_model(
