@@ -519,6 +519,7 @@ if __name__ == "__main__":
             total_size = total_sizes[model_type]
             expert_size = 16
             for fixed_cost in [
+                0.05,
                 0.2,
                 0.5,
             ]:
