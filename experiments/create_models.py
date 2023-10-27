@@ -19,6 +19,7 @@ from models.t5_sparity_check.t5_sparsity_check import MLPRouter
 from utils.constants import (
     # Models
     GPT2,
+    AXB,
     GPT2_XL,
     T5,
     T5_LARGE,
@@ -478,7 +479,7 @@ if __name__ == "__main__":
     dataset_types = [
         # BILLSUM,
         #COLA,
-        COLA,
+        AXB,
         # BOOLQ,
         # MULTIRC,
         # WIC,
@@ -510,12 +511,12 @@ if __name__ == "__main__":
             #     dataset_name=dataset_type,
             #     num_epochs=num_epochs,
             # )
-            # if True or dataset_type != SST2:
-            #     create_model(
-            #         # run_name="dense_epochs5",
-            #         **common_args,
-            #         push_to_hub=True,
-            #     )
+            if True or dataset_type != SST2:
+                create_model(
+                    # run_name="dense_epochs5",
+                    **common_args,
+                    push_to_hub=True,
+                )
             # create_model(
             #     use_mare_mlp=False,
             #     **common_args,
