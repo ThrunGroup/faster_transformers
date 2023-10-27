@@ -229,7 +229,6 @@ def finetune(
                 #     strict=False,
                 # )
                 model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
-            model.activate_mare_mlp(model)
 
             # Collect Stats
             if use_collect_stats:
@@ -237,6 +236,7 @@ def finetune(
                 trainer.train_router = False
                 trainer.evaluate(train_dataset)
                 trainer.train_router = True
+            model.activate_mare_mlp(model)
 
             # Freeze model params
             # for name, param in model.named_parameters():
