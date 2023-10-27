@@ -451,9 +451,9 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": 5,
-                "train_batch_size": 64,
-                "test_batch_size": 64,
-                "gradient_checkpointing": False,
+                "train_batch_size": 256,
+                "test_batch_size": 256,
+                "gradient_checkpointing": True,
             }
             if dataset_type != False:
                 create_model(
