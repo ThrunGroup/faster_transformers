@@ -45,7 +45,7 @@ class GLUEDataset(Dataset):
         try:
             # Try to load preprocessed data
             with open(
-                f"{self.model_type}_{self.dataset_type}_dataset1.pkl",
+                f"{self.model_type}_{self.dataset_type}_dataset.pkl",
                 "rb",
             ) as f:
                 tokenized_dataset = pickle.load(f)
@@ -54,15 +54,15 @@ class GLUEDataset(Dataset):
         except FileNotFoundError:
             # If preprocessed data does not exist, load and preprocess
             print("No dataset found.")
-            # dataset = load_dataset(
-            #     self.benchmark,
-            #     self.dataset_type,
-            # )
             dataset = load_dataset(
-                self.benchmark, self.dataset_type, split="train[:64]"
+                self.benchmark,
+                self.dataset_type,
             )
+            # dataset = load_dataset(
+            #     self.benchmark, self.dataset_type, split="train[:64]"
+            # )
 
-            dataset = dataset.train_test_split(test_size=0.2)
+            # dataset = dataset.train_test_split(test_size=0.2)
 
             tokenized_dataset = dataset.map(
                 self.preprocess,
@@ -71,15 +71,15 @@ class GLUEDataset(Dataset):
 
             # Save the preprocessed data
             with open(
-                f"{self.model_type}_{self.dataset_type}_dataset1.pkl",
+                f"{self.model_type}_{self.dataset_type}_dataset.pkl",
                 "wb",
             ) as f:
                 pickle.dump(tokenized_dataset, f)
             print("Preprocessed and saved data to disk.")
 
         train_dataset = tokenized_dataset["train"]
-        # val_dataset = tokenized_dataset["validation"]
-        val_dataset = tokenized_dataset["test"]
+        val_dataset = tokenized_dataset["validation"]
+        # val_dataset = tokenized_dataset["test"]
 
         return train_dataset, val_dataset
 

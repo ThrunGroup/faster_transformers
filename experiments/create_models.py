@@ -85,7 +85,7 @@ def finetune(
         )
 
     training_args = TrainingArguments(
-        output_dir=model_name,
+        output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
         eval_steps=25,
         logging_steps=5,
@@ -107,7 +107,7 @@ def finetune(
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
         # bf16=True,
-        # fp16=True,
+        fp16=True,
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
         push_to_hub=True,
@@ -311,13 +311,13 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [T5]
+    model_types = [T5_LARGE]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 1,
+                "num_epochs": 6,
                 "train_batch_size": 16,
                 "test_batch_size": 32,
                 "gradient_checkpointing": False,
