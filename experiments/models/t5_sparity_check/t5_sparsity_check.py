@@ -51,7 +51,7 @@ class MLPSparsityCheck(T5DenseActDense):
         self.router = MLPRouter(
             config.d_model,
             config.d_ff - num_all_rounders * expert_dim,
-            expert_dim * (num_all_rounders + num_experts),
+            int(expert_dim * num_experts/2),
         )
         self.router.to(self.wo.weight.dtype)
         self.routing_probs = None
@@ -210,7 +210,7 @@ class MLPSparsityCheck(T5DenseActDense):
         # #       f"sorted idcs: {sorted_idcs[:5], sorted_idcs[-5:]}")
         # # print(f"block idx: {self.block_idx} / sparsity:{self.num_negatives / self.num_params}")
         # # print(f"block idx: {self.block_idx} / sparsity:{self.num_positives / self.num_params}")
-        # hidden_states = self.dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
         if (
             isinstance(self.wo.weight, torch.Tensor)
             and hidden_states.dtype != self.wo.weight.dtype
@@ -266,7 +266,7 @@ def activate_mare(model):
                 mlp_layer = block.layer[2]
             else:
                 mlp_layer = block.layer[1]
-            if not is_decoder and block_idx < 4:
+            if not is_decoder and block_idx < 6:
                 continue
             mlp_layer.DenseReluDense: MLPSparsityCheck
             mlp_layer.DenseReluDense.activate_mare()

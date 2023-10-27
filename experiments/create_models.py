@@ -161,7 +161,7 @@ def finetune(
         output_dir=model_name,
         evaluation_strategy="steps",
         eval_steps=50,
-        logging_steps=5,
+        logging_steps=10,
         save_strategy="steps",
         learning_rate=5e-5,
         warmup_steps=20,
@@ -406,9 +406,10 @@ if __name__ == "__main__":
     torch.set_printoptions(threshold=300)
     dataset_types = [
         # BILLSUM,
+        #COLA,
         COLA,
-        # SST2,
-        # QNLI,
+        SST2,
+        QNLI,
         # BOOLQ,
         # MULTIRC,
         # WIC,
@@ -416,25 +417,26 @@ if __name__ == "__main__":
 
     total_sizes = {
         T5: 3072,
+        T5_LARGE: 4096,
         T5_3B: 16384,
     }
 
-    model_types = [T5]
+    model_types = [T5_LARGE]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 3,
+                "num_epochs": 5,
                 "train_batch_size": 32,
                 "test_batch_size": 64,
                 "gradient_checkpointing": False,
             }
-            # create_model(
-            #     # run_name="dense_epochs5",
-            #     **common_args,
-            #     push_to_hub=True,
-            # )
+            create_model(
+                # run_name="dense_epochs5",
+                **common_args,
+                push_to_hub=True,
+            )
             # create_model(
             #     use_mare_mlp=False,
             #     **common_args,
@@ -445,12 +447,12 @@ if __name__ == "__main__":
             #     num_experts=48,
             #     expert_size=32,
             # )
-            total_size = 3072
+            total_size = 4096
             expert_size = 16
             for fixed_cost in [
-                0.2,
+                0.1, 0.2,
             ]:
-                for ratio in [0.5, 1.0]:
+                for ratio in [0, 0.5, 1.0]:
                     total_nums = int(total_size / expert_size * fixed_cost)
                     total_nums += total_nums % 2
                     num_generalists = int(total_nums * ratio) + int(
