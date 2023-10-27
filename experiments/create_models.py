@@ -232,14 +232,14 @@ def finetune(
         elif use_mare_mlp:
             # Load pre-trained weights except parameters in routers
             if True:
-                print(f"thrunlab/{pre_trained_model_name}.pt")
-                state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
-                print(state_dict.keys())
-                model.load_state_dict(
-                    state_dict,
-                    strict=False,
-                )
-                # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
+                # print(f"thrunlab/{pre_trained_model_name}.pt")
+                # state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
+                # print(state_dict.keys())
+                # model.load_state_dict(
+                #     state_dict,
+                #     strict=False,
+                # )
+                model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
 
             # Collect Stats
             if use_collect_stats:
