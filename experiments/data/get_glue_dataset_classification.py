@@ -72,10 +72,12 @@ class GLUEDataset(Dataset):
                 pickle.dump(tokenized_dataset, f)
             print("Preprocessed and saved data to disk.")
 
-        train_dataset = tokenized_dataset["train"]
-        val_dataset = tokenized_dataset["validation"]
+        train_val_dataset = tokenized_dataset["train"].train_test_split(0.2)
+        train_dataset = train_val_dataset["train"]
+        val_dataset = train_val_dataset["val"]
+        test_dataset = tokenized_dataset["validation"]
 
-        return train_dataset, val_dataset
+        return train_dataset, val_dataset, test_dataset
 
     def get_data_collator(self):
         """

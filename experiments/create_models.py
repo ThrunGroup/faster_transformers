@@ -157,7 +157,7 @@ def finetune(
     """
     print("Finetuning started...")
     dataset = get_dataset(dataset_name, tokenizer, model, model_type)
-    train_dataset, val_dataset = dataset.get_tokenized_dataset()
+    train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
@@ -174,8 +174,8 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=model_name,
         evaluation_strategy="steps",
-        eval_steps=50,
-        logging_steps=10,
+        eval_steps=10,
+        logging_steps=5,
         save_strategy="steps",
         learning_rate=5e-5,
         warmup_steps=20,
@@ -202,7 +202,7 @@ def finetune(
     )
 
     early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=10, early_stopping_threshold=0.001
+        early_stopping_patience=4, early_stopping_threshold=0.001
     )
     # if use_mare_mlp:
     #     t = MARETrainer
@@ -245,7 +245,7 @@ def finetune(
             if use_collect_stats:
                 model.activate_stats(model, True)
                 trainer.train_router = False
-                print(trainer.evaluate(train_dataset))
+                print(trainer.evaluate(train_dataset, metric_key_prefix="train"))
                 trainer.train_router = True
             model.activate_mare_mlp(model)
 
@@ -290,7 +290,7 @@ def finetune(
         #     model.activate_mare_mlp(model)
         if use_mare_mlp and save_stats:
             trainer.train_router = False
-        print(trainer.evaluate())
+        print(trainer.evaluate(test_dataset, metric_key_prefix="test"))
         if save_stats:
             dir_path = os.path.join(
                 os.path.dirname(os.path.abspath(__file__)), "mare mlp stats histograms"
@@ -492,9 +492,9 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": num_epochs,
-                "train_batch_size": 128,
-                "test_batch_size": 128,
-                "gradient_checkpointing": False,
+                "train_batch_size": 64,
+                "test_batch_size": 64,
+                "gradient_checkpointing": True,
             }
             # Download model in local folder
             # download_model(
