@@ -69,6 +69,7 @@ class MARETrainer(Trainer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.train_router = True
+
     def compute_penalty(self, model):
         loss = None
         for is_decoder, network in enumerate(
@@ -323,6 +324,38 @@ def finetune(
     gc.collect()
 
 
+def get_model_name(
+    model_name: str,
+    dataset_name: str,
+    num_epochs: int = 5,
+    num_generalists: int = 0,
+    num_experts: int = 0,
+    expert_size: int = 0,
+    use_mare_mlp: bool = False,
+    run_name: str = "",
+):
+    pre_trained_model_name = model_name
+    # Build a Gated Attention model
+    model_name = f"{model_type}_{dataset_name}"
+    pre_trained_model_name = model_name
+    if num_generalists != 0:
+        model_name += f"_mare_ar{num_generalists}_ex{num_experts}"
+        if expert_size:
+            model_name += f"_size-{expert_size}"
+    elif num_experts:
+        model_name += f"_moe_ex{num_experts}"
+    else:
+        model_name += f"_dense"
+
+    model_name += f"_epochs-{num_epochs}"
+
+    if use_mare_mlp:
+        pre_trained_model_name += f"_dense_epochs-{num_epochs}"  # + "_collected-stats"
+        model_name += "_mare_mlp"
+    model_name += run_name  # optional
+    return model_name, pre_trained_model_name
+
+
 def create_model(
     model_type: str,
     dataset_name: str,
@@ -358,23 +391,16 @@ def create_model(
     :return: Dictionary of evaluation logs if `do_evaluation` is true
     """
     # Build a Gated Attention model
-    model_name = f"{model_type}_{dataset_name}"
-    pre_trained_model_name = model_name
-    if num_generalists != 0:
-        model_name += f"_mare_ar{num_generalists}_ex{num_experts}"
-        if expert_size:
-            model_name += f"_size-{expert_size}"
-    elif num_experts:
-        model_name += f"_moe_ex{num_experts}"
-    else:
-        model_name += f"_dense"
-
-    model_name += f"_epochs-{num_epochs}"
-
-    if use_mare_mlp:
-        pre_trained_model_name += f"_dense_epochs-{num_epochs}"  # + "_collected-stats"
-        model_name += "_mare_mlp"
-    model_name += run_name  # optional
+    model_name, pre_trained_model_name = get_model_name(
+        model_name=model_type,
+        dataset_name=dataset_name,
+        num_epochs=num_epochs,
+        num_generalists=num_generalists,
+        num_experts=num_experts,
+        expert_size=expert_size,
+        use_mare_mlp=use_mare_mlp,
+        run_name=run_name,
+    )
 
     # captures the method parameters and model_name as a dictionary
     config = locals()
@@ -417,13 +443,28 @@ def create_model(
     )
 
 
+def download_model(
+    model_name: str, dataset_name: str, num_epochs: int, force_download: bool = False
+):
+    model = build_model(
+        model_type,
+        dataset_name,
+    )
+    model_name = get_model_name(
+        model_name=model_name, dataset_name=dataset_name, num_epochs=num_epochs
+    )
+    if not os.path.exists(f"thrunlab/{model_name}.pt"):
+        model.from_pretrained(f"thrunlab/{model_name}")
+        os.makedirs("thrunlab", exist_ok=True)
+        torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
+
+
 if __name__ == "__main__":
     torch.set_printoptions(threshold=300)
     # parser = argparse.ArgumentParser(description="")
     # parser.add_argument("--datasets", nargs='+', type=str, help="A list of datasets")
     #
     # args = parser.parse_args()
-
 
     dataset_types = [
         # SQUAD,
@@ -443,22 +484,29 @@ if __name__ == "__main__":
     }
 
     model_types = [T5_LARGE]
+    num_epochs = 5
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 5,
+                "num_epochs": num_epochs,
                 "train_batch_size": 32,
                 "test_batch_size": 32,
                 "gradient_checkpointing": False,
             }
-            if dataset_type != SST2:
-                create_model(
-                    # run_name="dense_epochs5",
-                    **common_args,
-                    push_to_hub=True,
-                )
+            # Download model in local folder
+            download_model(
+                model_name=model_type,
+                dataset_name=dataset_type,
+                num_epochs=num_epochs,
+            )
+            # if dataset_type != SST2:
+            #     create_model(
+            #         # run_name="dense_epochs5",
+            #         **common_args,
+            #         push_to_hub=True,
+            #     )
             # create_model(
             #     use_mare_mlp=False,
             #     **common_args,
@@ -472,7 +520,8 @@ if __name__ == "__main__":
             total_size = total_sizes[model_type]
             expert_size = 16
             for fixed_cost in [
-                0.2, 0.5,
+                0.2,
+                0.5,
             ]:
                 for ratio in [0, 0.25, 0.5, 0.75, 0.9, 1.0]:
                     total_nums = int(total_size / expert_size * fixed_cost)
