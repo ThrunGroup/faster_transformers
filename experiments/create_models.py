@@ -479,7 +479,7 @@ if __name__ == "__main__":
 
     dataset_types = [
         # BILLSUM,
-        RTE,
+        COLA,
         # AXB,
         # BOOLQ,
         # MULTIRC,
