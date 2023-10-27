@@ -406,9 +406,9 @@ if __name__ == "__main__":
     torch.set_printoptions(threshold=300)
     dataset_types = [
         # BILLSUM,
-        #COLA,
+        COLA,
         SST2,
-        BILLSUM,
+        # BILLSUM,
         # BOOLQ,
         # MULTIRC,
         # WIC,
@@ -420,7 +420,7 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [T5_LARGE]
+    model_types = [T5_3B]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
@@ -446,7 +446,7 @@ if __name__ == "__main__":
             #     num_experts=48,
             #     expert_size=32,
             # )
-            total_size = 4096
+            total_size = total_sizes[model_type]
             expert_size = 16
             for fixed_cost in [
                 0.05, 0.1, 0.2, 0.5,
