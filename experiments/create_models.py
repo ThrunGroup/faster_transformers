@@ -234,7 +234,7 @@ def finetune(
             if use_collect_stats:
                 model.activate_stats(model, True)
                 trainer.train_router = False
-                trainer.evaluate(train_dataset)
+                print(trainer.evaluate(train_dataset))
                 trainer.train_router = True
             model.activate_mare_mlp(model)
 

@@ -289,8 +289,8 @@ def apply_sparsity_check_MLP(
             else:
                 mlp_layer = block.layer[1]
                 new_expert_size *= 2
-            if block_idx < 3:
-                new_expert_size *= 8
+            if block_idx < 4:
+                new_expert_size *= 4
             new_mlp = MLPSparsityCheck(
                 config,
                 block_idx,
