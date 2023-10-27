@@ -178,7 +178,7 @@ class MLPSparsityCheck(T5DenseActDense):
 
             # mask = mask.unsqueeze(-1)
             # hidden_states = F.linear(hidden_states, self.wi.weight * mask)
-            if False:
+            if True:
                 self.routing_probs = routing_probs
                 # activation = (self.act(hidden_states) != 0).to(
                 #     routing_probs.dtype
