@@ -15,11 +15,13 @@ import torch
 from data.get_dataset import get_dataset
 from models.build_model import build_model
 from models.t5_sparity_check.t5_sparsity_check import MLPRouter
+from trainer import MARETrainer, CustomTrainer
 from utils.constants import (
     # Models
     GPT2,
     GPT2_XL,
     T5,
+    T5_LARGE,
     T5_3B,
     # Datasets
     # SST2,
@@ -32,96 +34,6 @@ from utils.constants import (
     MULTIRC,
     BOOLQ,
 )
-
-
-class CustomTrainer(Trainer):
-    def compute_loss(self, model, inputs, return_outputs=False):
-        labels = inputs.pop("labels")
-
-        # forward pass
-        outputs = model(**inputs)
-
-        logits = outputs.get("logits")[:, 0]
-        labels = labels.to(logits.dtype)
-
-        # Check if there are any NaN values in logits
-        if torch.isnan(logits).any():
-            # If there are NaN values, return a zero loss for this batch
-            # This effectively "skips" optimizing this batch.
-            # The zero gradients won't affect the optimizer update.
-            print("NAN")
-            loss = torch.tensor(0.0).to(logits.device).requires_grad_()
-        else:
-            loss = F.binary_cross_entropy(logits, labels)
-
-        return (loss, outputs) if return_outputs else loss
-
-
-class MARETrainer(Trainer):
-    def compute_penalty(self, model):
-        loss = None
-        count = 0
-
-        for is_decoder, network in enumerate(
-            [model.transformer.encoder, model.transformer.decoder]
-        ):
-            for block_idx, block in enumerate(network.block):
-                if is_decoder:
-                    mlp_layer = block.layer[2].DenseReluDense
-                else:
-                    mlp_layer = block.layer[1].DenseReluDense
-
-                count += 1
-
-                if loss is None:
-                    if mlp_layer.routing_probs is None:
-                        continue
-                    loss = F.binary_cross_entropy(
-                        # loss = F.cross_entropy(
-                        mlp_layer.routing_probs,
-                        mlp_layer.activation,
-                    )
-                else:
-                    loss += F.binary_cross_entropy(
-                        mlp_layer.routing_probs,
-                        mlp_layer.activation,
-                    )
-
-        if loss is not None:
-            loss = loss / count
-
-        return loss
-
-    def compute_loss(self, model, inputs, return_outputs=False):
-        labels = inputs.pop("labels")
-        # forward pass
-
-        outputs = model(**inputs)
-
-        logits = outputs.get("logits")[:, 0]
-        labels = labels.to(logits.dtype)
-
-        # # get penalty term
-        # lambda_coeff = 1
-        # regularizer = lambda_coeff * self.compute_penalty(model)
-        # loss = F.binary_cross_entropy(logits, labels)
-        alpha = 0.0
-        penalty = self.compute_penalty(model)
-        loss = F.binary_cross_entropy(logits, labels)
-
-        if penalty:
-            loss = loss + alpha * penalty
-
-        # if loss is None:
-        #     # loss = F.binary_cross_entropy(logits, labels)
-        #     loss = F.binary_cross_entropy(torch.tensor(.0), torch.tensor(.0))
-        #     print("hi loss is NOne")
-        # else:
-        #     print('hi loss is not NOne')
-        #     # loss = loss + F.binary_cross_entropy(logits, labels)
-        # print(loss)
-        # print(self.compute_penalty(model))
-        return (loss, outputs) if return_outputs else loss
 
 
 def finetune(
@@ -175,9 +87,10 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=model_name,
         evaluation_strategy="steps",
-        eval_steps=50,
+        eval_steps=25,
         logging_steps=5,
         save_strategy="steps",
+        save_steps=10000,
         learning_rate=5e-5,
         warmup_steps=20,
         weight_decay=0.01,
@@ -203,11 +116,11 @@ def finetune(
     )
 
     early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=8, early_stopping_threshold=0.03
+        early_stopping_patience=5, early_stopping_threshold=0.03
     )
 
     trainer = CustomTrainer(
-        # trainer = MARETrainer(
+    # trainer = MARETrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
@@ -227,14 +140,14 @@ def finetune(
         if use_collect_stats and not use_mare_mlp:
             model.activate_stats(model)
         elif use_mare_mlp:
-            # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
-            model.from_pretrained(f"thrunlab/t5-base_cola_dense_epochs-6")
+            model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
+            # model.from_pretrained(f"thrunlab/t5-base_cola_dense_epochs-6")
             # pre_trained_model_name = "t5-base_cola_mare_ar16_ex32_size-32_epochs-5_collected-stats"
 
             # Load pre-trained weights except parameters in routers
-            print(f"thrunlab/{pre_trained_model_name}.pt")
-            # state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
-            state_dict = torch.load(f"thrunlab/t5-base_cola_dense_epochs-6.pt")
+            # print(f"thrunlab/{pre_trained_model_name}.pt")
+            state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
+            # state_dict = torch.load(f"thrunlab/t5-base_cola_dense_epochs-6.pt")
             print(state_dict.keys())
             # # for key in list(state_dict.keys()):
             # #     if "router" in key:
@@ -250,17 +163,13 @@ def finetune(
                 trainer.evaluate(train_dataset)
             model.activate_mare_mlp(model)
 
-            # Freeze model params
-            for name, param in model.named_parameters():
-                if "router" not in name:
-                    param.requires_grad = False
-                else:
-                    print(name)
-            # for module in model.transformer.modules():
-            #     if isinstance(module, MLPRouter):
-            #         for name, param in module.transformer.named_parameters():
-            #             print(f"{name} is unfrozen.")
-            #             param.requires_grad = True
+            # # Freeze model params
+            # for name, param in model.named_parameters():
+            #     if "router" not in name:
+            #         param.requires_grad = False
+            #     else:
+            #         print(name)
+
     print("Training")
     trainer.train()
     if do_evaluation:
@@ -276,16 +185,8 @@ def finetune(
                 f"data-{dataset_name}_epochs-{num_epochs}_int ff activations_"
             )
             model.plot_stats(model, os.path.join(dir_path, filename))
+            print("saved at: ", os.path.join(dir_path, filename))
     wandb_run.finish()
-    # if do_evaluation:
-    #     return evaluate_model(
-    #         model_name,
-    #         dataset_name,
-    #         model=model,
-    #         tokenizer=tokenizer,
-    #         test_dataset=test_dataset,
-    #         trainer=trainer,
-    #     )
 
     if True or (
         "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0
@@ -351,7 +252,7 @@ def create_model(
     else:
         model_name += f"_dense"
 
-    model_name += f"_epochs-{num_epochs}_without_distillation_50"
+    model_name += f"_epochs-{num_epochs}"
 
     if use_mare_mlp:
         pre_trained_model_name += (
@@ -405,9 +306,9 @@ if __name__ == "__main__":
     torch.set_printoptions(threshold=300)
     dataset_types = [
         # BILLSUM,
-        COLA,
         # SST2,
-        # QNLI,
+        COLA,
+        QNLI,
         # BOOLQ,
         # MULTIRC,
         # WIC,
@@ -415,42 +316,42 @@ if __name__ == "__main__":
 
     total_sizes = {
         T5: 3072,
+        T5_LARGE: 4096,
         T5_3B: 16384,
     }
 
-    model_types = [T5_3B]
+    model_types = [T5_LARGE]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 8,
-                "train_batch_size": 16,
-                "test_batch_size": 32,
-                "gradient_checkpointing": False,
+                "num_epochs": 7,
+                "train_batch_size": 64,
+                "test_batch_size": 128,
+                "gradient_checkpointing": True,
             }
-            create_model(
-                # run_name="dense_epochs5",
-                **common_args,
-                push_to_hub=True,
-            )
+            # create_model(
+            #     # run_name="dense_epochs5",
+            #     **common_args,
+            #     push_to_hub=True,
+            # )
             total_size = total_sizes[model_type]
             expert_size = 16
             fixed_costs = [
-                # 0.02,
-                # 0.05,
-                # 0.1,
+                0.05,
+                # 0.01,
+                0.1,
                 0.2,
                 # 0.3,
                 0.5,
             ]
             generalist_ratios = [
                 0.0,
-                # 0.1,
-                # 0.25,
+                0.25,
                 0.5,
                 # 0.75,
-                # 0.9,
+                0.9,
                 1.0,
             ]
 
@@ -458,6 +359,7 @@ if __name__ == "__main__":
 
             for fixed_cost in fixed_costs:
                 for generalist_ratio in generalist_ratios:
+                    # continue
                     total_nums = int(total_size / expert_size * fixed_cost)
                     num_generalists = (
                         int(total_nums * generalist_ratio) * 2 // 2
@@ -468,94 +370,8 @@ if __name__ == "__main__":
                         **common_args,
                         save_stats=False,
                         use_collect_stats=True,
-                        push_to_hub=False,
+                        push_to_hub=True,
                         num_generalists=num_generalists,
                         num_experts=num_experts,
                         expert_size=expert_size,
                     )
-
-            # create_model(
-            #     use_mare_upcycling=True,
-            #     capacity_factor=2,
-            #     num_generalists=1,
-            #     num_experts=2,
-            #     apply_to_half_layers=True,
-            #     **common_args,
-            # )
-
-            # create_model(
-            #     use_mare_upcycling=True,
-            #     capacity_factor=2,
-            #     num_generalists=0,
-            #     num_experts=4,
-            #     apply_to_half_layers=True,
-            #     **common_args,
-            # )
-            #
-
-            # create_model(
-            #     use_mare_upcycling=True,
-            #     capacity_factor=2,
-            #     num_generalists=1,
-            #     num_experts=15,
-            #     apply_to_half_layers=True,
-            #     **common_args,
-            # )
-
-            # create_model(
-            #     use_mare_upcycling=True,
-            #     capacity_factor=2,
-            #     num_generalists=0,
-            #     num_experts=16,
-            #     apply_to_half_layers=True,
-            #     **common_args,
-            # )
-
-    # Original dense
-    # create_model(
-    #     run_name="baseline",
-    #     **common_args,
-    # )
-
-    # MARE without experts
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     num_generalists=2,
-    #     capacity_factor=2,
-    #     num_experts=0,
-    #     run_name="c2_dense_2_half",
-    #     apply_to_half_layers=True,
-    #     **common_args,
-    # )
-
-    # # MARE without ARs
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     capacity_factor=2,
-    #     num_generalists=0,
-    #     num_experts=8,
-    #     run_name="moe_ex8_one_more",
-    #     apply_to_half_layers=True,
-    #     **common_args,
-    # )
-
-    # MARE
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     capacity_factor=2,
-    #     num_generalists=1,
-    #     num_experts=7,
-    #     run_name="mare_ar1_ex7_half_from_ft_scaler_per_expert",
-    #     apply_to_half_layers=True,
-    #     **common_args,
-    # )
-
-    # create_model(
-    #     use_mare_upcycling=True,
-    #     capacity_factor=2,
-    #     num_generalists=1,
-    #     num_experts=4,
-    #     run_name="c2_mare_ar1_ex4_half_from_ft_dense",
-    #     apply_to_half_layers=True,
-    #     **common_args,
-    # )

@@ -217,7 +217,10 @@ def activate_stats(model, init_stats: bool = False):
         for block_idx, block in enumerate(network.block):
             if is_decoder:
                 mlp_layer = block.layer[2]
+                # continue
             else:
+                if block_idx < 6:
+                    continue
                 mlp_layer = block.layer[1]
             mlp_layer.DenseReluDense: MLPSparsityCheck
             mlp_layer.DenseReluDense.activate_stats()
@@ -233,6 +236,8 @@ def plot_stats(model, filepath: str = None):
             if is_decoder:
                 mlp_layer = block.layer[2]
             else:
+                if block_idx < 6:
+                    continue
                 mlp_layer = block.layer[1]
             mlp_layer.DenseReluDense: MLPSparsityCheck
             mlp_layer.DenseReluDense.plot_stats(
@@ -247,7 +252,10 @@ def activate_mare(model):
         for block_idx, block in enumerate(network.block):
             if is_decoder:
                 mlp_layer = block.layer[2]
+                # continue
             else:
+                if block_idx < 6:
+                    continue
                 mlp_layer = block.layer[1]
             mlp_layer.DenseReluDense: MLPSparsityCheck
             mlp_layer.DenseReluDense.activate_mare()
@@ -266,7 +274,10 @@ def apply_sparsity_check_MLP(
         for block_idx, block in enumerate(network.block):
             if is_decoder:
                 mlp_layer = block.layer[2]
+                # continue
             else:
+                if block_idx < 6:
+                    continue
                 mlp_layer = block.layer[1]
             new_mlp = MLPSparsityCheck(
                 config,
