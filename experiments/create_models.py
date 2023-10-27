@@ -46,6 +46,8 @@ class CustomTrainer(Trainer):
 
         logits = outputs.get("logits")[:, 0]
         labels = labels.to(logits.dtype)
+        print(logits)
+        print(labels)
 
         # Check if there are any NaN values in logits
         if torch.isnan(logits).any():
@@ -56,6 +58,8 @@ class CustomTrainer(Trainer):
             loss = torch.tensor(0.0).to(logits.device).requires_grad_()
         else:
             loss = F.binary_cross_entropy(logits, labels)
+
+        print(loss)
 
         return (loss, outputs) if return_outputs else loss
 
@@ -240,11 +244,11 @@ def finetune(
                 # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
 
             # Collect Stats
-            if use_collect_stats:
-                model.activate_stats(model, True)
-                trainer.train_router = False
-                print(trainer.evaluate(train_dataset))
-                trainer.train_router = True
+            # if use_collect_stats:
+            #     model.activate_stats(model, True)
+            #     trainer.train_router = False
+            #     print(trainer.evaluate(train_dataset))
+            #     trainer.train_router = True
             model.activate_mare_mlp(model)
 
             # Freeze model params
@@ -273,7 +277,7 @@ def finetune(
             #         if "router" in name:
             #             print(f"{name} is Unfrozen.")
             #             param.requires_grad = True
-
+        print("Training")
         trainer.train()
     if do_evaluation:
         if save_stats:
