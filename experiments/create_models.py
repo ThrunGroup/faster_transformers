@@ -178,7 +178,7 @@ def finetune(
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
-        # bf16=True,
+        bf16=True,
         # fp16=True,
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
@@ -431,7 +431,7 @@ if __name__ == "__main__":
                 "num_epochs": 5,
                 "train_batch_size": 16,
                 "test_batch_size": 32,
-                "gradient_checkpointing": False,
+                "gradient_checkpointing": True,
             }
             create_model(
                 # run_name="dense_epochs5",
