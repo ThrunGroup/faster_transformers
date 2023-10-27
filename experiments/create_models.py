@@ -449,8 +449,8 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": 5,
-                "train_batch_size": 128,
-                "test_batch_size": 128,
+                "train_batch_size": 32,
+                "test_batch_size": 32,
                 "gradient_checkpointing": True,
             }
             if dataset_type != SST2:
