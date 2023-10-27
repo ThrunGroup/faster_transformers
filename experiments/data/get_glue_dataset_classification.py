@@ -14,6 +14,7 @@ from utils.constants import (
     WIC,
     MULTIRC,
     BOOLQ,
+    AXB,
     SUPERGLUE,
 )
 
@@ -152,6 +153,14 @@ class GLUEDataset(Dataset):
                 + example["sentence1"]
                 + "\nSecond sentence: "
                 + example["sentence2"]
+            )
+        elif self.dataset_type == AXB:
+            input_text = (
+                    "Does the first sentence entail second sentence?"
+                    + "\nFirst sentence: "
+                    + example["sentence1"]
+                    + "\nSecond sentence: "
+                    + example["sentence2"]
             )
         else:
             raise ValueError(f"Invalid dataset: ({self.dataset_type})")

@@ -55,6 +55,7 @@ GLUE = [QNLI, SST2, COLA, STSB]
 WIC = "wic"
 BOOLQ = "boolq"
 MULTIRC = "multirc"
+AXB = "axb"
 SUPERGLUE = [WIC, BOOLQ, MULTIRC]
 
 # Number of blocks

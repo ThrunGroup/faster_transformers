@@ -19,6 +19,7 @@ from models.t5_sparity_check.t5_sparsity_check import MLPRouter
 from utils.constants import (
     # Models
     GPT2,
+    AXB,
     GPT2_XL,
     T5,
     T5_LARGE,
@@ -469,9 +470,10 @@ if __name__ == "__main__":
         # SQUAD,
         # COLA,
         # SST2,
-        BOOLQ,
-        MULTIRC,
-        # WIC,
+        # BOOLQ,
+        # MULTIRC,
+        WIC,
+        AXB,
     ]
     # if hasattr(args, "datasets"):
     #     dataset_types = args.datasets
@@ -490,8 +492,8 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": num_epochs,
-                "train_batch_size": 8,
-                "test_batch_size": 16,
+                "train_batch_size": 64,
+                "test_batch_size": 64,
                 "gradient_checkpointing": True,
             }
             # # Download model in local folder
