@@ -408,8 +408,6 @@ if __name__ == "__main__":
         # BILLSUM,
         #COLA,
         SST2,
-        QNLI,
-        COLA,
         BILLSUM,
         # BOOLQ,
         # MULTIRC,
@@ -429,8 +427,8 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": 5,
-                "train_batch_size": 16,
-                "test_batch_size": 32,
+                "train_batch_size": 256,
+                "test_batch_size": 256,
                 "gradient_checkpointing": True,
             }
             create_model(
