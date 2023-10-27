@@ -467,10 +467,10 @@ if __name__ == "__main__":
 
     dataset_types = [
         # SQUAD,
-        COLA,
+        # COLA,
         # SST2,
-        # BOOLQ,
-        # MULTIRC,
+        BOOLQ,
+        MULTIRC,
         # WIC,
     ]
     # if hasattr(args, "datasets"):
