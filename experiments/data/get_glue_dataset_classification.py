@@ -80,9 +80,11 @@ class GLUEDataset(Dataset):
                 val_dataset = train_val_dataset["test"]
                 test_dataset = tokenized_dataset["validation"]
             elif len(dataset.column_names.keys()) == 3:
-                train_dataset = dataset["train"]
-                val_dataset = dataset["validation"]
-                test_dataset = dataset["test"]
+                train_dataset = tokenized_dataset["train"]
+                val_dataset = tokenized_dataset["validation"]
+                test_dataset = tokenized_dataset["test"]
+            else:
+                raise NotImplementedError(f"{tokenized_dataset} does not have supporting format.")
 
 
         return train_dataset, val_dataset, test_dataset
