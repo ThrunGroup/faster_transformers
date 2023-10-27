@@ -275,11 +275,11 @@ def finetune(
             #         if "router" in name:
             #             print(f"{name} is Unfrozen.")
             #             param.requires_grad = True
-        else:
-            model.from_pretrained(f"thrunlab/{model_name}")
-            os.makedirs("thrunlab", exist_ok=True)
-            torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
-            return
+        # else:
+        #     model.from_pretrained(f"thrunlab/{model_name}")
+        #     os.makedirs("thrunlab", exist_ok=True)
+        #     torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
+        #     return
         print("Training")
         trainer.train()
     if do_evaluation:
@@ -455,7 +455,7 @@ if __name__ == "__main__":
                 "test_batch_size": 128,
                 "gradient_checkpointing": True,
             }
-            if dataset_type != False:
+            if dataset_type != SST2:
                 create_model(
                     # run_name="dense_epochs5",
                     **common_args,
