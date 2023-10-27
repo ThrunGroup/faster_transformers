@@ -309,11 +309,11 @@ def finetune(
     # if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
     #     wandb_run.finish()
     if push_to_hub:
-        # print("pushing to hub")
-        # trainer.push_to_hub()
-        # os.makedirs("thrunlab", exist_ok=True)
-        # torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
-        model.from_pretrained(f"thrunlab/{model_name}")
+        print("pushing to hub")
+        trainer.push_to_hub()
+        os.makedirs("thrunlab", exist_ok=True)
+        torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
+        # model.from_pretrained(f"thrunlab/{model_name}")
 
     # Empty out gpu memory
     del trainer
@@ -485,7 +485,7 @@ if __name__ == "__main__":
                         use_mare_mlp=True,
                         **common_args,
                         save_stats=False,
-                        use_collect_stats=True,
+                        use_collect_stats=False,
                         push_to_hub=False,
                         num_generalists=num_generalists,
                         num_experts=num_experts,
