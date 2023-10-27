@@ -492,9 +492,9 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": num_epochs,
-                "train_batch_size": 128,
-                "test_batch_size": 128,
-                "gradient_checkpointing": True,
+                "train_batch_size": 256,
+                "test_batch_size": 256,
+                "gradient_checkpointing": False,
             }
             # Download model in local folder
             # download_model(
