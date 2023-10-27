@@ -173,8 +173,8 @@ def finetune(
         report_to="wandb",
         run_name=model_name,
         # for memory issues
-        # gradient_accumulation_steps=2,
-        # deepspeed="ds_config.json",
+        gradient_accumulation_steps=2,
+        deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
@@ -407,9 +407,10 @@ if __name__ == "__main__":
     dataset_types = [
         # BILLSUM,
         #COLA,
-        COLA,
         SST2,
         QNLI,
+        COLA,
+        BILLSUM,
         # BOOLQ,
         # MULTIRC,
         # WIC,
@@ -421,15 +422,15 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [T5_LARGE]
+    model_types = [T5_3B]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": 5,
-                "train_batch_size": 32,
-                "test_batch_size": 64,
+                "train_batch_size": 16,
+                "test_batch_size": 32,
                 "gradient_checkpointing": False,
             }
             create_model(
@@ -447,10 +448,10 @@ if __name__ == "__main__":
             #     num_experts=48,
             #     expert_size=32,
             # )
-            total_size = 3072
+            total_size = 4096
             expert_size = 16
             for fixed_cost in [
-                0.1, 0.2, 0.3, 0.5,
+                0.05, 0.1, 0.2, 0.5,
             ]:
                 for ratio in [0, 0.25, 0.5, 0.75, 1.0]:
                     total_nums = int(total_size / expert_size * fixed_cost)
