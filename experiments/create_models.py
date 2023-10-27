@@ -47,7 +47,16 @@ class CustomTrainer(Trainer):
         logits = outputs.get("logits")[:, 0]
         labels = labels.to(logits.dtype)
 
-        loss = F.binary_cross_entropy(logits, labels)
+        # Check if there are any NaN values in logits
+        if torch.isnan(logits).any():
+            # If there are NaN values, return a zero loss for this batch
+            # This effectively "skips" optimizing this batch.
+            # The zero gradients won't affect the optimizer update.
+            print("NAN")
+            loss = torch.tensor(0.0).to(logits.device).requires_grad_()
+        else:
+            loss = F.binary_cross_entropy(logits, labels)
+
         return (loss, outputs) if return_outputs else loss
 
 
