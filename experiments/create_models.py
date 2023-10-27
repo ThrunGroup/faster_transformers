@@ -252,11 +252,11 @@ def finetune(
             model.activate_mare_mlp(model)
 
             # Freeze model params
-            # for name, param in model.named_parameters():
-            #     if "router" not in name:
-            #         param.requires_grad = False
-            #     else:
-            #         print(name)
+            for name, param in model.named_parameters():
+                if "router" not in name:
+                    param.requires_grad = False
+                else:
+                    print(name)
             # for (
             #     name,
             #     module,
@@ -440,8 +440,8 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": 5,
-                "train_batch_size": 256,
-                "test_batch_size": 256,
+                "train_batch_size": 16,
+                "test_batch_size": 16,
                 "gradient_checkpointing": True,
             }
             if dataset_type != SST2:
