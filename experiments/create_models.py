@@ -244,19 +244,19 @@ def finetune(
                 # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
 
             # Collect Stats
-            # if use_collect_stats:
-            #     model.activate_stats(model, True)
-            #     trainer.train_router = False
-            #     print(trainer.evaluate(train_dataset))
-            #     trainer.train_router = True
+            if use_collect_stats:
+                model.activate_stats(model, True)
+                trainer.train_router = False
+                print(trainer.evaluate(train_dataset))
+                trainer.train_router = True
             model.activate_mare_mlp(model)
 
             # Freeze model params
-            for name, param in model.named_parameters():
-                if "router" not in name:
-                    param.requires_grad = False
-                else:
-                    print(name)
+            # for name, param in model.named_parameters():
+            #     if "router" not in name:
+            #         param.requires_grad = False
+            #     else:
+            #         print(name)
             # for (
             #     name,
             #     module,
@@ -440,8 +440,8 @@ if __name__ == "__main__":
                 "model_type": model_type,
                 "dataset_name": dataset_type,
                 "num_epochs": 5,
-                "train_batch_size": 16,
-                "test_batch_size": 16,
+                "train_batch_size": 64,
+                "test_batch_size": 64,
                 "gradient_checkpointing": False,
             }
             if dataset_type != SST2:
