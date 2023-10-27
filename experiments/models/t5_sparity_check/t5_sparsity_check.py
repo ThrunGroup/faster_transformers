@@ -296,7 +296,7 @@ def apply_sparsity_check_MLP(
                 block_idx,
                 num_all_rounders=num_generalists,
                 num_experts=num_experts,
-                expert_dim=new_expert_size,
+                expert_dim=int(new_expert_size + 0.5),
                 is_decoder=bool(is_decoder),
             )
             old_mlp = mlp_layer.DenseReluDense
