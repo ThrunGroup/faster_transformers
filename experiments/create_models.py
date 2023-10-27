@@ -478,8 +478,8 @@ if __name__ == "__main__":
 
     dataset_types = [
         # BILLSUM,
-        #COLA,
-        AXB,
+        COLA,
+        # AXB,
         # BOOLQ,
         # MULTIRC,
         # WIC,
