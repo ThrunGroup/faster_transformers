@@ -494,7 +494,7 @@ if __name__ == "__main__":
                 "num_epochs": num_epochs,
                 "train_batch_size": 128,
                 "test_batch_size": 128,
-                "gradient_checkpointing": False,
+                "gradient_checkpointing": True,
             }
             # Download model in local folder
             # download_model(
