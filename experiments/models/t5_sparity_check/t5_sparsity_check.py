@@ -198,7 +198,7 @@ class MLPSparsityCheck(T5DenseActDense):
             # self.count += 1
 
             hidden_states = hidden_states * mask
-        # hidden_states = self.act(hidden_states)
+        hidden_states = self.act(hidden_states)
 
         # Collecting stats
         if self.is_collecting_stats is True:
@@ -266,6 +266,8 @@ def activate_mare(model):
                 mlp_layer = block.layer[2]
             else:
                 mlp_layer = block.layer[1]
+            if not is_decoder and block_idx < 4:
+                continue
             mlp_layer.DenseReluDense: MLPSparsityCheck
             mlp_layer.DenseReluDense.activate_mare()
 
@@ -282,21 +284,16 @@ def apply_sparsity_check_MLP(
     ):
         for block_idx, block in enumerate(network.block):
             new_expert_size = expert_size
-            constant = 1/2
-            new_expert_size *= constant
             if is_decoder:
                 mlp_layer = block.layer[2]
             else:
                 mlp_layer = block.layer[1]
-                new_expert_size *= 2
-            if block_idx < 4:
-                new_expert_size *= 4
             new_mlp = MLPSparsityCheck(
                 config,
                 block_idx,
                 num_all_rounders=num_generalists,
                 num_experts=num_experts,
-                expert_dim=int(new_expert_size + 0.5),
+                expert_dim=new_expert_size,
                 is_decoder=bool(is_decoder),
             )
             old_mlp = mlp_layer.DenseReluDense
