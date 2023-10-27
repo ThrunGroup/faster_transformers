@@ -177,7 +177,7 @@ class MLPSparsityCheck(T5DenseActDense):
 
             # mask = mask.unsqueeze(-1)
             # hidden_states = F.linear(hidden_states, self.wi.weight * mask)
-            if True or hidden_states.requires_grad:
+            if False:
                 self.routing_probs = routing_probs
                 activation = (self.act(hidden_states) != 0).to(
                     routing_probs.dtype
@@ -198,7 +198,7 @@ class MLPSparsityCheck(T5DenseActDense):
             # self.count += 1
 
             hidden_states = hidden_states * mask
-        hidden_states = self.act(hidden_states)
+        # hidden_states = self.act(hidden_states)
 
         # Collecting stats
         if self.is_collecting_stats is True:
@@ -210,7 +210,7 @@ class MLPSparsityCheck(T5DenseActDense):
         # #       f"sorted idcs: {sorted_idcs[:5], sorted_idcs[-5:]}")
         # # print(f"block idx: {self.block_idx} / sparsity:{self.num_negatives / self.num_params}")
         # # print(f"block idx: {self.block_idx} / sparsity:{self.num_positives / self.num_params}")
-        hidden_states = self.dropout(hidden_states)
+        # hidden_states = self.dropout(hidden_states)
         if (
             isinstance(self.wo.weight, torch.Tensor)
             and hidden_states.dtype != self.wo.weight.dtype
