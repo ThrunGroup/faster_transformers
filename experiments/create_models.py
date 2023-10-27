@@ -102,11 +102,11 @@ def finetune(
         run_name=model_name,
         # for memory issues
         gradient_accumulation_steps=2,
-        deepspeed="ds_config.json",
+        # deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
-        bf16=True,
+        # bf16=True,
         # fp16=True,
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
@@ -119,8 +119,10 @@ def finetune(
         early_stopping_patience=5, early_stopping_threshold=0.03
     )
 
-    trainer = CustomTrainer(
-    # trainer = MARETrainer(
+    # trainer_class = MARETrainer if use_mare_mlp else CustomTrainer
+
+    # trainer = trainer_class(
+    trainer = MARETrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
@@ -140,18 +142,10 @@ def finetune(
         if use_collect_stats and not use_mare_mlp:
             model.activate_stats(model)
         elif use_mare_mlp:
-            model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
-            # model.from_pretrained(f"thrunlab/t5-base_cola_dense_epochs-6")
-            # pre_trained_model_name = "t5-base_cola_mare_ar16_ex32_size-32_epochs-5_collected-stats"
-
-            # Load pre-trained weights except parameters in routers
-            # print(f"thrunlab/{pre_trained_model_name}.pt")
+            # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
+            print(f"thrunlab/{pre_trained_model_name}")
             state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
-            # state_dict = torch.load(f"thrunlab/t5-base_cola_dense_epochs-6.pt")
-            print(state_dict.keys())
-            # # for key in list(state_dict.keys()):
-            # #     if "router" in key:
-            # #         state_dict.pop(key)
+            
             model.load_state_dict(
                 state_dict,
                 strict=False,
@@ -160,17 +154,12 @@ def finetune(
             # Collect Stats
             if use_collect_stats:
                 model.activate_stats(model, True)
+                trainer.deepspeed_zero_optimization = False
                 trainer.evaluate(train_dataset)
             model.activate_mare_mlp(model)
 
-            # # Freeze model params
-            # for name, param in model.named_parameters():
-            #     if "router" not in name:
-            #         param.requires_grad = False
-            #     else:
-            #         print(name)
-
     print("Training")
+    trainer.deepspeed_zero_optimization = True
     trainer.train()
     if do_evaluation:
         if save_stats:
@@ -256,7 +245,7 @@ def create_model(
 
     if use_mare_mlp:
         pre_trained_model_name += (
-            f"_dense_epochs-{num_epochs}"  # + "_collected-stats"
+            f"_dense_epochs-{num_epochs}"  # -{num_epochs}
         )
         model_name += "_mare_mlp"
     model_name += run_name  # optional
@@ -303,11 +292,13 @@ def create_model(
 
 
 if __name__ == "__main__":
+    print(os.listdir("thrunlab"))
+
     torch.set_printoptions(threshold=300)
     dataset_types = [
         # BILLSUM,
         # SST2,
-        COLA,
+        # COLA,
         QNLI,
         # BOOLQ,
         # MULTIRC,
@@ -320,22 +311,24 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [T5_LARGE]
+    model_types = [T5]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 7,
-                "train_batch_size": 64,
-                "test_batch_size": 128,
-                "gradient_checkpointing": True,
+                "num_epochs": 1,
+                "train_batch_size": 16,
+                "test_batch_size": 32,
+                "gradient_checkpointing": False,
             }
-            # create_model(
-            #     # run_name="dense_epochs5",
-            #     **common_args,
-            #     push_to_hub=True,
-            # )
+            create_model(
+                # run_name="dense_epochs5",
+                **common_args,  
+                push_to_hub=True,
+            )
+
+            # continue
             total_size = total_sizes[model_type]
             expert_size = 16
             fixed_costs = [

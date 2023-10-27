@@ -79,8 +79,12 @@ class MARETrainer(Trainer):
                         continue
                     mlp_layer = block.layer[1].DenseReluDense
 
-                count += 1
 
+                if mlp_layer.__class__.__name__ != "MLPSparsityCheck":
+                    continue
+
+                count += 1
+                
                 if loss is None:
                     if mlp_layer.routing_probs is None:
                         continue

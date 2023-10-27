@@ -9,15 +9,16 @@ import matplotlib.pyplot as plt
 import gc
 
 
+
 class MLPRouter(nn.Module):
     def __init__(self, input_dims, output_dims, low_rank: int = 64):
         super().__init__()
         self.router = nn.Sequential(
             nn.Linear(input_dims, low_rank),
-            nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(low_rank, output_dims),
-            nn.Sigmoid(),
-            # nn.Softmax(),
+            # nn.Hardtanh(0, 1),
+            nn.Sigmoid()
         )
 
     def forward(self, x):
@@ -52,7 +53,7 @@ class MLPSparsityCheck(T5DenseActDense):
         self.router = MLPRouter(
             config.d_model,
             config.d_ff - num_all_rounders * expert_dim,
-            expert_dim * (num_all_rounders + num_experts),
+            int(expert_dim * (num_all_rounders + num_experts)/2),
         )
         self.router.to(self.wo.weight.dtype)
         self.routing_probs = None
@@ -141,7 +142,6 @@ class MLPSparsityCheck(T5DenseActDense):
         plt.show()
 
     def forward(self, hidden_states):
-        # print(hidden_states.requires_grad," ", self.block_idx, " ", self.is_decoder, " ", hidden_states.shape, f"count: {self.count}")
         self.count += 1
 
         if self.is_mare is False:
@@ -155,22 +155,18 @@ class MLPSparsityCheck(T5DenseActDense):
                 dtype=routing_probs.dtype,
                 device=routing_probs.device,
             )
-            # routing_probs = torch.sum(routing_probs, dim=(0, 1))  # shape: d_ff - num_all_rounders * expert_dim
             K = self.num_experts * self.expert_dim
             topk_values, topk_idcs = torch.topk(
                 routing_probs,
                 k=K,
                 dim=-1,
             )
+            self.non_mare_idcs = self.non_mare_idcs.to(device=topk_idcs.device)
             topk_idcs = self.non_mare_idcs[topk_idcs]
             mask[..., self.mare_idcs] = 1
             mask = mask.scatter(-1, topk_idcs, topk_values)
-            # mask[..., self.mare_idcs] = torch.finfo(mask.dtype).max
-            # mask = F.sigmoid(mask)
             hidden_states = self.wi(hidden_states)
-
-            # mask = mask.unsqueeze(-1)
-            # hidden_states = F.linear(hidden_states, self.wi.weight * mask)
+            
             if hidden_states.requires_grad:
                 self.routing_probs = routing_probs
                 activation = (self.act(hidden_states) != 0).to(
@@ -186,13 +182,7 @@ class MLPSparsityCheck(T5DenseActDense):
         # Collecting stats
         if self.is_collecting_stats is True:
             self.collect_stats(hidden_states)
-        # print(f"block idx: {self.block_idx} / sparsity:{self.num_zeros/self.num_params}")
-        # sorted_values, sorted_idcs = self.counts_per_idx.clone().detach().sort()
-        # # print(torch.histogram(self.counts_per_idx.to('cpu'), 32, density=True))
-        # # print(f"block idx: {self.block_idx}/ sorted counts: {sorted_values[:5], sorted_values[-5:]}/"
-        # #       f"sorted idcs: {sorted_idcs[:5], sorted_idcs[-5:]}")
-        # # print(f"block idx: {self.block_idx} / sparsity:{self.num_negatives / self.num_params}")
-        # # print(f"block idx: {self.block_idx} / sparsity:{self.num_positives / self.num_params}")
+    
         hidden_states = self.dropout(hidden_states)
         if (
             isinstance(self.wo.weight, torch.Tensor)
@@ -202,11 +192,6 @@ class MLPSparsityCheck(T5DenseActDense):
             hidden_states = hidden_states.to(self.wo.weight.dtype)
         hidden_states = self.wo(hidden_states)
 
-        # if self.is_mare is False:
-        #     hidden_states = self.wo(hidden_states)
-        # else:
-        #     mask: torch.tensor
-        #     hidden_states = F.linear(hidden_states, self.wo.weight * mask.T)
         return hidden_states
 
 
