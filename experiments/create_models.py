@@ -426,9 +426,9 @@ if __name__ == "__main__":
 
 
     dataset_types = [
-        # BILLSUM,
+        BILLSUM,
         #COLA,
-        SST2,
+        # SST2,
         # BOOLQ,
         # MULTIRC,
         # WIC,
