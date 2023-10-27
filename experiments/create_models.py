@@ -277,6 +277,7 @@ def finetune(
             #             param.requires_grad = True
         else:
             model.from_pretrained(f"thrunlab/{model_name}")
+            os.makedirs("thrunlab", exist_ok=True)
             torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
             return
         print("Training")
