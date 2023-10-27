@@ -233,16 +233,13 @@ def finetune(
             # Load pre-trained weights except parameters in routers
             if True:
                 print(f"thrunlab/{pre_trained_model_name}.pt")
-                # state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
-                # print(state_dict.keys())
-                # # for key in list(state_dict.keys()):
-                # #     if "router" in key:
-                # #         state_dict.pop(key)
-                # model.load_state_dict(
-                #     state_dict,
-                #     strict=False,
-                # )
-                model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
+                state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
+                print(state_dict.keys())
+                model.load_state_dict(
+                    state_dict,
+                    strict=False,
+                )
+                # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
 
             # Collect Stats
             if use_collect_stats:
@@ -278,6 +275,10 @@ def finetune(
             #         if "router" in name:
             #             print(f"{name} is Unfrozen.")
             #             param.requires_grad = True
+        else:
+            model.from_pretrained(f"thrunlab/{model_name}")
+            torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
+            return
         print("Training")
         trainer.train()
     if do_evaluation:
@@ -448,12 +449,12 @@ if __name__ == "__main__":
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 5,
+                "num_epochs": 0,
                 "train_batch_size": 128,
                 "test_batch_size": 128,
                 "gradient_checkpointing": True,
             }
-            if dataset_type != SST2:
+            if dataset_type != False:
                 create_model(
                     # run_name="dense_epochs5",
                     **common_args,
