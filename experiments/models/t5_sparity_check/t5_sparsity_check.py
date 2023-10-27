@@ -196,7 +196,7 @@ class MLPSparsityCheck(T5DenseActDense):
             )
             self.activation = torch.index_select(
                 activation, -1, self.non_mare_idcs
-            )
+            ).detach()
 
         # if self.count % 20 == 0:
         #     a = self.routing_probs[0, 0, :]
