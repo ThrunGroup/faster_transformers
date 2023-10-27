@@ -66,26 +66,25 @@ class GLUEDataset(Dataset):
                 remove_columns=dataset.column_names["train"],
             )
 
-            # Save the preprocessed data
-            with open(
-                f"{self.model_type}_{self.dataset_type}_dataset.pkl",
-                "wb",
-            ) as f:
-                pickle.dump(tokenized_dataset, f)
-            print("Preprocessed and saved data to disk.")
+        # Save the preprocessed data
+        with open(
+            f"{self.model_type}_{self.dataset_type}_dataset.pkl",
+            "wb",
+        ) as f:
+            pickle.dump(tokenized_dataset, f)
+        print("Preprocessed and saved data to disk.")
 
-            print(tokenized_dataset)
-            if len(dataset.column_names.keys()) == 2:
-                train_val_dataset = tokenized_dataset["train"].train_test_split(0.2, seed=0)
-                train_dataset = train_val_dataset["train"]
-                val_dataset = train_val_dataset["test"]
-                test_dataset = tokenized_dataset["validation"]
-            elif len(dataset.column_names.keys()) == 3:
-                train_dataset = tokenized_dataset["train"]
-                val_dataset = tokenized_dataset["validation"]
-                test_dataset = tokenized_dataset["test"]
-            else:
-                raise NotImplementedError(f"{tokenized_dataset} does not have supporting format.")
+        if len(dataset.column_names.keys()) == 2:
+            train_val_dataset = tokenized_dataset["train"].train_test_split(0.2, seed=0)
+            train_dataset = train_val_dataset["train"]
+            val_dataset = train_val_dataset["test"]
+            test_dataset = tokenized_dataset["validation"]
+        elif len(dataset.column_names.keys()) == 3:
+            train_dataset = tokenized_dataset["train"]
+            val_dataset = tokenized_dataset["validation"]
+            test_dataset = tokenized_dataset["test"]
+        else:
+            raise NotImplementedError(f"{tokenized_dataset} does not have supporting format.")
 
 
         return train_dataset, val_dataset, test_dataset
