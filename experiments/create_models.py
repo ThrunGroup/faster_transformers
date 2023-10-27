@@ -485,7 +485,7 @@ if __name__ == "__main__":
                         use_mare_mlp=True,
                         **common_args,
                         save_stats=False,
-                        use_collect_stats=False,
+                        use_collect_stats=True,
                         push_to_hub=False,
                         num_generalists=num_generalists,
                         num_experts=num_experts,
