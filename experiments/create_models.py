@@ -151,6 +151,7 @@ def finetune(
     use_mare_mlp: bool = False,
     use_collect_stats: bool = False,
     pre_trained_model_name: str = None,
+    use_distillation:bool = True,
 ):
     """
     Finetune the model on a dataset
@@ -257,7 +258,8 @@ def finetune(
                 trainer.train_router = False
                 print(trainer.evaluate(train_dataset, metric_key_prefix="train"))
                 trainer.train_router = True
-            model.activate_mare_mlp(model)
+            if not use_distillation:
+                model.activate_mare_mlp(model)
 
             # Freeze model params
             for name, param in model.named_parameters():
@@ -296,8 +298,8 @@ def finetune(
         if save_stats:
             model.activate_stats(model, True)
 
-        # if use_mare_mlp:
-        #     model.activate_mare_mlp(model)
+        if use_mare_mlp:
+            model.activate_mare_mlp(model)
         if use_mare_mlp and save_stats:
             trainer.train_router = False
         print(trainer.evaluate(test_dataset, metric_key_prefix="test"))
@@ -512,7 +514,7 @@ if __name__ == "__main__":
             #     dataset_name=dataset_type,
             #     num_epochs=num_epochs,
             # )
-            if True or dataset_type != SST2:
+            if not os.path.exists(f"{get_model_name(model_type, dataset_type, num_epochs)}.pt"):
                 create_model(
                     # run_name="dense_epochs5",
                     **common_args,
