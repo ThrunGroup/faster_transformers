@@ -63,6 +63,7 @@ class MARETrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super(MARETrainer, self).__init__(*args, **kwargs)
         self.steps = 0
+        self.router_loss = torch.nn.MSELoss()
 
     def compute_penalty(self, model):
         loss = None
@@ -80,8 +81,8 @@ class MARETrainer(Trainer):
                     mlp_layer = block.layer[2].DenseReluDense
                     # continue
                 else:
-                    if block_idx < 6:
-                        continue
+                    # if block_idx < 6:
+                    #     continue
                     mlp_layer = block.layer[1].DenseReluDense
 
                 if mlp_layer.__class__.__name__ != "MLPSparsityCheck":
@@ -89,29 +90,35 @@ class MARETrainer(Trainer):
 
                 count += 1
 
+                if (
+                    mlp_layer.routing_probs is None
+                    or mlp_layer.activation is None
+                ):
+                    continue
+
+                layer_loss = self.router_loss(
+                    mlp_layer.routing_probs,
+                    mlp_layer.activation,
+                )
+
                 if loss is None:
-                    if mlp_layer.routing_probs is None:
-                        continue
-                    loss = F.binary_cross_entropy(
-                        mlp_layer.routing_probs,
-                        mlp_layer.activation,
-                    )
+                    loss = layer_loss
                 else:
-                    loss += F.binary_cross_entropy(
-                        mlp_layer.routing_probs,
-                        mlp_layer.activation,
-                    )
+                    loss += layer_loss
 
                 # if self.steps % 25 == 0:
-                #     print(mlp_layer.routing_probs.shape)
-                #     binary_preds = (mlp_layer.routing_probs > 0.5).float()
-                #     correct = (binary_preds == mlp_layer.activation).float().sum()
-                #     accuracy = correct / mlp_layer.activation.numel()
-                #     module = "decoder" if is_decoder else "encoder"
-                #     print(module, block_idx, " :", accuracy.item())
+                # print(mlp_layer.routing_probs.shape)
+                # binary_preds = (mlp_layer.routing_probs > 0.5).float()
+                # correct = (binary_preds == mlp_layer.activation).float().sum()
+                # accuracy = correct / mlp_layer.activation.numel()
+                # module = "decoder" if is_decoder else "encoder"
+                # print(module, block_idx, " :", accuracy.item())
 
         if loss is not None:
             loss = loss / count
+
+        if self.steps % 50 == 0:
+            print(loss)
 
         return loss
 
@@ -128,8 +135,9 @@ class MARETrainer(Trainer):
         # lambda_coeff = 1
         # regularizer = lambda_coeff * self.compute_penalty(model)
         # loss = F.binary_cross_entropy(logits, labels)
-        alpha = 0.5
+        alpha = 0.9
         penalty = self.compute_penalty(model)
+        # penalty = None
         loss = F.binary_cross_entropy(logits, labels)
 
         if penalty:

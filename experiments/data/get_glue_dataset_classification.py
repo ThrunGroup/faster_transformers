@@ -11,6 +11,8 @@ from utils.constants import (
     QNLI,
     SST2,
     COLA,
+    RTE,
+    MRPC,
     WIC,
     MULTIRC,
     BOOLQ,
@@ -45,43 +47,68 @@ class GLUEDataset(Dataset):
         try:
             # Try to load preprocessed data
             with open(
-                f"{self.model_type}_{self.dataset_type}_dataset2.pkl",
+                f"{self.model_type}_{self.dataset_type}_train_dataset.pkl",
                 "rb",
             ) as f:
-                tokenized_dataset = pickle.load(f)
+                train_dataset = pickle.load(f)
+            with open(
+                f"{self.model_type}_{self.dataset_type}_test_dataset.pkl", "rb"
+            ) as f:
+                test_dataset = pickle.load(f)
+            with open(
+                f"{self.model_type}_{self.dataset_type}_validation_dataset.pkl",
+                "rb",
+            ) as f:
+                val_dataset = pickle.load(f)
             print("Loaded preprocessed data from disk.")
 
         except FileNotFoundError:
             # If preprocessed data does not exist, load and preprocess
             print("No dataset found.")
-            # dataset = load_dataset(
-            #     self.benchmark,
-            #     self.dataset_type,
-            # )
             dataset = load_dataset(
-                self.benchmark, self.dataset_type, split="train[:4096]"
+                self.benchmark,
+                self.dataset_type,
             )
+            # dataset = load_dataset(
+            #     self.benchmark, self.dataset_type, split="train"
+            # )
 
-            dataset = dataset.train_test_split(test_size=0.5)
+            # dataset = dataset.train_test_split(test_size=0.5)
 
             tokenized_dataset = dataset.map(
                 self.preprocess,
                 remove_columns=dataset.column_names["train"],
             )
+            # GLUE doesn't provide answers for TEST, so we have to manually make them
+            train_test_dataset = tokenized_dataset["train"].train_test_split(
+                test_size=1024
+            )
+            train_dataset = train_test_dataset["train"]
+            test_dataset = train_test_dataset["test"]
+            val_dataset = tokenized_dataset["validation"]
 
             # Save the preprocessed data
             with open(
-                f"{self.model_type}_{self.dataset_type}_dataset2.pkl",
+                f"{self.model_type}_{self.dataset_type}_train_dataset.pkl",
                 "wb",
             ) as f:
-                pickle.dump(tokenized_dataset, f)
+                pickle.dump(train_dataset, f)
+            with open(
+                f"{self.model_type}_{self.dataset_type}_test_dataset.pkl", "wb"
+            ) as f:
+                pickle.dump(test_dataset, f)
+            with open(
+                f"{self.model_type}_{self.dataset_type}_validation_dataset.pkl",
+                "wb",
+            ) as f:
+                pickle.dump(val_dataset, f)
             print("Preprocessed and saved data to disk.")
 
-        train_dataset = tokenized_dataset["train"]
+        # train_dataset = tokenized_dataset["train"]
         # val_dataset = tokenized_dataset["validation"]
-        val_dataset = tokenized_dataset["test"]
+        # test_dataset = tokenized_dataset["test"]
 
-        return train_dataset, val_dataset
+        return train_dataset, val_dataset, test_dataset
 
     def get_data_collator(self):
         """
@@ -130,6 +157,22 @@ class GLUEDataset(Dataset):
         elif self.dataset_type == SST2:
             input_text = (
                 "Positive or negative sentiment?\n" + example["sentence"]
+            )
+        elif self.dataset_type == RTE:
+            input_text = (
+                "Entailed?\n"
+                + "\First sentence: "
+                + example["sentence1"]
+                + "\Second sentence: "
+                + example["sentence2"]
+            )
+        elif self.dataset_type == MRPC:
+            input_text = (
+                "Equivalent?\n"
+                + "\First sentence: "
+                + example["sentence1"]
+                + "\Second sentence: "
+                + example["sentence2"]
             )
         elif self.dataset_type == COLA:
             input_text = "cola classification: " + example["sentence"]

@@ -32,6 +32,8 @@ from utils.constants import (
     QNLI,
     SST2,
     COLA,
+    RTE,
+    MRPC,
     WIC,
     MULTIRC,
     BOOLQ,
@@ -70,7 +72,10 @@ def finetune(
     """
     print("Finetuning started...")
     dataset = get_dataset(dataset_name, tokenizer, model, model_type)
-    train_dataset, val_dataset = dataset.get_tokenized_dataset()
+    train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
+
+    print("val : ", val_dataset)
+    print("test: ", test_dataset)
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
@@ -92,7 +97,7 @@ def finetune(
         eval_steps=25,
         logging_steps=5,
         save_strategy="steps",
-        save_steps=10000,
+        # save_steps=100,
         learning_rate=5e-5,
         max_steps=10,
         warmup_steps=20,
@@ -104,7 +109,7 @@ def finetune(
         report_to="wandb",
         run_name=model_name,
         # for memory issues
-        gradient_accumulation_steps=2,
+        gradient_accumulation_steps=1,
         # deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
@@ -119,7 +124,7 @@ def finetune(
     )
 
     early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=4, early_stopping_threshold=0.03
+        early_stopping_patience=15, early_stopping_threshold=0.001
     )
 
     # trainer_class = MARETrainer if use_mare_mlp else CustomTrainer
@@ -146,7 +151,7 @@ def finetune(
             model.activate_stats(model)
         elif use_mare_mlp:
             # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
-            print(f"thrunlab/{pre_trained_model_name}")
+            # print(f"thrunlab/{pre_trained_model_name}")
             # state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
 
             # model.load_state_dict(
@@ -177,6 +182,9 @@ def finetune(
             )
             model.plot_stats(model, os.path.join(dir_path, filename))
             print("saved at: ", os.path.join(dir_path, filename))
+
+    results = trainer.evaluate(val_dataset)
+    print("EVALUATION: ", results)
     wandb_run.finish()
 
     if True or (
@@ -217,6 +225,8 @@ def create_model(
     train_batch_size: int = 0,
     test_batch_size: int = 0,
     gradient_checkpointing: bool = False,
+    fixed_costs=0,
+    generalist_ratios=0,
     save_stats: bool = False,
     **kwargs,
 ):
@@ -243,13 +253,16 @@ def create_model(
     else:
         model_name += f"_dense"
 
-    model_name += f"_epochs-{num_epochs}_check_speed"
+    model_name += f"_sp{fixed_costs}_ar{generalist_ratios}"
+    model_name = model_name.replace(".", "_")
+    print(model_name)
 
     if use_mare_mlp:
         pre_trained_model_name += (
             f"_dense_epochs-{num_epochs}"  # -{num_epochs}
         )
-        model_name += "_mare_mlp"
+        model_name += "_256_original_router"
+    pre_trained_model_name = "t5-large_cola_dense_sp0_ar0"
     model_name += run_name  # optional
 
     # captures the method parameters and model_name as a dictionary
@@ -301,6 +314,8 @@ if __name__ == "__main__":
         # BILLSUM,
         # SST2,
         COLA,
+        # RTE,
+        # MRPC,
         # QNLI,
         # BOOLQ,
         # MULTIRC,
@@ -313,16 +328,16 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [T5_LARGE]
+    model_types = [T5]
     for model_type in model_types:
         for dataset_type in dataset_types:
             common_args = {
                 "model_type": model_type,
                 "dataset_name": dataset_type,
-                "num_epochs": 1,
+                "num_epochs": 10,
                 "train_batch_size": 16,
-                "test_batch_size": 16,
-                "gradient_checkpointing": True,
+                "test_batch_size": 32,
+                "gradient_checkpointing": False,
             }
             # create_model(
             #     # run_name="dense_epochs5",
@@ -331,23 +346,20 @@ if __name__ == "__main__":
             # )
 
             # continue
-
-            # continue
             total_size = total_sizes[model_type]
             expert_size = 16
             fixed_costs = [
                 0.05,
-                0.1,
                 0.2,
                 # 0.3,
-                0.5,
+                # 0.5,
             ]
             generalist_ratios = [
-                # 0.0,
+                0.0,
                 # 0.25,
                 # 0.5,
-                # 0.9,
-                1.0,
+                # # 0.9,
+                # 1.0,
             ]
 
             print("______MARE_______")
@@ -369,4 +381,6 @@ if __name__ == "__main__":
                         num_generalists=num_generalists,
                         num_experts=num_experts,
                         expert_size=expert_size,
+                        fixed_costs=fixed_cost,
+                        generalist_ratios=generalist_ratio,
                     )
