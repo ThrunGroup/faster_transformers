@@ -74,9 +74,6 @@ def finetune(
     dataset = get_dataset(dataset_name, tokenizer, model, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
 
-    print("val : ", val_dataset)
-    print("test: ", test_dataset)
-
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
     preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
@@ -95,11 +92,11 @@ def finetune(
         output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
         eval_steps=25,
-        logging_steps=5,
+        logging_steps=25,
         save_strategy="steps",
         # save_steps=100,
         learning_rate=5e-5,
-        max_steps=10,
+        max_steps=750,
         warmup_steps=20,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
@@ -124,7 +121,7 @@ def finetune(
     )
 
     early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=15, early_stopping_threshold=0.001
+        early_stopping_patience=12, early_stopping_threshold=0.001
     )
 
     # trainer_class = MARETrainer if use_mare_mlp else CustomTrainer
@@ -151,22 +148,31 @@ def finetune(
             model.activate_stats(model)
         elif use_mare_mlp:
             # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
-            # print(f"thrunlab/{pre_trained_model_name}")
-            # state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
+            print(f"thrunlab/{pre_trained_model_name}")
+            state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
 
-            # model.load_state_dict(
-            #     state_dict,
-            #     strict=False,
-            # )
+            model.load_state_dict(
+                state_dict,
+                strict=False,
+            )
 
             # Collect Stats
             if use_collect_stats:
                 model.activate_stats(model, True)
+                print("Evaluating")
                 trainer.evaluate(train_dataset)
             model.activate_mare_mlp(model)
 
+    # # Freeze all parameters
+    # for param in model.parameters():
+    #     param.requires_grad = False
+
+    # # Unfreeze parameters that contain 'router'
+    # for name, param in model.named_parameters():
+    #     if "router" in name:
+    #         param.requires_grad = True
+
     print("Training")
-    trainer.deepspeed_zero_optimization = True
     trainer.train()
     if do_evaluation:
         if save_stats:
@@ -183,7 +189,7 @@ def finetune(
             model.plot_stats(model, os.path.join(dir_path, filename))
             print("saved at: ", os.path.join(dir_path, filename))
 
-    results = trainer.evaluate(val_dataset)
+    results = trainer.evaluate(test_dataset)
     print("EVALUATION: ", results)
     wandb_run.finish()
 
@@ -244,14 +250,14 @@ def create_model(
     # Build a Gated Attention model
     model_name = f"{model_type}_{dataset_name}"
     pre_trained_model_name = model_name
-    if num_generalists != 0:
-        model_name += f"_mare_ar{num_generalists}_ex{num_experts}"
-        if expert_size:
-            model_name += f"_size-{expert_size}"
-    elif num_experts:
-        model_name += f"_moe_ex{num_experts}"
-    else:
-        model_name += f"_dense"
+    # if num_generalists != 0:
+    #     model_name += f"_mare_ar{num_generalists}_ex{num_experts}"
+    #     if expert_size:
+    #         model_name += f"_size-{expert_size}"
+    # elif num_experts:
+    #     model_name += f"_moe_ex{num_experts}"
+    # else:
+    #     model_name += f"_dense"
 
     model_name += f"_sp{fixed_costs}_ar{generalist_ratios}"
     model_name = model_name.replace(".", "_")
@@ -261,8 +267,9 @@ def create_model(
         pre_trained_model_name += (
             f"_dense_epochs-{num_epochs}"  # -{num_epochs}
         )
-        model_name += "_256_original_router"
-    pre_trained_model_name = "t5-large_cola_dense_sp0_ar0"
+        model_name += "_router_from_pretrained_alpha1"
+    pre_trained_model_name = "t5-large_sst2_sp0_ar0"
+    # pre_trained_model_name = "t5-large_cola_sp0_ar0"
     model_name += run_name  # optional
 
     # captures the method parameters and model_name as a dictionary
@@ -307,13 +314,10 @@ def create_model(
 
 
 if __name__ == "__main__":
-    print(os.listdir("thrunlab"))
-
-    torch.set_printoptions(threshold=300)
     dataset_types = [
         # BILLSUM,
-        # SST2,
-        COLA,
+        SST2,
+        # COLA,
         # RTE,
         # MRPC,
         # QNLI,
@@ -328,59 +332,54 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [T5]
-    for model_type in model_types:
-        for dataset_type in dataset_types:
-            common_args = {
-                "model_type": model_type,
-                "dataset_name": dataset_type,
-                "num_epochs": 10,
-                "train_batch_size": 16,
-                "test_batch_size": 32,
-                "gradient_checkpointing": False,
-            }
-            # create_model(
-            #     # run_name="dense_epochs5",
-            #     **common_args,
-            #     push_to_hub=True,
-            # )
+    model_types = [T5_LARGE]
+    for i in range(1):
+        print("EXPERIMENT: ", i)
+        for model_type in model_types:
+            for dataset_type in dataset_types:
+                common_args = {
+                    "model_type": model_type,
+                    "dataset_name": dataset_type,
+                    "num_epochs": 2,
+                    "train_batch_size": 16,
+                    "test_batch_size": 32,
+                    "gradient_checkpointing": False,
+                }
+                # create_model(
+                #     **common_args,
+                #     push_to_hub=True,
+                # )
+                # continue
 
-            # continue
-            total_size = total_sizes[model_type]
-            expert_size = 16
-            fixed_costs = [
-                0.05,
-                0.2,
-                # 0.3,
-                # 0.5,
-            ]
-            generalist_ratios = [
-                0.0,
-                # 0.25,
-                # 0.5,
-                # # 0.9,
-                # 1.0,
-            ]
+                # continue
+                total_size = total_sizes[model_type]
+                expert_size = 16
+                fixed_costs = [
+                    0.05,
+                    # 0.2,
+                    # 0.3,
+                ]
+                generalist_ratios = [0.0]
 
-            print("______MARE_______")
+                print("______MARE_______")
 
-            for fixed_cost in fixed_costs:
-                for generalist_ratio in generalist_ratios:
-                    # continue
-                    total_nums = int(total_size / expert_size * fixed_cost)
-                    num_generalists = (
-                        int(total_nums * generalist_ratio) * 2 // 2
-                    )  # To make it even
-                    num_experts = total_nums - num_generalists
-                    create_model(
-                        use_mare_mlp=True,
-                        **common_args,
-                        save_stats=False,
-                        use_collect_stats=True,
-                        push_to_hub=False,
-                        num_generalists=num_generalists,
-                        num_experts=num_experts,
-                        expert_size=expert_size,
-                        fixed_costs=fixed_cost,
-                        generalist_ratios=generalist_ratio,
-                    )
+                for fixed_cost in fixed_costs:
+                    for generalist_ratio in generalist_ratios:
+                        # continue
+                        total_nums = int(total_size / expert_size * fixed_cost)
+                        num_generalists = (
+                            int(total_nums * generalist_ratio) * 2 // 2
+                        )  # To make it even
+                        num_experts = total_nums - num_generalists
+                        create_model(
+                            use_mare_mlp=True,
+                            **common_args,
+                            save_stats=False,
+                            use_collect_stats=False,
+                            push_to_hub=False,
+                            num_generalists=num_generalists,
+                            num_experts=num_experts,
+                            expert_size=expert_size,
+                            fixed_costs=fixed_cost,
+                            generalist_ratios=generalist_ratio,
+                        )
