@@ -106,8 +106,8 @@ def finetune(
         report_to="wandb",
         run_name=model_name,
         # for memory issues
-        gradient_accumulation_steps=1,
-        # deepspeed="ds_config.json",
+        gradient_accumulation_steps=2,
+        deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
@@ -121,7 +121,7 @@ def finetune(
     )
 
     early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=12, early_stopping_threshold=0.001
+        early_stopping_patience=8, early_stopping_threshold=0.01
     )
 
     # trainer_class = MARETrainer if use_mare_mlp else CustomTrainer
@@ -169,7 +169,12 @@ def finetune(
 
     # # Unfreeze parameters that contain 'router'
     # for name, param in model.named_parameters():
-    #     if "router" in name:
+    #     # print(name)
+    #     if (
+    #         "router" in name
+    #         or "classification_head" in name
+    #         # or "encoder" in name
+    #     ):
     #         param.requires_grad = True
 
     print("Training")
@@ -268,7 +273,7 @@ def create_model(
             f"_dense_epochs-{num_epochs}"  # -{num_epochs}
         )
         model_name += "_router_from_pretrained_alpha1"
-    pre_trained_model_name = "t5-large_sst2_sp0_ar0"
+    pre_trained_model_name = "t5-large_rte_sp0_ar0"
     # pre_trained_model_name = "t5-large_cola_sp0_ar0"
     model_name += run_name  # optional
 
@@ -316,9 +321,9 @@ def create_model(
 if __name__ == "__main__":
     dataset_types = [
         # BILLSUM,
-        SST2,
+        # SST2,
         # COLA,
-        # RTE,
+        RTE,
         # MRPC,
         # QNLI,
         # BOOLQ,
@@ -340,9 +345,9 @@ if __name__ == "__main__":
                 common_args = {
                     "model_type": model_type,
                     "dataset_name": dataset_type,
-                    "num_epochs": 2,
-                    "train_batch_size": 16,
-                    "test_batch_size": 32,
+                    "num_epochs": 4,
+                    "train_batch_size": 8,
+                    "test_batch_size": 16,
                     "gradient_checkpointing": False,
                 }
                 # create_model(

@@ -106,14 +106,6 @@ class MARETrainer(Trainer):
                 else:
                     loss += layer_loss
 
-                # if self.steps % 25 == 0:
-                # print(mlp_layer.routing_probs.shape)
-                # binary_preds = (mlp_layer.routing_probs > 0.5).float()
-                # correct = (binary_preds == mlp_layer.activation).float().sum()
-                # accuracy = correct / mlp_layer.activation.numel()
-                # module = "decoder" if is_decoder else "encoder"
-                # print(module, block_idx, " :", accuracy.item())
-
         if loss is not None:
             loss = loss / count
 
@@ -124,8 +116,8 @@ class MARETrainer(Trainer):
 
     def compute_loss(self, model, inputs, return_outputs=False):
         labels = inputs.pop("labels")
-        # forward pass
 
+        # forward pass
         outputs = model(**inputs)
 
         logits = outputs.get("logits")[:, 0]
@@ -143,13 +135,4 @@ class MARETrainer(Trainer):
         if penalty:
             loss = loss + alpha * penalty
 
-        # if loss is None:
-        #     # loss = F.binary_cross_entropy(logits, labels)
-        #     loss = F.binary_cross_entropy(torch.tensor(.0), torch.tensor(.0))
-        #     print("hi loss is NOne")
-        # else:
-        #     print('hi loss is not NOne')
-        #     # loss = loss + F.binary_cross_entropy(logits, labels)
-        # print(loss)
-        # print(self.compute_penalty(model))
         return (loss, outputs) if return_outputs else loss

@@ -306,8 +306,8 @@ def low_rank_approximation(linear_layer, rank=64):
     second_layer = nn.Linear(rank, linear_layer.out_features, bias=True)
 
     # Assign the low-rank matrices to the layers' weights
-    first_layer.weight.data = U_approx.T
-    second_layer.weight.data = torch.mm(S_approx, V_approx).T
+    first_layer.weight.data = U_approx.T.contiguous()
+    second_layer.weight.data = torch.mm(S_approx, V_approx).T.contiguous()
 
     # If the original linear layer had a bias, assign it to the second layer's bias
     if linear_layer.bias is not None:
