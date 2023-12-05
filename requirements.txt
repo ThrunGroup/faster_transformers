@@ -36,8 +36,9 @@ py7zr
 accelerate
 wandb
 deepspeed
-equinox~=0.10.4 # latest: 0.11.2
+equinox # latest: 0.11.2
 transformers
-huggingface_hub~=0.12.0
-tokenizers~=0.11.4
-datasets~=2.9.0
+huggingface_hub #~=0.12.0
+tokenizers #~=0.11.4
+datasets #~=2.9.0
+testresources
