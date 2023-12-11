@@ -96,7 +96,7 @@ def finetune(
         save_strategy="steps",
         # save_steps=100,
         learning_rate=5e-5,
-        max_steps=750,
+        max_steps=10,
         warmup_steps=20,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
@@ -349,10 +349,10 @@ if __name__ == "__main__":
                     "test_batch_size": 16,
                     "gradient_checkpointing": False,
                 }
-                # create_model(
-                #     **common_args,
-                #     push_to_hub=True,
-                # )
+                create_model(
+                    **common_args,
+                    push_to_hub=True,
+                )
 
                 total_size = total_sizes[model_type]
                 expert_size = 16
