@@ -69,11 +69,6 @@ class GLUEDataset(Dataset):
                 self.benchmark,
                 self.dataset_type,
             )
-            # dataset = load_dataset(
-            #     self.benchmark, self.dataset_type, split="train"
-            # )
-
-            # dataset = dataset.train_test_split(test_size=0.5)
 
             tokenized_dataset = dataset.map(
                 self.preprocess,
@@ -81,8 +76,9 @@ class GLUEDataset(Dataset):
             )
             # GLUE doesn't provide answers for TEST, so we have to manually make them
             train_test_dataset = tokenized_dataset["train"].train_test_split(
-                test_size=1024
+                test_size=0.1
             )
+
             train_dataset = train_test_dataset["train"]
             test_dataset = train_test_dataset["test"]
             val_dataset = tokenized_dataset["validation"]

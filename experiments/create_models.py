@@ -322,8 +322,8 @@ if __name__ == "__main__":
     dataset_types = [
         # BILLSUM,
         # SST2,
-        COLA,
-        # RTE,
+        # COLA,
+        RTE,
         # MRPC,
         # QNLI,
         # BOOLQ,
@@ -359,7 +359,7 @@ if __name__ == "__main__":
                 expert_size = 16
                 fixed_costs = [
                     0.05,
-                    # 0.2,
+                    0.1,
                     # 0.3,
                 ]
                 generalist_ratios = [0.0]

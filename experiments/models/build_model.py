@@ -1,12 +1,14 @@
 from transformers import (
     GPT2Config,
     T5Config,
+    MistralConfig,
     GPT2LMHeadModel,
     AutoModelForSeq2SeqLM,
     AutoModelForQuestionAnswering,
     AutoModelForSequenceClassification,
     T5ForConditionalGeneration,
     T5ForSequenceClassification,
+    MistralForSequenceClassification,
 )
 from torch import nn
 
@@ -30,8 +32,11 @@ from experiments.models.t5_sparity_check.t5_sparsity_check_new import (
 )
 
 from utils.constants import (
+    # models
     GPT2,
     T5,
+    MISTRAL_7B,
+    # datasets
     BILLSUM,
     SQUAD,
     SAMSUM,
@@ -49,6 +54,8 @@ def get_model(model_type, dataset_type):
     config = config.from_pretrained(model_type)
 
     # get model
+    if "mistral" in model_type:
+        model = MistralForSequenceClassification
     if "t5" in model_type:
         model = T5ForConditionalGeneration
         model = T5ForSequenceClassification
