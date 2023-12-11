@@ -274,7 +274,6 @@ def create_model(
         )
         model_name += "_router_from_pretrained_alpha1"
     pre_trained_model_name = "t5-3b_rte_sp0_ar0"
-    # pre_trained_model_name = "t5-large_cola_sp0_ar0"
     model_name += run_name  # optional
 
     # captures the method parameters and model_name as a dictionary
@@ -322,8 +321,8 @@ if __name__ == "__main__":
     dataset_types = [
         # BILLSUM,
         # SST2,
-        COLA,
-        # RTE,
+        # COLA,
+        RTE,
         # MRPC,
         # QNLI,
         # BOOLQ,
