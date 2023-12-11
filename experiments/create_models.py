@@ -273,7 +273,7 @@ def create_model(
             f"_dense_epochs-{num_epochs}"  # -{num_epochs}
         )
         model_name += "_router_from_pretrained_alpha1"
-    pre_trained_model_name = "t5-large_rte_sp0_ar0"
+    pre_trained_model_name = "t5-3b_rte_sp0_ar0"
     # pre_trained_model_name = "t5-large_cola_sp0_ar0"
     model_name += run_name  # optional
 
@@ -322,8 +322,8 @@ if __name__ == "__main__":
     dataset_types = [
         # BILLSUM,
         # SST2,
-        # COLA,
-        RTE,
+        COLA,
+        # RTE,
         # MRPC,
         # QNLI,
         # BOOLQ,
@@ -350,10 +350,10 @@ if __name__ == "__main__":
                     "test_batch_size": 16,
                     "gradient_checkpointing": False,
                 }
-                create_model(
-                    **common_args,
-                    push_to_hub=True,
-                )
+                # create_model(
+                #     **common_args,
+                #     push_to_hub=True,
+                # )
 
                 total_size = total_sizes[model_type]
                 expert_size = 16
