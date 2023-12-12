@@ -149,12 +149,12 @@ def finetune(
         elif use_mare_mlp:
             # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
             print(f"thrunlab/{pre_trained_model_name}")
-            state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
+            # state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
 
-            model.load_state_dict(
-                state_dict,
-                strict=False,
-            )
+            # model.load_state_dict(
+            #     state_dict,
+            #     strict=False,
+            # )
 
             # Collect Stats
             if use_collect_stats:
@@ -336,7 +336,7 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [T5_3B]
+    model_types = [T5_LARGE]
     for i in range(1):
         print("EXPERIMENT: ", i)
         for model_type in model_types:
@@ -349,10 +349,10 @@ if __name__ == "__main__":
                     "test_batch_size": 16,
                     "gradient_checkpointing": False,
                 }
-                create_model(
-                    **common_args,
-                    push_to_hub=True,
-                )
+                # create_model(
+                #     **common_args,
+                #     push_to_hub=True,
+                # )
 
                 total_size = total_sizes[model_type]
                 expert_size = 16

@@ -248,12 +248,10 @@ def apply_sparsity_check_MLP(
         [model.transformer.encoder, model.transformer.decoder]
     ):
         for block_idx, block in enumerate(network.block):
+            print(is_decoder, block_idx)
             if is_decoder:
                 mlp_layer = block.layer[2]
-                # continue
             else:
-                # if block_idx < 6:
-                #     continue
                 mlp_layer = block.layer[1]
             new_mlp = MLPSparsityCheck(
                 config,
@@ -266,6 +264,9 @@ def apply_sparsity_check_MLP(
             old_mlp = mlp_layer.DenseReluDense
             new_mlp.wi.weight.data = old_mlp.wi.weight.data
             new_mlp.wo.weight.data = old_mlp.wo.weight.data
+
+            print("wi: ", old_mlp.wi.weight.data.shape)
+            print("wo: ", old_mlp.wo.weight.data.shape)
 
             # router
             new_mlp.router.router = low_rank_approximation(
@@ -294,7 +295,7 @@ def apply_sparsity_check_MLP(
 
 def low_rank_approximation(linear_layer, rank=64):
     # Decompose the weight matrix of the layer
-    print(linear_layer.weight)
+    print("weight: ", linear_layer.weight)
     U, S, V = torch.svd(linear_layer.weight.T.data)
 
     # Take the top `rank` components
