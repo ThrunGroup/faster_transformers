@@ -294,7 +294,7 @@ def apply_sparsity_check_MLP(
 
 def low_rank_approximation(linear_layer, rank=64):
     # Decompose the weight matrix of the layer
-    print(linear_layer.weight.shape)
+    print(linear_layer.weight)
     U, S, V = torch.svd(linear_layer.weight.T.data)
 
     # Take the top `rank` components

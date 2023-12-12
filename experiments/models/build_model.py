@@ -56,7 +56,7 @@ def get_model(model_type, dataset_type):
     # get model
     if "mistral" in model_type:
         model = MistralForSequenceClassification
-    if "t5" in model_type:
+    elif "t5" in model_type:
         model = T5ForConditionalGeneration
         model = T5ForSequenceClassification
     elif dataset_type in [BILLSUM, SAMSUM]:
@@ -70,7 +70,7 @@ def get_model(model_type, dataset_type):
         model = AutoModelForSequenceClassification
     # model_type = "lukeleeai/t5-base_cola_dense_epochs5"
     model = model.from_pretrained(model_type, config=config)
-
+    print(model)
     return config, model
 
 
