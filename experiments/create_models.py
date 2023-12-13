@@ -25,6 +25,7 @@ from utils.constants import (
     T5,
     T5_LARGE,
     T5_3B,
+    MISTRAL_7B,
     # Datasets
     # SST2,
     BILLSUM,
@@ -336,7 +337,7 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [T5_3B]
+    model_types = [T5]
     for i in range(1):
         print("EXPERIMENT: ", i)
         for model_type in model_types:
@@ -353,6 +354,8 @@ if __name__ == "__main__":
                     **common_args,
                     push_to_hub=True,
                 )
+
+                break
 
                 total_size = total_sizes[model_type]
                 expert_size = 16
