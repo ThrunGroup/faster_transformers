@@ -337,7 +337,7 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [T5_3B]
+    model_types = [MISTRAL_7B]
     for i in range(1):
         print("EXPERIMENT: ", i)
         for model_type in model_types:
@@ -348,41 +348,41 @@ if __name__ == "__main__":
                     "num_epochs": 4,
                     "train_batch_size": 4,
                     "test_batch_size": 8,
-                    "gradient_checkpointing": False,
+                    "gradient_checkpointing": True,
                 }
-                # create_model(
-                #     **common_args,
-                #     push_to_hub=True,
-                # )
+                create_model(
+                    **common_args,
+                    push_to_hub=True,
+                )
 
-                total_size = total_sizes[model_type]
-                expert_size = 16
-                fixed_costs = [
-                    0.05,
-                    0.1,
-                    # 0.3,
-                ]
-                generalist_ratios = [0.0]
+                # total_size = total_sizes[model_type]
+                # expert_size = 16
+                # fixed_costs = [
+                #     0.05,
+                #     0.1,
+                #     # 0.3,
+                # ]
+                # generalist_ratios = [0.0]
 
-                print("______MARE_______")
+                # print("______MARE_______")
 
-                for fixed_cost in fixed_costs:
-                    for generalist_ratio in generalist_ratios:
-                        # continue
-                        total_nums = int(total_size / expert_size * fixed_cost)
-                        num_generalists = (
-                            int(total_nums * generalist_ratio) * 2 // 2
-                        )  # To make it even
-                        num_experts = total_nums - num_generalists
-                        create_model(
-                            use_mare_mlp=True,
-                            **common_args,
-                            save_stats=False,
-                            use_collect_stats=False,
-                            push_to_hub=False,
-                            num_generalists=num_generalists,
-                            num_experts=num_experts,
-                            expert_size=expert_size,
-                            fixed_costs=fixed_cost,
-                            generalist_ratios=generalist_ratio,
-                        )
+                # for fixed_cost in fixed_costs:
+                #     for generalist_ratio in generalist_ratios:
+                #         # continue
+                #         total_nums = int(total_size / expert_size * fixed_cost)
+                #         num_generalists = (
+                #             int(total_nums * generalist_ratio) * 2 // 2
+                #         )  # To make it even
+                #         num_experts = total_nums - num_generalists
+                #         create_model(
+                #             use_mare_mlp=True,
+                #             **common_args,
+                #             save_stats=False,
+                #             use_collect_stats=False,
+                #             push_to_hub=False,
+                #             num_generalists=num_generalists,
+                #             num_experts=num_experts,
+                #             expert_size=expert_size,
+                #             fixed_costs=fixed_cost,
+                #             generalist_ratios=generalist_ratio,
+                #         )
