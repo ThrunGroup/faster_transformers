@@ -350,10 +350,10 @@ if __name__ == "__main__":
                     "test_batch_size": 8,
                     "gradient_checkpointing": False,
                 }
-                create_model(
-                    **common_args,
-                    push_to_hub=True,
-                )
+                # create_model(
+                #     **common_args,
+                #     push_to_hub=True,
+                # )
 
                 total_size = total_sizes[model_type]
                 expert_size = 16
