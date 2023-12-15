@@ -128,7 +128,7 @@ class MARETrainer(Trainer):
         # regularizer = lambda_coeff * self.compute_penalty(model)
         # loss = F.binary_cross_entropy(logits, labels)
         alpha = 1.0
-        penalty = self.compute_penalty(model)
+        # penalty = self.compute_penalty(model)
         # penalty = None
         loss = F.binary_cross_entropy(logits, labels)
 
