@@ -272,8 +272,8 @@ def apply_sparsity_check_MLP(
             new_mlp.router.router = low_rank_approximation(
                 old_mlp.wi,
                 # rank=expert_size * (num_experts + num_generalists),
-                # rank=old_mlp.ㅑ.out_features // 5,
-                rank=256,
+                rank=old_mlp.ㅑ.out_features // 5,
+                # rank=256,
             )
 
             if block_idx == 0:
