@@ -117,7 +117,7 @@ class GLUEDataset(Dataset):
         """
         data_collator = DataCollatorWithPadding(
             tokenizer=self.tokenizer,
-            max_length=512,
+            # max_length=self.tokenizer.model_max_length,
         )
         return data_collator
 
@@ -181,7 +181,7 @@ class GLUEDataset(Dataset):
                 "Yes or No?"
                 + "\nQuestion: "
                 + example["question"]
-                + "\nPessage: "
+                + "\nPassage: "
                 + example["passage"]
             )
         elif self.dataset_type == MULTIRC:
@@ -207,8 +207,9 @@ class GLUEDataset(Dataset):
 
         inputs = self.tokenizer(
             input_text,
-            truncation=True,
-            max_length=512,
+            padding=True,
+            # truncation=True,
+            # max_length=512,
         )
         inputs["labels"] = example["label"]
 

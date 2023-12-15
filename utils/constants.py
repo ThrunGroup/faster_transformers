@@ -14,6 +14,7 @@ OPT_1_3B = "opt-1.3b"
 OPT_2_7B = "opt-2.7b"
 OPT_13B = "opt-13b"
 OPT_30B = "opt-30b"
+MISTRAL_7B = "mistralai/Mistral-7B-v0.1"
 
 BLOOM = "bloom"
 BLOOM_560M = "bloom-560m"
@@ -43,6 +44,10 @@ WIKITEXT2 = "wikitext-2-raw-v1"
 SQUAD = "squad"
 OPENWEBTEXT = "openwebtext"
 SAMSUM = "samsum"
+
+# trainers
+CUSTOM_TRAINER = "custom_trainer"
+MARE_TRAINER = "mare_trainer"
 
 # GLUE
 QNLI = "qnli"

@@ -7,7 +7,7 @@ from transformers import (
 )
 from torch.nn import functional as F
 import wandb
-import copy
+import argparse
 
 import gc
 import torch
@@ -37,8 +37,33 @@ from utils.constants import (
     WIC,
     MULTIRC,
     BOOLQ,
+
+    # Trainers
+    CUSTOM_TRAINER,
+    MARE_TRAINER,
 )
 
+def create_arg_parser():
+    parser = argparse.ArgumentParser(description="Finetune a model on a dataset")
+
+    # Adding arguments based on the finetune function's parameters
+    parser.add_argument("--model_type", type=str, required=True, help="Type of the model")
+    parser.add_argument("--model_name", type=str, required=True, help="Name of the model to finetune")
+    parser.add_argument("--model", required=True, help="PyTorch model to finetune")
+    parser.add_argument("--tokenizer", required=True, help="Tokenizer to tokenize the dataset")
+    parser.add_argument("--dataset_name", type=str, required=True, help="Name of the dataset to train on")
+    parser.add_argument("--num_epochs", type=int, default=10, help="Number of epochs to train the model")
+    parser.add_argument("--resume_from_checkpoint", action="store_true", help="Whether to resume the training from the checkpoint")
+    parser.add_argument("--run_name", type=str, default="", help="Run name for the experiment")
+    parser.add_argument("--do_evaluation", action="store_true", help="Whether to evaluate the model after training")
+    parser.add_argument("--push_to_hub", action="store_true", help="Whether to push the model to the hub")
+    parser.add_argument("--config", help="Additional configuration")
+    parser.add_argument("--save_stats", action="store_true", help="Whether to save statistics of the model")
+    parser.add_argument("--use_mare_mlp", action="store_true", help="Whether to use MARE MLP")
+    parser.add_argument("--use_collect_stats", action="store_true", help="Whether to collect stats during training")
+    parser.add_argument("--pre_trained_model_name", type=str, help="Name of the pre-trained model")
+
+    return parser
 
 def finetune(
     model_type: str,
@@ -56,6 +81,7 @@ def finetune(
     use_mare_mlp: bool = False,
     use_collect_stats: bool = False,
     pre_trained_model_name: str = None,
+    trainer_type: str = CUSTOM_TRAINER,
 ):
     """
     Finetune the model on a dataset
@@ -68,6 +94,7 @@ def finetune(
     :param resume_from_checkpoint: Whether to resume the training from the checkpoint
     :param do_evaluation: Whether to evaluate the model after training and save the metrics
     :param save_stats: Whether to save statistics of t5_sparsity_check model
+    :param trainer_type: Trainer type (e.g. CustomTrainer is a trainer with default loss function of labels and logits)
     :returns: Dictionary of evaluation metrics and inference time if `do_evaluation` is true
     """
     print("Finetuning started...")
@@ -124,10 +151,13 @@ def finetune(
         early_stopping_patience=8, early_stopping_threshold=0.01
     )
 
-    # trainer_class = MARETrainer if use_mare_mlp else CustomTrainer
-
-    # trainer = trainer_class(
-    trainer = MARETrainer(
+    if trainer_type == MARE_TRAINER:
+        trainer_class = MARETrainer
+    elif trainer_type == CUSTOM_TRAINER:
+        trainer_class = CustomTrainer
+    else:
+        raise NotImplementedError(f"{trainer_type} is not implemented.")
+    trainer = trainer_class(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
@@ -239,6 +269,7 @@ def create_model(
     fixed_costs=0,
     generalist_ratios=0,
     save_stats: bool = False,
+    relufy: bool = True,
     **kwargs,
 ):
     """
@@ -250,6 +281,7 @@ def create_model(
     :param num_epochs: Number of epochs to finetune the model
     :param do_evaluation: Whether to evaluate the model after training and save the metrics
     :param save_stats: Whether to save statistics of model (should set to be true only for t5_sparsity_check model)
+    :param relufy: Whether to relufy activation function in mlp blocks
     :return: Dictionary of evaluation logs if `do_evaluation` is true
     """
     # Build a Gated Attention model
@@ -299,6 +331,10 @@ def create_model(
     tokenizer = AutoTokenizer.from_pretrained(model_type)
     if GPT2 in model_type:
         tokenizer.pad_token = tokenizer.eos_token
+
+    if "mistral" in model_type:
+        if relufy:
+            model.config.hidden_act = "relu"
 
     finetune(
         model_type,
