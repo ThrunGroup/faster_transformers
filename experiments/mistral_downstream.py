@@ -17,12 +17,18 @@ from peft import (
 
 import torch
 import argparse
+import os
 
 from data.get_dataset import get_dataset
 
 
 def train_mistral(use_relu: bool = True,):
     dataset_type = BOOLQ  # @jay: fix hard-coded
+
+    os.environ["WANDB_PROJECT"] = f"Mistral 7b on {dataset_type}"
+    os.environ["WANDB_WATCH"] = "gradients"
+    # os.environ["WANDB_LOG_MODEL"] = "checkpoint"
+
 
     nf4_config = BitsAndBytesConfig(
         load_in_4bit=True,
@@ -76,6 +82,8 @@ def train_mistral(use_relu: bool = True,):
         push_to_hub=True,
         seed=1,
         data_seed=1,
+        report_to="wandb",
+        run_name=output_dir,
     )
 
     # Get dataset
