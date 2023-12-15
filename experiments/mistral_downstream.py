@@ -27,6 +27,7 @@ def train_mistral(use_relu: bool = True,):
 
     os.environ["WANDB_PROJECT"] = f"Mistral 7b on {dataset_type}"
     os.environ["WANDB_WATCH"] = "gradients"
+    home_dir = "/scr/jay"
     # os.environ["WANDB_LOG_MODEL"] = "checkpoint"
 
 
@@ -63,7 +64,7 @@ def train_mistral(use_relu: bool = True,):
     output_dir = f"{MISTRAL_7B}_{dataset_type}"
 
     args = TrainingArguments(
-        output_dir=output_dir,
+        output_dir=os.path.join(home_dir,output_dir),
         # num_train_epochs=5,
         # per_device_train_batch_size=4,
         max_steps=1000,  # comment out this line if you want to train in epochs
@@ -131,3 +132,7 @@ def main():
     #     "gradient_checkpointing": True,
     # }
     # create_model(**common_args, push_to_hub=True,)
+
+
+if __name__ == "__main__":
+    main()
