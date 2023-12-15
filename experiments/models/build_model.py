@@ -51,8 +51,7 @@ def get_model(model_type, dataset_type):
         config = GPT2Config
     else:
         config = T5Config
-    if model_type == MISTRAL_7B:
-        model_type = "mistralai/" + model_type
+
     config = config.from_pretrained(model_type)
 
     # get model

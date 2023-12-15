@@ -72,6 +72,7 @@ def finetune(
     :returns: Dictionary of evaluation metrics and inference time if `do_evaluation` is true
     """
     print("Finetuning started...")
+    model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
 
@@ -256,15 +257,6 @@ def create_model(
     # Build a Gated Attention model
     model_name = f"{model_type}_{dataset_name}"
     pre_trained_model_name = model_name
-    # if num_generalists != 0:
-    #     model_name += f"_mare_ar{num_generalists}_ex{num_experts}"
-    #     if expert_size:
-    #         model_name += f"_size-{expert_size}"
-    # elif num_experts:
-    #     model_name += f"_moe_ex{num_experts}"
-    # else:
-    #     model_name += f"_dense"
-
     model_name += f"_sp{fixed_costs}_ar{generalist_ratios}"
     model_name = model_name.replace(".", "_")
     print(model_name)
