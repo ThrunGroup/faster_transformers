@@ -127,13 +127,21 @@ def build_model(
         )
 
     if dataset_type in GLUE + SUPERGLUE:
-        original_out_proj = model.classification_head.out_proj
-        new_out_proj = nn.Linear(config.d_model, 4)
-        new_out_proj.weight.data = original_out_proj.weight.data.repeat(4, 1)
-        new_out_proj.bias.data = original_out_proj.bias.data.repeat(4)
-        model.classification_head.out_proj = nn.Sequential(
-            new_out_proj, nn.Sigmoid()
-        )
+        if "t5" in model_type:
+            original_out_proj = model.classification_head.out_proj
+            new_out_proj = nn.Linear(config.d_model, 4)
+            new_out_proj.weight.data = original_out_proj.weight.data.repeat(
+                4, 1
+            )
+            new_out_proj.bias.data = original_out_proj.bias.data.repeat(4)
+            model.classification_head.out_proj = nn.Sequential(
+                new_out_proj, nn.Sigmoid()
+            )
+        else:
+            original_out = model.score
+            new_out = nn.Linear(config.hidden_size, 4, bias=False)
+            new_out.weight.data = original_out.weight.data.repeat(4, 1)
+            model.score = nn.Sequential(new_out, nn.Sigmoid())
 
     return model
 
