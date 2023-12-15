@@ -35,6 +35,7 @@ class GLUEDataset(Dataset):
         :param prefix: Prefix to the inputs to start the summarization task
         """
         super().__init__(tokenizer, model, model_type)
+        self.model_type = model_type.split("/")[-1]
         self.dataset_type = dataset_type
         self.metrics = evaluate.load("accuracy")
         self.benchmark = "super_glue" if dataset_type in SUPERGLUE else "glue"
