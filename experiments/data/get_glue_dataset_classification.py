@@ -44,20 +44,19 @@ class GLUEDataset(Dataset):
         Load and build a simple summarization dataset
         :return: tokenized dataset, data collator, and compute_metrics function
         """
-        model_name = self.model_type.split("/")[-1]
         try:
             # Try to load preprocessed data
             with open(
-                f"{model_name}_{self.dataset_type}_train_dataset.pkl",
+                f"{self.model_type}_{self.dataset_type}_train_dataset.pkl",
                 "rb",
             ) as f:
                 train_dataset = pickle.load(f)
             with open(
-                f"{model_name}_{self.dataset_type}_test_dataset.pkl", "rb"
+                f"{self.model_type}_{self.dataset_type}_test_dataset.pkl", "rb"
             ) as f:
                 test_dataset = pickle.load(f)
             with open(
-                f"{model_name}_{self.dataset_type}_validation_dataset.pkl",
+                f"{self.model_type}_{self.dataset_type}_validation_dataset.pkl",
                 "rb",
             ) as f:
                 val_dataset = pickle.load(f)
@@ -86,16 +85,16 @@ class GLUEDataset(Dataset):
 
             # Save the preprocessed data
             with open(
-                f"{model_name}_{self.dataset_type}_train_dataset.pkl",
+                f"{self.model_type}_{self.dataset_type}_train_dataset.pkl",
                 "wb",
             ) as f:
                 pickle.dump(train_dataset, f)
             with open(
-                f"{model_name}_{self.dataset_type}_test_dataset.pkl", "wb"
+                f"{self.model_type}_{self.dataset_type}_test_dataset.pkl", "wb"
             ) as f:
                 pickle.dump(test_dataset, f)
             with open(
-                f"{model_name}_{self.dataset_type}_validation_dataset.pkl",
+                f"{self.model_type}_{self.dataset_type}_validation_dataset.pkl",
                 "wb",
             ) as f:
                 pickle.dump(val_dataset, f)

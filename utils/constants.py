@@ -14,7 +14,7 @@ OPT_1_3B = "opt-1.3b"
 OPT_2_7B = "opt-2.7b"
 OPT_13B = "opt-13b"
 OPT_30B = "opt-30b"
-MISTRAL_7B = "mistralai/Mistral-7B-v0.1"
+MISTRAL_7B = "Mistral-7B-v0.1"
 
 BLOOM = "bloom"
 BLOOM_560M = "bloom-560m"
