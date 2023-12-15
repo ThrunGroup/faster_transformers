@@ -84,7 +84,7 @@ def finetune(
         "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0
     ):
         wandb_run = wandb.init(
-            project=f"{model_type}_{dataset_type}_mlp",
+            project=f"{model_name}_{dataset_type}_mlp",
             name=model_name,
             reinit=True,
             config=config,
