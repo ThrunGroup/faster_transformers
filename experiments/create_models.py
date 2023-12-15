@@ -289,6 +289,8 @@ def create_model(
     model.config.pad_token_id = model.config.eos_token_id
 
     tokenizer = AutoTokenizer.from_pretrained(model_type)
+    if model_type == MISTRAL_7B:
+        tokenizer.pad_token = tokenizer.eos_token
     if GPT2 in model_type:
         tokenizer.pad_token = tokenizer.eos_token
 
