@@ -144,7 +144,7 @@ def build_model(
             new_out.weight.data = original_out.weight.data.repeat(4, 1)
             model.score = nn.Sequential(new_out, nn.Sigmoid())
 
-    print(model)
+    print("MODEL AGAIN: ", model)
 
     return model
 
