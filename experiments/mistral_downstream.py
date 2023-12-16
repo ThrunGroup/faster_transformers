@@ -1,4 +1,6 @@
-from utils.constants import MISTRAL_7B, BOOLQ
+import copy
+
+from utils.constants import MISTRAL_7B, BOOLQ, MULTIRC
 from create_models import create_model
 from transformers import (
     AutoModelForSequenceClassification,
@@ -6,6 +8,7 @@ from transformers import (
     BitsAndBytesConfig,
     TrainingArguments,
     Trainer,
+    EarlyStoppingCallback,
 )
 from peft import (
     AutoPeftModelForSequenceClassification,
@@ -22,70 +25,95 @@ import os
 from data.get_dataset import get_dataset
 
 
-def train_mistral(use_relu: bool = True,):
-    dataset_type = BOOLQ  # @jay: fix hard-coded
+def _get_trainable_parameter_groups(trainer):
+    param_groups = []
+    for param_group in trainer.optimizer.param_groups:
+        trainable_params = {
+            "params": [p for p in param_group["params"] if p.requires_grad]
+        }
+        param_groups.append(trainable_params)
+    return param_groups
+
+def train_mistral(
+    dataset_type: str,
+    use_relu: bool = True,
+    use_quantization: bool = False,
+    use_lora: bool = True,
+):
+    # dataset_type = BOOLQ  # @jay: fix hard-coded
+    model_name = "mistral7b"
 
     os.environ["WANDB_PROJECT"] = f"Mistral 7b on {dataset_type}"
     os.environ["WANDB_WATCH"] = "gradients"
     home_dir = "/scr/jay"
     # os.environ["WANDB_LOG_MODEL"] = "checkpoint"
 
+    if use_quantization:
+        nf4_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+        )
+        model = AutoModelForSequenceClassification.from_pretrained(
+            MISTRAL_7B,
+            # device_map="auto",
+            quantization_config=nf4_config,
+            use_cache=False,
+        )
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            MISTRAL_7B,
+            # device_map="auto",
+            use_cache=False,
+            torch_dtype=torch.bfloat16,
+        )
 
-    nf4_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.bfloat16,
-    )
-    model = AutoModelForSequenceClassification.from_pretrained(
-        MISTRAL_7B,
-        device_map="auto",
-        quantization_config=nf4_config,
-        use_cache=False,
-    )
     if use_relu:
         model.config.hidden_act = "relu"
+    model.config.pad_token_id = (
+        model.config.eos_token_id
+    )  # pad token id is required when calculating loss in the
+    # forward pass of sequence classification model
 
     tokenizer = AutoTokenizer.from_pretrained(MISTRAL_7B)
 
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
+    output_dir = f"mistral7b_{dataset_type}"
 
-    peft_config = LoraConfig(
-        lora_alpha=16,
-        lora_dropout=0.1,
-        r=64,
-        bias="none",
-        task_type=TaskType.SEQ_CLS,
-    )
-
-    model = prepare_model_for_kbit_training(model)
-    model = get_peft_model(model, peft_config)
-    output_dir = f"{MISTRAL_7B}_{dataset_type}"
-
-    args = TrainingArguments(
-        output_dir=os.path.join(home_dir,output_dir),
-        # num_train_epochs=5,
+    args_classifier = TrainingArguments(
+        output_dir=os.path.join(home_dir, output_dir),
+        num_train_epochs=1,
         # per_device_train_batch_size=4,
-        max_steps=1000,  # comment out this line if you want to train in epochs
-        per_device_train_batch_size=4,
-        warmup_steps=20,
+        # max_steps=1000,  # comment out this line if you want to train in epochs
+        per_device_train_batch_size=32,
+        per_device_eval_batch_size=32,
+        warmup_steps=10,
         logging_steps=10,
-        save_strategy="epoch",
+        save_strategy="steps",
         evaluation_strategy="steps",
-        eval_steps=20,  # comment out this line if you want to evaluate at the end of each epoch
-        learning_rate=2e-4,
+        eval_steps=50,  # comment out this line if you want to evaluate at the end of each epoch
+        learning_rate=4e-3,
         gradient_checkpointing=True,
         # weight_decay=0.01,
         bf16=True,
+        # fp16=True,
         lr_scheduler_type="constant",
-        hub_model_id=f"thrunlab/{output_dir}",
+        hub_model_id=f"thrunlab/{output_dir}_classifier",
         push_to_hub=True,
         seed=1,
         data_seed=1,
+        save_steps=600,
         report_to="wandb",
         run_name=output_dir,
+        load_best_model_at_end=True,
+        deepspeed="mistral_ds_config.json",
     )
+
+    args_finetune = copy.deepcopy(args_classifier)
+    args_finetune.learning_rate = 5e-5
+    args_finetune.hub_model_id = f"thrunlab/{output_dir}_finetuned"
 
     # Get dataset
     dataset = get_dataset(dataset_type, tokenizer, model, MISTRAL_7B)
@@ -95,30 +123,85 @@ def train_mistral(use_relu: bool = True,):
     # Call relevant functions
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
-    preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
-
-    trainer = Trainer(
-        model=model,
-        peft_config=peft_config,
-        max_seq_length=max_seq_length,
-        tokenizer=tokenizer,
-        args=args,
-        train_dataset=train_dataset,
-        val_dataset=val_dataset,
-        data_collator=data_collator,
-        compute_metrics=compute_metrics,
-        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+    # preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics  # Don't need this as
+    # MistralForSequenceClassification only uses last logits (pooled_logits)
+    early_stopping = EarlyStoppingCallback(
+        early_stopping_patience=8, early_stopping_threshold=0.01
     )
 
-    trainer.train()
-    trainer.push_to_hub()
+    trainer_classifier = Trainer(
+        model=model,
+        tokenizer=tokenizer,
+        args=args_classifier,
+        train_dataset=train_dataset,
+        eval_dataset=val_dataset,
+        data_collator=data_collator,
+        compute_metrics=compute_metrics,
+        # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        callbacks=[early_stopping],
+    )
 
-    trainer.evaluate(test_dataset)
+    # Freeze base model
+    for params in model.model.parameters():  # Exclude classifier head
+        params.requires_grad = False
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            print(name)
+
+    # trainer_classifier.optimizer.param_groups = _get_trainable_parameter_groups(trainer_classifier)
+    trainer_classifier.train()
+    trainer_classifier.push_to_hub()
+
+    trainer_classifier.evaluate(test_dataset)
+
+    del trainer_classifier
+    torch.cuda.empty_cache()
+
+    # Unfreeze Base model for fine-tuning
+    for params in model.model.parameters():
+        params.requires_grad = True
+
+    if use_quantization:
+        model = prepare_model_for_kbit_training(model)
+
+    if use_lora:
+        peft_config = LoraConfig(
+            lora_alpha=16,  # Scaling factor for the weight matrices
+            lora_dropout=0.1,
+            r=64,
+            bias="none",
+            task_type=TaskType.SEQ_CLS,
+        )
+        model = get_peft_model(model, peft_config)  # PeftModel.base_model --> LoraModel/ LoraModel.model = model
+
+    trainer_finetune = Trainer(
+        model=model,
+        tokenizer=tokenizer,
+        args=args_finetune,
+        train_dataset=train_dataset,
+        eval_dataset=val_dataset,
+        data_collator=data_collator,
+        compute_metrics=compute_metrics,
+        # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        callbacks=[early_stopping],
+    )
+
+    # transformer_model is the base mistral model (excluding classifier head)
+    # if use_lora:
+    #     transformer_model = model.base_model.model.model
+    # else:
+    #     transformer_model = model.model
+
+    trainer_finetune.optimizer.param_groups = _get_trainable_parameter_groups(trainer_finetune)
+    trainer_finetune.train()
+    trainer_finetune.push_to_hub()
+    trainer_finetune.evaluate(test_dataset)
 
 
 def main():
-    train_mistral(True)
-    train_mistral(False)
+    for dataset_type in [BOOLQ, MULTIRC]:
+        train_mistral(dataset_type, False, False)
+        train_mistral(dataset_type, True, False)
     # parser = argparse.ArgumentParser()
     # parser.add_argument("--model", type=str, default=MISTRAL_7B, help="Model types")
     # parser.add_argument("--dataset", type=str, default=BOOLQ, help="dataset")

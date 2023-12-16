@@ -44,69 +44,93 @@ class GLUEDataset(Dataset):
         Load and build a simple summarization dataset
         :return: tokenized dataset, data collator, and compute_metrics function
         """
-        try:
-            # Try to load preprocessed data
-            with open(
-                f"{self.model_type}_{self.dataset_type}_train_dataset.pkl",
-                "rb",
-            ) as f:
-                train_dataset = pickle.load(f)
-            with open(
-                f"{self.model_type}_{self.dataset_type}_test_dataset.pkl", "rb"
-            ) as f:
-                test_dataset = pickle.load(f)
-            with open(
-                f"{self.model_type}_{self.dataset_type}_validation_dataset.pkl",
-                "rb",
-            ) as f:
-                val_dataset = pickle.load(f)
-            print("Loaded preprocessed data from disk.")
-
-        except FileNotFoundError:
-            # If preprocessed data does not exist, load and preprocess
-            print("No dataset found.")
-            dataset = load_dataset(
-                self.benchmark,
-                self.dataset_type,
-            )
-            # dataset = load_dataset(
-            #     self.benchmark, self.dataset_type, split="train"
-            # )
-
-            # dataset = dataset.train_test_split(test_size=0.5)
-
-            tokenized_dataset = dataset.map(
-                self.preprocess,
-                remove_columns=dataset.column_names["train"],
-            )
-            # GLUE doesn't provide answers for TEST, so we have to manually make them
-            train_test_dataset = tokenized_dataset["train"].train_test_split(
-                test_size=1024
-            )
-            train_dataset = train_test_dataset["train"]
-            test_dataset = train_test_dataset["test"]
-            val_dataset = tokenized_dataset["validation"]
-
-            # Save the preprocessed data
-            with open(
-                f"{self.model_type}_{self.dataset_type}_train_dataset.pkl",
-                "wb",
-            ) as f:
-                pickle.dump(train_dataset, f)
-            with open(
-                f"{self.model_type}_{self.dataset_type}_test_dataset.pkl", "wb"
-            ) as f:
-                pickle.dump(test_dataset, f)
-            with open(
-                f"{self.model_type}_{self.dataset_type}_validation_dataset.pkl",
-                "wb",
-            ) as f:
-                pickle.dump(val_dataset, f)
-            print("Preprocessed and saved data to disk.")
+        # try:
+        #     # Try to load preprocessed data
+        #     with open(
+        #         f"{self.model_type}_{self.dataset_type}_train_dataset.pkl",
+        #         "rb",
+        #     ) as f:
+        #         train_dataset = pickle.load(f)
+        #     with open(
+        #         f"{self.model_type}_{self.dataset_type}_test_dataset.pkl", "rb"
+        #     ) as f:
+        #         test_dataset = pickle.load(f)
+        #     with open(
+        #         f"{self.model_type}_{self.dataset_type}_validation_dataset.pkl",
+        #         "rb",
+        #     ) as f:
+        #         val_dataset = pickle.load(f)
+        #     print("Loaded preprocessed data from disk.")
+        #
+        # except FileNotFoundError:
+        #     # If preprocessed data does not exist, load and preprocess
+        #     print("No dataset found.")
+        #     dataset = load_dataset(
+        #         self.benchmark,
+        #         self.dataset_type,
+        #     )
+        #     # dataset = load_dataset(
+        #     #     self.benchmark, self.dataset_type, split="train"
+        #     # )
+        #
+        #     # dataset = dataset.train_test_split(test_size=0.5)
+        #
+        #     tokenized_dataset = dataset.map(
+        #         self.preprocess,
+        #         remove_columns=dataset.column_names["train"],
+        #     )
+        #     # GLUE doesn't provide answers for TEST, so we have to manually make them
+        #     train_test_dataset = tokenized_dataset["train"].train_test_split(
+        #         test_size=1024
+        #     )
+        #     train_dataset = train_test_dataset["train"]
+        #     test_dataset = train_test_dataset["test"]
+        #     val_dataset = tokenized_dataset["validation"]
+        #
+        #     # Save the preprocessed data
+        #     with open(
+        #         f"{self.model_type}_{self.dataset_type}_train_dataset.pkl",
+        #         "wb",
+        #     ) as f:
+        #         pickle.dump(train_dataset, f)
+        #     with open(
+        #         f"{self.model_type}_{self.dataset_type}_test_dataset.pkl", "wb"
+        #     ) as f:
+        #         pickle.dump(test_dataset, f)
+        #     with open(
+        #         f"{self.model_type}_{self.dataset_type}_validation_dataset.pkl",
+        #         "wb",
+        #     ) as f:
+        #         pickle.dump(val_dataset, f)
+        #     print("Preprocessed and saved data to disk.")
 
         # train_dataset = tokenized_dataset["train"]
         # val_dataset = tokenized_dataset["validation"]
         # test_dataset = tokenized_dataset["test"]
+        dataset = load_dataset(
+            self.benchmark,
+            self.dataset_type,
+        )
+        # dataset = load_dataset(
+        #     self.benchmark, self.dataset_type, split="train"
+        # )
+
+        # dataset = dataset.train_test_split(test_size=0.5)
+
+        tokenized_dataset = dataset.map(
+            self.preprocess,
+            remove_columns=dataset.column_names["train"],
+        )
+        # GLUE doesn't provide answers for TEST, so we have to manually make them
+        if 'test' not in tokenized_dataset:
+            train_test_dataset = tokenized_dataset["train"].train_test_split(
+                test_size=1024
+            )
+            tokenized_dataset['train'] = train_test_dataset['train']
+            tokenized_dataset['test'] = train_test_dataset['test']
+        train_dataset = tokenized_dataset["train"]
+        test_dataset = tokenized_dataset["test"]
+        val_dataset = tokenized_dataset["validation"]
 
         return train_dataset, val_dataset, test_dataset
 
@@ -137,7 +161,8 @@ class GLUEDataset(Dataset):
         # preds = np.array(
         #     preds[0][:, 0] > 1 / 2, dtype=float
         # )  # the output is sigmoid
-        preds = np.array(preds > 1 / 2, dtype=float)  # the output is sigmoid
+        # preds = np.array(preds > 1 / 2, dtype=float)  # the output is sigmoid
+        preds = preds.argmax(-1)
         # print("preds: ", preds)
         # print("labels: ", labels)
         # print("preds : ", preds)
@@ -207,7 +232,7 @@ class GLUEDataset(Dataset):
 
         inputs = self.tokenizer(
             input_text,
-            padding=True,
+            # padding='max_length',  # Data collator will dynamically pad sequences to match the max length of sequence
             # truncation=True,
             # max_length=512,
         )
