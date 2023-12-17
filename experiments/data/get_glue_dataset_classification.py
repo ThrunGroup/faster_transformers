@@ -122,7 +122,7 @@ class GLUEDataset(Dataset):
             remove_columns=dataset.column_names["train"],
         )
         # GLUE doesn't provide answers for TEST, so we have to manually make them
-        if 'test' not in tokenized_dataset:
+        if True or 'test' not in tokenized_dataset:
             train_test_dataset = tokenized_dataset["train"].train_test_split(
                 test_size=1024
             )

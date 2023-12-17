@@ -1,9 +1,11 @@
 import copy
+import accelerate
 
 from utils.constants import MISTRAL_7B, BOOLQ, MULTIRC
 from create_models import create_model
 from transformers import (
     AutoModelForSequenceClassification,
+    MistralForSequenceClassification,
     AutoTokenizer,
     BitsAndBytesConfig,
     TrainingArguments,
@@ -39,6 +41,8 @@ def train_mistral(
     use_relu: bool = True,
     use_quantization: bool = False,
     use_lora: bool = True,
+    pretrained_dir: str = MISTRAL_7B,
+
 ):
     # dataset_type = BOOLQ  # @jay: fix hard-coded
     model_name = "mistral7b"
@@ -63,7 +67,7 @@ def train_mistral(
         )
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
-            MISTRAL_7B,
+            pretrained_dir,
             # device_map="auto",
             use_cache=False,
             torch_dtype=torch.bfloat16,
@@ -83,8 +87,9 @@ def train_mistral(
     output_dir = f"mistral7b_{dataset_type}"
 
     args_classifier = TrainingArguments(
-        output_dir=os.path.join(home_dir, output_dir),
+        output_dir=os.path.join(home_dir, output_dir) + "_classifier",
         num_train_epochs=1,
+        max_steps=5,
         # per_device_train_batch_size=4,
         # max_steps=1000,  # comment out this line if you want to train in epochs
         per_device_train_batch_size=32,
@@ -94,7 +99,7 @@ def train_mistral(
         save_strategy="steps",
         evaluation_strategy="steps",
         eval_steps=50,  # comment out this line if you want to evaluate at the end of each epoch
-        learning_rate=4e-3,
+        learning_rate=2e-4,
         gradient_checkpointing=True,
         # weight_decay=0.01,
         bf16=True,
@@ -112,6 +117,7 @@ def train_mistral(
     )
 
     args_finetune = copy.deepcopy(args_classifier)
+    args_finetune.output_dir = os.path.join(home_dir, output_dir) + "_finetuned"
     args_finetune.learning_rate = 5e-5
     args_finetune.hub_model_id = f"thrunlab/{output_dir}_finetuned"
 
@@ -150,16 +156,57 @@ def train_mistral(
 
     # trainer_classifier.optimizer.param_groups = _get_trainable_parameter_groups(trainer_classifier)
     trainer_classifier.train()
-    trainer_classifier.push_to_hub()
-
     trainer_classifier.evaluate(test_dataset)
-
-    del trainer_classifier
-    torch.cuda.empty_cache()
 
     # Unfreeze Base model for fine-tuning
     for params in model.model.parameters():
         params.requires_grad = True
+
+    # trainer_classifier.push_to_hub()
+    # trainer_classifier.save_model()
+    # accelerator = trainer_classifier.accelerator
+    # unwrapped_model = accelerator.unwrap_model(model)
+
+    # New Code #
+    # Saves the whole/unpartitioned fp16 model when in ZeRO Stage-3 to the output directory if
+    # `stage3_gather_16bit_weights_on_model_save` is True in DeepSpeed Config file or
+    # `zero3_save_16bit_model` is True in DeepSpeed Plugin.
+    # For Zero Stages 1 and 2, models are saved as usual in the output directory.
+    # The model name saved is `pytorch_model.bin`
+    # unwrapped_model.save_pretrained(
+    #     args_classifier.output_dir,
+    #     is_main_process=accelerator.is_main_process,
+    #     save_function=accelerator.save,
+    #     state_dict=accelerator.get_state_dict(model),
+    # )
+    # from deepspeed.utils.zero_to_fp32 import load_state_dict_from_zero_checkpoint
+    # checkpoint_dir = os.path.join(trainer_classifier.args.output_dir, "checkpoint-final")
+    # trainer_classifier.deepspeed.save_checkpoint(checkpoint_dir)
+    # fp32_model = load_state_dict_from_zero_checkpoint(trainer_classifier.model, checkpoint_dir)
+    # fp32_model.save_pretrained(args_classifier.output_dir)
+    # unwrapped_model = trainer_classifier.accelerator.unwrap_model(trainer_classifier.deepspeed)
+    # unwrapped_model.save_pretrained(args_classifier.output_dir)
+
+    # trainer_classifier.model.save_pretrained(args_classifier.output_dir)
+    # clear memory
+    del model
+    del trainer_classifier
+    torch.cuda.empty_cache()
+
+    model = AutoModelForSequenceClassification.from_pretrained(
+            args_classifier.output_dir,
+            # device_map="auto",
+            use_cache=False,
+            torch_dtype=torch.bfloat16,
+        )
+
+    if use_relu:
+        model.config.hidden_act = "relu"
+    model.config.pad_token_id = model.config.eos_token_id
+
+    # Unfreeze Base model for fine-tuning
+    # for params in model.model.parameters():
+    #     params.requires_grad = True
 
     if use_quantization:
         model = prepare_model_for_kbit_training(model)
@@ -192,16 +239,24 @@ def train_mistral(
     # else:
     #     transformer_model = model.model
 
-    trainer_finetune.optimizer.param_groups = _get_trainable_parameter_groups(trainer_finetune)
+    # trainer_finetune.optimizer.param_groups = _get_trainable_parameter_groups(trainer_finetune)
     trainer_finetune.train()
-    trainer_finetune.push_to_hub()
+    # trainer_finetune.push_to_hub()
     trainer_finetune.evaluate(test_dataset)
 
+    del trainer_finetune
+    del model
+    torch.cuda.empty_cache()
 
 def main():
+    home_dir = "/scr/jay"
+
+
     for dataset_type in [BOOLQ, MULTIRC]:
+        output_dir = f"mistral7b_{dataset_type}_finetuned"
+        output_dir = os.path.join(home_dir, output_dir)
         train_mistral(dataset_type, False, False)
-        train_mistral(dataset_type, True, False)
+        train_mistral(dataset_type, True, False, output_dir)
     # parser = argparse.ArgumentParser()
     # parser.add_argument("--model", type=str, default=MISTRAL_7B, help="Model types")
     # parser.add_argument("--dataset", type=str, default=BOOLQ, help="dataset")
