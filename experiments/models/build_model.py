@@ -143,8 +143,6 @@ def build_model(
                 nn.Linear(config.hidden_size, 4, bias=False), nn.Sigmoid()
             )
 
-    print("MODEL AGAIN: ", model)
-
     return model
 
 
