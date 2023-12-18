@@ -331,7 +331,7 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [MISTRAL_7B]
+    model_types = [T5]
     for i in range(1):
         print("EXPERIMENT: ", i)
         for model_type in model_types:
