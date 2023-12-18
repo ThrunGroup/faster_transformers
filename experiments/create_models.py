@@ -114,7 +114,7 @@ def finetune(
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
         # bf16=True,
-        # fp16=True,
+        fp16=True,
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
         push_to_hub=True,
@@ -129,7 +129,8 @@ def finetune(
     # trainer_class = MARETrainer if use_mare_mlp else CustomTrainer
 
     # trainer = trainer_class(
-    trainer = MARETrainer(
+    # trainer = MARETrainer(
+    trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
