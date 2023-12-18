@@ -119,9 +119,6 @@ class MARETrainer(Trainer):
 
         # forward pass
         outputs = model(**inputs)
-
-        print("outputs: ", outputs.get("logits").shape)
-
         logits = outputs.get("logits")[:, 0]
         labels = labels.to(logits.dtype)
 
