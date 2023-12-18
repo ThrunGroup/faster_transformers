@@ -99,7 +99,7 @@ def finetune(
         # save_steps=100,
         learning_rate=5e-5,
         max_steps=750,
-        warmup_steps=20,
+        # warmup_steps=20,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -331,7 +331,7 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [T5]
+    model_types = [MISTRAL_7B]
     for i in range(1):
         print("EXPERIMENT: ", i)
         for model_type in model_types:
