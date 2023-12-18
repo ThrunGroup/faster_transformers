@@ -127,21 +127,21 @@ def build_model(
             expert_size=expert_size,
         )
 
-    if dataset_type in GLUE + SUPERGLUE:
-        if "t5" in model_type:
-            original_out_proj = model.classification_head.out_proj
-            new_out_proj = nn.Linear(config.d_model, 4)
-            new_out_proj.weight.data = original_out_proj.weight.data.repeat(
-                4, 1
-            )
-            new_out_proj.bias.data = original_out_proj.bias.data.repeat(4)
-            model.classification_head.out_proj = nn.Sequential(
-                new_out_proj, nn.Sigmoid()
-            )
-        # elif "mistral" in model_type:
-        #     model.score = nn.Sequential(
-        #         nn.Linear(config.hidden_size, 4, bias=False), nn.Sigmoid()
-        #     )
+    # if dataset_type in GLUE + SUPERGLUE:
+    #     if "t5" in model_type:
+    #         original_out_proj = model.classification_head.out_proj
+    #         new_out_proj = nn.Linear(config.d_model, 4)
+    #         new_out_proj.weight.data = original_out_proj.weight.data.repeat(
+    #             4, 1
+    #         )
+    #         new_out_proj.bias.data = original_out_proj.bias.data.repeat(4)
+    #         model.classification_head.out_proj = nn.Sequential(
+    #             new_out_proj, nn.Sigmoid()
+    #         )
+    #     elif "mistral" in model_type:
+    #         model.score = nn.Sequential(
+    #             nn.Linear(config.hidden_size, 4, bias=False), nn.Sigmoid()
+    #         )
 
     return model
 
