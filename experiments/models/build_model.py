@@ -138,11 +138,11 @@ def build_model(
             model.classification_head.out_proj = nn.Sequential(
                 new_out_proj, nn.Sigmoid()
             )
-        elif "mistral" in model_type:
-            original_out = model.score
-            new_out = nn.Linear(config.hidden_size, 4, bias=False)
-            new_out.weight.data = original_out.weight.data.repeat(4, 1)
-            model.score = nn.Sequential(new_out, nn.Sigmoid())
+        # elif "mistral" in model_type:
+        #     original_out = model.score
+        #     new_out = nn.Linear(config.hidden_size, 4, bias=False)
+        #     new_out.weight.data = original_out.weight.data.repeat(4, 1)
+        #     model.score = nn.Sequential(new_out, nn.Sigmoid())
 
     print("MODEL AGAIN: ", model)
 
