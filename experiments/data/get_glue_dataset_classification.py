@@ -217,6 +217,7 @@ class GLUEDataset(Dataset):
         This is a workaround to avoid storing too many tensors that are not needed.
         """
         # pred_ids = torch.argmax(logits[0], dim=-1)
-        print("---preprocess--- ", logits[0].shape)
-        pred_ids = logits[0][:, 0]
+        # print("---preprocess--- ", logits[0].shape)
+        # pred_ids = logits[0][:, 0]
+        pred_ids = logits[:, 0]
         return pred_ids
