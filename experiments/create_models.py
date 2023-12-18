@@ -332,7 +332,7 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [MISTRAL_7B]
+    model_types = [T5_LARGE]
     for i in range(1):
         print("EXPERIMENT: ", i)
         for model_type in model_types:
@@ -341,7 +341,7 @@ if __name__ == "__main__":
                     "model_type": model_type,
                     "dataset_name": dataset_type,
                     "num_epochs": 4,
-                    "train_batch_size": 4,
+                    "train_batch_size": 8,
                     "test_batch_size": 16,
                     "gradient_checkpointing": True,
                 }
