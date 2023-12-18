@@ -217,9 +217,8 @@ class GLUEDataset(Dataset):
         This is a workaround to avoid storing too many tensors that are not needed.
         """
         # pred_ids = torch.argmax(logits[0], dim=-1)
-        pred_ids = logits[:, 0]
-        if "Mistral" in self.model_type:
-            pred_ids = logits[:, 0]
-        else:
-            pred_ids = logits[0][:, 0]
+        # if "mistral" in self.model_type:
+        #     pred_ids = logits[:, 0]
+        # else:
+        pred_ids = logits[0][:, 0]
         return pred_ids

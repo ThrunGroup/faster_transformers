@@ -138,10 +138,10 @@ def build_model(
             model.classification_head.out_proj = nn.Sequential(
                 new_out_proj, nn.Sigmoid()
             )
-        elif "mistral" in model_type:
-            model.score = nn.Sequential(
-                nn.Linear(config.hidden_size, 4, bias=False), nn.Sigmoid()
-            )
+        # elif "mistral" in model_type:
+        #     model.score = nn.Sequential(
+        #         nn.Linear(config.hidden_size, 4, bias=False), nn.Sigmoid()
+        #     )
 
     return model
 
