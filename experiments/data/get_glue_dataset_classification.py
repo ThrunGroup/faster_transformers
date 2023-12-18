@@ -134,7 +134,9 @@ class GLUEDataset(Dataset):
         # preds = np.array(
         #     preds[0][:, 0] > 1 / 2, dtype=float
         # )  # the output is sigmoid
-        preds = np.array(preds > 1 / 2, dtype=float)  # the output is sigmoid
+
+        # preds = np.array(preds > 1 / 2, dtype=float)  # the output is sigmoid
+
         # print("preds: ", preds)
         # print("labels: ", labels)
         # print("preds : ", preds)
@@ -216,9 +218,9 @@ class GLUEDataset(Dataset):
         Original Trainer may have a memory leak.
         This is a workaround to avoid storing too many tensors that are not needed.
         """
-        # pred_ids = torch.argmax(logits[0], dim=-1)
-        if "mistral" in self.model_type:
-            pred_ids = logits[:, 0]
-        else:
-            pred_ids = logits[0][:, 0]
+        pred_ids = torch.argmax(logits, dim=-1)
+        # if "mistral" in self.model_type:
+        #     pred_ids = logits[:, 0]
+        # else:
+        #     pred_ids = logits[0][:, 0]
         return pred_ids
