@@ -97,7 +97,7 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         # save_steps=100,
-        learning_rate=2.5e-5,
+        learning_rate=2.5e-6,
         max_steps=750,
         # warmup_steps=20,
         weight_decay=0.01,
