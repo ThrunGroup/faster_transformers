@@ -173,6 +173,7 @@ def finetune(
     for name, param in model.named_parameters():
         if "score" in name:
             param.requires_grad = True
+            print(name)
 
     print("Training")
     trainer.train()
