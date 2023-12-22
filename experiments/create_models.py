@@ -166,19 +166,13 @@ def finetune(
                 trainer.evaluate(train_dataset)
             model.activate_mare_mlp(model)
 
-    # # Freeze all parameters
-    # for param in model.parameters():
-    #     param.requires_grad = False
+    # Freeze all parameters
+    for param in model.parameters():
+        param.requires_grad = False
 
-    # # Unfreeze parameters that contain 'router'
-    # for name, param in model.named_parameters():
-    #     # print(name)
-    #     if (
-    #         "router" in name
-    #         or "classification_head" in name
-    #         # or "encoder" in name
-    #     ):
-    #         param.requires_grad = True
+    for name, param in model.named_parameters():
+        if "score" in name:
+            param.requires_grad = True
 
     print("Training")
     trainer.train()
