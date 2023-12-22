@@ -48,16 +48,17 @@ class GLUEDataset(Dataset):
         try:
             # Try to load preprocessed data
             with open(
-                f"{self.model_type}_{self.dataset_type}_train_dataset.pkl",
+                f"{self.model_type}_{self.dataset_type}_train_dataset1.pkl",
                 "rb",
             ) as f:
                 train_dataset = pickle.load(f)
             with open(
-                f"{self.model_type}_{self.dataset_type}_test_dataset.pkl", "rb"
+                f"{self.model_type}_{self.dataset_type}_test_dataset1.pkl",
+                "rb",
             ) as f:
                 test_dataset = pickle.load(f)
             with open(
-                f"{self.model_type}_{self.dataset_type}_validation_dataset.pkl",
+                f"{self.model_type}_{self.dataset_type}_validation_dataset1.pkl",
                 "rb",
             ) as f:
                 val_dataset = pickle.load(f)
@@ -80,30 +81,41 @@ class GLUEDataset(Dataset):
                 test_size=0.1
             )
 
-            train_dataset = train_test_dataset["train"]
-            test_dataset = train_test_dataset["test"]
-            val_dataset = tokenized_dataset["validation"]
+            # train_dataset = train_test_dataset["train"]
+            # test_dataset = train_test_dataset["test"]
+            # val_dataset = tokenized_dataset["validation"]
+
+            max_data_points = 100
+
+            train_dataset = train_test_dataset["train"].select(
+                range(min(max_data_points, len(train_test_dataset["train"])))
+            )
+            test_dataset = train_test_dataset["test"].select(
+                range(min(max_data_points, len(train_test_dataset["test"])))
+            )
+            val_dataset = tokenized_dataset["validation"].select(
+                range(
+                    min(max_data_points, len(tokenized_dataset["validation"]))
+                )
+            )
 
             # Save the preprocessed data
             with open(
-                f"{self.model_type}_{self.dataset_type}_train_dataset.pkl",
+                f"{self.model_type}_{self.dataset_type}_train_dataset1.pkl",
                 "wb",
             ) as f:
                 pickle.dump(train_dataset, f)
             with open(
-                f"{self.model_type}_{self.dataset_type}_test_dataset.pkl", "wb"
+                f"{self.model_type}_{self.dataset_type}_test_dataset1.pkl",
+                "wb",
             ) as f:
                 pickle.dump(test_dataset, f)
             with open(
-                f"{self.model_type}_{self.dataset_type}_validation_dataset.pkl",
+                f"{self.model_type}_{self.dataset_type}_validation_dataset1.pkl",
                 "wb",
             ) as f:
                 pickle.dump(val_dataset, f)
             print("Preprocessed and saved data to disk.")
-
-        # train_dataset = tokenized_dataset["train"]
-        # val_dataset = tokenized_dataset["validation"]
-        # test_dataset = tokenized_dataset["test"]
 
         return train_dataset, val_dataset, test_dataset
 
