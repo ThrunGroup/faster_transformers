@@ -48,17 +48,17 @@ class GLUEDataset(Dataset):
         try:
             # Try to load preprocessed data
             with open(
-                f"{self.model_type}_{self.dataset_type}_train_dataset1.pkl",
+                f"{self.model_type}_{self.dataset_type}_train_dataset2.pkl",
                 "rb",
             ) as f:
                 train_dataset = pickle.load(f)
             with open(
-                f"{self.model_type}_{self.dataset_type}_test_dataset1.pkl",
+                f"{self.model_type}_{self.dataset_type}_test_dataset2.pkl",
                 "rb",
             ) as f:
                 test_dataset = pickle.load(f)
             with open(
-                f"{self.model_type}_{self.dataset_type}_validation_dataset1.pkl",
+                f"{self.model_type}_{self.dataset_type}_validation_dataset2.pkl",
                 "rb",
             ) as f:
                 val_dataset = pickle.load(f)
@@ -85,7 +85,7 @@ class GLUEDataset(Dataset):
             # test_dataset = train_test_dataset["test"]
             # val_dataset = tokenized_dataset["validation"]
 
-            max_data_points = 100
+            max_data_points = 1
 
             train_dataset = train_test_dataset["train"].select(
                 range(min(max_data_points, len(train_test_dataset["train"])))
@@ -101,17 +101,17 @@ class GLUEDataset(Dataset):
 
             # Save the preprocessed data
             with open(
-                f"{self.model_type}_{self.dataset_type}_train_dataset1.pkl",
+                f"{self.model_type}_{self.dataset_type}_train_dataset2.pkl",
                 "wb",
             ) as f:
                 pickle.dump(train_dataset, f)
             with open(
-                f"{self.model_type}_{self.dataset_type}_test_dataset1.pkl",
+                f"{self.model_type}_{self.dataset_type}_test_dataset2.pkl",
                 "wb",
             ) as f:
                 pickle.dump(test_dataset, f)
             with open(
-                f"{self.model_type}_{self.dataset_type}_validation_dataset1.pkl",
+                f"{self.model_type}_{self.dataset_type}_validation_dataset2.pkl",
                 "wb",
             ) as f:
                 pickle.dump(val_dataset, f)
