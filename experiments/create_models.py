@@ -167,13 +167,13 @@ def finetune(
             model.activate_mare_mlp(model)
 
     # Freeze all parameters
-    for param in model.parameters():
-        param.requires_grad = False
+    # for param in model.parameters():
+    #     param.requires_grad = False
 
-    for name, param in model.named_parameters():
-        if "score" in name:
-            param.requires_grad = True
-            print(name)
+    # for name, param in model.named_parameters():
+    #     if "score" in name:
+    #         param.requires_grad = True
+    #         print(name)
 
     print("Training")
     trainer.train()
