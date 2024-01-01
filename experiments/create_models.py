@@ -93,7 +93,7 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
-        eval_steps=2,
+        eval_steps=50,
         logging_steps=1,
         save_strategy="steps",
         # save_steps=100,
@@ -336,8 +336,8 @@ if __name__ == "__main__":
                     "model_type": model_type,
                     "dataset_name": dataset_type,
                     "num_epochs": 6,
-                    "train_batch_size": 1,
-                    "test_batch_size": 1,
+                    "train_batch_size": 16,
+                    "test_batch_size": 16,
                     "gradient_checkpointing": True,
                 }
                 create_model(
