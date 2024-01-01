@@ -137,8 +137,7 @@ class GLUEDataset(Dataset):
         :return:
         """
         preds, labels = preds
-        preds = torch.argmax(preds, dim=-1)
-        # preds = preds[0].argmax(-1)
+        preds = preds.argmax(-1)
         # print(preds[0].shape)
         # print(preds[0])
         # print(preds.shape, labels.shape)
