@@ -48,17 +48,17 @@ class GLUEDataset(Dataset):
         try:
             # Try to load preprocessed data
             with open(
-                f"{self.model_type}_{self.dataset_type}_train_dataset_64.pkl",
+                f"{self.model_type}_{self.dataset_type}_train_dataset64.pkl",
                 "rb",
             ) as f:
                 train_dataset = pickle.load(f)
             with open(
-                f"{self.model_type}_{self.dataset_type}_test_dataset_64.pkl",
+                f"{self.model_type}_{self.dataset_type}_test_dataset64.pkl",
                 "rb",
             ) as f:
                 test_dataset = pickle.load(f)
             with open(
-                f"{self.model_type}_{self.dataset_type}_validation_dataset_64.pkl",
+                f"{self.model_type}_{self.dataset_type}_validation_dataset64.pkl",
                 "rb",
             ) as f:
                 val_dataset = pickle.load(f)
