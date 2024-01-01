@@ -109,7 +109,7 @@ def finetune(
         run_name=model_name,
         # for memory issues
         gradient_accumulation_steps=2,
-        deepspeed="ds_config.json",
+        # deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
@@ -335,7 +335,7 @@ if __name__ == "__main__":
                 common_args = {
                     "model_type": model_type,
                     "dataset_name": dataset_type,
-                    "num_epochs": 4,
+                    "num_epochs": 6,
                     "train_batch_size": 1,
                     "test_batch_size": 1,
                     "gradient_checkpointing": True,
