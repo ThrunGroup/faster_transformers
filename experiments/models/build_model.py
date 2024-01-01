@@ -70,10 +70,7 @@ def get_model(model_type, dataset_type):
         # GLUE
         model = AutoModelForSequenceClassification
     # model_type = "lukeleeai/t5-base_cola_dense_epochs5"
-    model = model.from_pretrained(model_type, 
-                                  attn_implementation="flash_attention_2", 
-                                  config=config
-                                  )
+    model = model.from_pretrained(model_type, config=config)
     print(model)
     return config, model
 
