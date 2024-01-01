@@ -49,6 +49,8 @@ def get_model(model_type, dataset_type):
     # get config
     if GPT2 in model_type:
         config = GPT2Config
+    elif model_type == MISTRAL_7B:
+        config = MistralConfig
     else:
         config = T5Config
 
