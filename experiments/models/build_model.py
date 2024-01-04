@@ -38,7 +38,7 @@ def get_lora_model(model):
             # cast the small parameters (e.g. layernorm) to fp32 for stability
             param.data = param.data.to(torch.float32)
 
-    model.gradient_checkpointing_enable()  # reduce number of stored activations
+    # model.gradient_checkpointing_enable()  # reduce number of stored activations
     model.enable_input_require_grads()
 
     class CastOutputToFloat(nn.Sequential):

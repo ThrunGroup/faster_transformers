@@ -325,7 +325,7 @@ if __name__ == "__main__":
                     "num_epochs": 6,
                     "train_batch_size": 32,
                     "test_batch_size": 64,
-                    "gradient_checkpointing": True,
+                    "gradient_checkpointing": False,
                 }
                 create_model(
                     **common_args,
