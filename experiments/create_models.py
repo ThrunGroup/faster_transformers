@@ -323,8 +323,8 @@ if __name__ == "__main__":
                     "model_type": model_type,
                     "dataset_name": dataset_type,
                     "num_epochs": 6,
-                    "train_batch_size": 32,
-                    "test_batch_size": 64,
+                    "train_batch_size": 16,
+                    "test_batch_size": 32,
                     "gradient_checkpointing": True,
                 }
                 create_model(
