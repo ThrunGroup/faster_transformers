@@ -159,6 +159,8 @@ class GLUEDataset(Dataset):
                     ),
                 )
             elif self.dataset_type == COLA:
+                print(example)
+
                 input_texts += (
                     ("cola classification: " + example["sentence"]),
                 )
