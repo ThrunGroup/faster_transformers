@@ -65,12 +65,11 @@ class GLUEDataset(Dataset):
             dataset = load_dataset(
                 self.benchmark,
                 self.dataset_type,
+                # streaming=True
             )
 
             max_data_points = 16
-            dataset = tokenized_dataset["validation"].select(
-                range(3 * max_data_points)
-            )
+            dataset = dataset.select(range(3 * max_data_points))
             tokenized_dataset = dataset.map(
                 self.preprocess,
                 remove_columns=dataset.column_names["train"],
@@ -195,6 +194,7 @@ class GLUEDataset(Dataset):
         inputs = self.tokenizer(
             input_text,
             truncation=True,
+            padding="max_length",
             max_length=512,
         )
         # inputs["labels"] = "YES" if example["label"] == 1 else "NO"
