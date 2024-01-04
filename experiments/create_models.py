@@ -75,9 +75,9 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    train_dataset = train_dataset.select(range(32))
-    val_dataset = val_dataset.select(range(32))
-    test_dataset = test_dataset.select(range(32))
+    train_dataset = train_dataset.select(range(128))
+    val_dataset = val_dataset.select(range(128))
+    test_dataset = test_dataset.select(range(128))
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
