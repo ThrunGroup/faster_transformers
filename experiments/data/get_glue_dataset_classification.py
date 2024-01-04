@@ -68,7 +68,7 @@ class GLUEDataset(Dataset):
 
             tokenized_dataset = dataset.map(
                 self.preprocess,
-                remove_columns=dataset.column_names["train"],
+                # remove_columns=dataset.column_names["train"],
             )
 
             print("Tokenization completed.")
