@@ -117,7 +117,7 @@ class GLUEDataset(Dataset):
         # preds = np.array(preds > 1 / 2, dtype=float)  # the output is sigmoid
         return self.metrics.compute(predictions=preds, references=labels)
 
-    def preprocess_batch(self, examples):
+    def preprocess(self, examples):
         if self.dataset_type == COLA:
             inputs = preprocess_cola(
                 self.tokenizer, self.dataset_type, examples
