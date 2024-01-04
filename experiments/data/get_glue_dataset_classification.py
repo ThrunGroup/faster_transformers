@@ -123,6 +123,8 @@ class GLUEDataset(Dataset):
         labels = []
 
         for example in examples:
+            print("example: ", example)
+
             if self.dataset_type == QNLI:
                 input_texts += (
                     (
@@ -159,8 +161,6 @@ class GLUEDataset(Dataset):
                     ),
                 )
             elif self.dataset_type == COLA:
-                print(example)
-
                 input_texts += (
                     ("cola classification: " + example["sentence"]),
                 )
