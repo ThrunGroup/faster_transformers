@@ -271,15 +271,11 @@ def create_model(
     model = build_model(
         model_type,
         dataset_name,
-        use_mare_lora=use_mare_lora,
-        use_mare_attention=use_mare_attention,
-        use_mare_upcycling=use_mare_upcycling,
         use_mare_mlp=use_mare_mlp or use_collect_stats,
         num_generalists=num_generalists,
         num_experts=num_experts,
         expert_size=expert_size,
         capacity_factor=capacity_factor,
-        apply_to_half_layers=apply_to_half_layers,
     )
 
     model.config.pad_token_id = model.config.eos_token_id
