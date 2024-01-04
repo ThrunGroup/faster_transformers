@@ -67,32 +67,32 @@ class GLUEDataset(Dataset):
                 self.dataset_type,
             )
 
+            max_data_points = 16
+            dataset = tokenized_dataset["validation"].select(
+                range(3 * max_data_points)
+            )
             tokenized_dataset = dataset.map(
                 self.preprocess,
                 remove_columns=dataset.column_names["train"],
             )
-            # GLUE doesn't provide answers for TEST, so we have to manually make them
-            train_test_dataset = tokenized_dataset["train"].train_test_split(
-                test_size=0.1
+            train_dataset = tokenized_dataset.select(range(max_data_points))
+            test_dataset = tokenized_dataset.select(
+                range(max_data_points, 2 * max_data_points)
             )
+            val_dataset = tokenized_dataset.select(
+                range(2 * max_data_points, 3 * max_data_points)
+            )
+
+            print("Tokenization completed.")
+
+            # # GLUE doesn't provide answers for TEST, so we have to manually make them
+            # train_test_dataset = tokenized_dataset["train"].train_test_split(
+            #     test_size=0.1
+            # )
 
             # train_dataset = train_test_dataset["train"]
             # test_dataset = train_test_dataset["test"]
             # val_dataset = tokenized_dataset["validation"]
-
-            max_data_points = 16
-
-            train_dataset = train_test_dataset["train"].select(
-                range(min(max_data_points, len(train_test_dataset["train"])))
-            )
-            test_dataset = train_test_dataset["test"].select(
-                range(min(max_data_points, len(train_test_dataset["test"])))
-            )
-            val_dataset = tokenized_dataset["validation"].select(
-                range(
-                    min(max_data_points, len(tokenized_dataset["validation"]))
-                )
-            )
 
             # Save the preprocessed data
             with open(train_path, "wb") as f:
