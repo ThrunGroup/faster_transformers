@@ -75,6 +75,9 @@ class GLUEDataset(Dataset):
                 self.preprocess,
                 remove_columns=dataset.column_names["train"],
             )
+
+            print("Tokenization completed.")
+
             train_dataset = tokenized_dataset.select(range(max_data_points))
             test_dataset = tokenized_dataset.select(
                 range(max_data_points, 2 * max_data_points)
@@ -82,8 +85,6 @@ class GLUEDataset(Dataset):
             val_dataset = tokenized_dataset.select(
                 range(2 * max_data_points, 3 * max_data_points)
             )
-
-            print("Tokenization completed.")
 
             # # GLUE doesn't provide answers for TEST, so we have to manually make them
             # train_test_dataset = tokenized_dataset["train"].train_test_split(
