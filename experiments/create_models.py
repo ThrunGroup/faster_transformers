@@ -75,13 +75,9 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    train_dataset = train_dataset.select(range(128))
-    val_dataset = val_dataset.select(range(128))
-    test_dataset = test_dataset.select(range(128))
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
-    preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
 
     if True or (
         "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0
@@ -96,7 +92,7 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
-        eval_steps=50,
+        eval_steps=10,
         logging_steps=1,
         save_strategy="steps",
         # save_steps=100,
@@ -327,8 +323,8 @@ if __name__ == "__main__":
                     "model_type": model_type,
                     "dataset_name": dataset_type,
                     "num_epochs": 6,
-                    "train_batch_size": 16,
-                    "test_batch_size": 16,
+                    "train_batch_size": 64,
+                    "test_batch_size": 64,
                     "gradient_checkpointing": True,
                 }
                 create_model(
