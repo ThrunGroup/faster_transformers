@@ -1,10 +1,8 @@
-from transformers import DataCollatorForSeq2Seq, DataCollatorWithPadding
+from transformers import DataCollatorWithPadding, AutoTokenizer
 import evaluate
 import torch
 from datasets import load_dataset
-import numpy as np
 import pickle
-import os
 
 from .dataset import Dataset
 from utils.constants import (
@@ -17,6 +15,7 @@ from utils.constants import (
     MULTIRC,
     BOOLQ,
     SUPERGLUE,
+    MISTRAL_7B,
 )
 
 
@@ -64,9 +63,9 @@ class GLUEDataset(Dataset):
             dataset = load_dataset(self.benchmark, self.dataset_type)
 
             tokenized_dataset = dataset.map(
-                self.preprocess,
+                self.preprocess_batch,
                 batched=True,
-                batch_size=256,
+                batch_size=4,
                 remove_columns=dataset.column_names["train"],
             )
 
@@ -118,7 +117,14 @@ class GLUEDataset(Dataset):
         # preds = np.array(preds > 1 / 2, dtype=float)  # the output is sigmoid
         return self.metrics.compute(predictions=preds, references=labels)
 
-    def preprocess(self, examples):
+    def preprocess_batch(self, examples):
+        if self.dataset_type == COLA:
+            inputs = preprocess_cola(
+                self.tokenizer, self.dataset_type, examples
+            )
+        return inputs
+
+    def preprocess_single(self, examples):
         input_texts = []
         labels = []
         print(examples)
@@ -226,3 +232,27 @@ class GLUEDataset(Dataset):
         # else:
         #     pred_ids = logits[0][:, 0]
         return pred_ids
+
+
+def preprocess_cola(tokenizer, data_type, examples):
+    sentences = examples["sentence"]
+    input_texts = [
+        "cola classification: " + sentence for sentence in sentences
+    ]
+    inputs = tokenizer(
+        input_texts,
+        truncation=True,
+        padding="max_length",
+        max_length=512,
+    )
+    inputs["labels"] = examples["label"]
+    return inputs
+
+
+if __name__ == "__main__":
+    model_type = MISTRAL_7B
+    tokenizer = AutoTokenizer.from_pretrained(model_type)
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.pad_token_id = tokenizer.eos_token_id
+    dataset = GLUEDataset(tokenizer, model_type, COLA)
+    dataset.get_tokenized_dataset()
