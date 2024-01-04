@@ -118,74 +118,95 @@ class GLUEDataset(Dataset):
         # preds = np.array(preds > 1 / 2, dtype=float)  # the output is sigmoid
         return self.metrics.compute(predictions=preds, references=labels)
 
-    def preprocess(self, example):
-        if self.dataset_type == QNLI:
-            input_text = (
-                "Does the context entail the question? \n"
-                + "context: "
-                + example["sentence"]
-                + " question: "
-                + example["question"]
-            )
-        elif self.dataset_type == SST2:
-            input_text = (
-                "Positive or negative sentiment?\n" + example["sentence"]
-            )
-        elif self.dataset_type == RTE:
-            input_text = (
-                "Entailed?\n"
-                + "\First sentence: "
-                + example["sentence1"]
-                + "\Second sentence: "
-                + example["sentence2"]
-            )
-        elif self.dataset_type == MRPC:
-            input_text = (
-                "Equivalent?\n"
-                + "\First sentence: "
-                + example["sentence1"]
-                + "\Second sentence: "
-                + example["sentence2"]
-            )
-        elif self.dataset_type == COLA:
-            input_text = "cola classification: " + example["sentence"]
-        elif self.dataset_type == BOOLQ:
-            input_text = (
-                "Yes or No?"
-                + "\nQuestion: "
-                + example["question"]
-                + "\nPessage: "
-                + example["passage"]
-            )
-        elif self.dataset_type == MULTIRC:
-            input_text = (
-                "Is the answer correct?"
-                + "\nPassage: "
-                + example["paragraph"]
-                + "\nQuestion: "
-                + example["question"]
-                + "\nAnswer: "
-                + example["answer"]
-            )
-        elif self.dataset_type == WIC:
-            input_text = (
-                "Is the word used in the same context?"
-                + "\nFirst sentence: "
-                + example["sentence1"]
-                + "\nSecond sentence: "
-                + example["sentence2"]
-            )
-        else:
-            raise ValueError(f"Invalid dataset: ({self.dataset_type})")
+    def preprocess(self, examples):
+        input_texts = []
+        labels = []
+
+        for example in examples:
+            if self.dataset_type == QNLI:
+                input_texts += (
+                    (
+                        "Does the context entail the question? \n"
+                        + "context: "
+                        + example["sentence"]
+                        + " question: "
+                        + example["question"]
+                    ),
+                )
+            elif self.dataset_type == SST2:
+                input_texts += (
+                    (
+                        "Positive or negative sentiment?\n"
+                        + example["sentence"]
+                    ),
+                )
+            elif self.dataset_type == RTE:
+                input_texts = (
+                    "Entailed?\n"
+                    + "\First sentence: "
+                    + example["sentence1"]
+                    + "\Second sentence: "
+                    + example["sentence2"]
+                )
+            elif self.dataset_type == MRPC:
+                input_texts += (
+                    (
+                        "Equivalent?\n"
+                        + "\First sentence: "
+                        + example["sentence1"]
+                        + "\Second sentence: "
+                        + example["sentence2"]
+                    ),
+                )
+            elif self.dataset_type == COLA:
+                input_texts += (
+                    ("cola classification: " + example["sentence"]),
+                )
+            elif self.dataset_type == BOOLQ:
+                input_texts += (
+                    (
+                        "Yes or No?"
+                        + "\nQuestion: "
+                        + example["question"]
+                        + "\nPessage: "
+                        + example["passage"]
+                    ),
+                )
+            elif self.dataset_type == MULTIRC:
+                input_texts += (
+                    (
+                        "Is the answer correct?"
+                        + "\nPassage: "
+                        + example["paragraph"]
+                        + "\nQuestion: "
+                        + example["question"]
+                        + "\nAnswer: "
+                        + example["answer"]
+                    ),
+                )
+            elif self.dataset_type == WIC:
+                input_texts += (
+                    (
+                        "Is the word used in the same context?"
+                        + "\nFirst sentence: "
+                        + example["sentence1"]
+                        + "\nSecond sentence: "
+                        + example["sentence2"]
+                    ),
+                )
+            else:
+                raise ValueError(f"Invalid dataset: ({self.dataset_type})")
+
+            labels += (example["label"],)
 
         inputs = self.tokenizer(
-            input_text,
+            input_texts,
             truncation=True,
             padding="max_length",
             max_length=512,
         )
-        # inputs["labels"] = "YES" if example["label"] == 1 else "NO"
-        inputs["labels"] = example["label"]
+
+        inputs["labels"] = labels
 
         return inputs
 
