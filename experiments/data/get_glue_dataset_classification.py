@@ -63,7 +63,7 @@ class GLUEDataset(Dataset):
             dataset = load_dataset(self.benchmark, self.dataset_type)
 
             tokenized_dataset = dataset.map(
-                self.preprocess_batch,
+                self.preprocess,
                 batched=True,
                 batch_size=4,
                 remove_columns=dataset.column_names["train"],
