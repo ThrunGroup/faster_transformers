@@ -2,12 +2,9 @@ from transformers import (
     AutoConfig,
     AutoModelForSequenceClassification,
 )
-from peft import (
-    LoraConfig,
-    TaskType,
-    get_peft_model,
-    AutoPeftModelForSequenceClassification,
-)
+import torch
+from torch import nn
+from peft import LoraConfig, TaskType, get_peft_model
 
 from experiments.models.t5_sparity_check.t5_sparsity_check_new import (
     apply_sparsity_check_MLP,
@@ -52,34 +49,20 @@ def build_model(
     expert_size: int = 0,
 ):
     print("Loading the model...")
-    # config = AutoConfig.from_pretrained(model_type)
-    lora_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        lora_dropout=0.05,
-        bias="none",
-        task_type=TaskType.SEQ_CLS,
-        target_modules=[
-            "q_proj",
-            "v_proj",
-        ],
-    )
-    model = AutoPeftModelForSequenceClassification.from_pretrained(
+    config = AutoConfig.from_pretrained(model_type)
+    model = AutoModelForSequenceClassification.from_pretrained(
         model_type,
-        config=lora_config,
+        config=config,
         # load_in_8bit=True,
         # device_map="auto",
     )
-    model.gradient_checkpointing_enable()  # reduce number of stored activations
-    model.enable_input_require_grads()
-    model.print_trainable_parameters()
-    # print("Applying LoRA to the model...")
-    # model = get_lora_model(model)
+    print("Applying LoRA to the model...")
+    model = get_lora_model(model)
 
     if use_mare_mlp:
         apply_sparsity_check_MLP(
             model,
-            # config,
+            config,
             num_generalists=num_generalists,
             num_experts=num_experts,
             expert_size=expert_size,
