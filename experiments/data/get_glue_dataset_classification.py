@@ -121,6 +121,7 @@ class GLUEDataset(Dataset):
     def preprocess(self, examples):
         input_texts = []
         labels = []
+        print(examples)
 
         for example in examples:
             print("example: ", example)
