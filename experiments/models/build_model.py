@@ -65,8 +65,8 @@ def build_model(
     model = AutoModelForSequenceClassification.from_pretrained(
         model_type,
         config=config,
-        load_in_8bit=True,
-        device_map="auto",
+        # load_in_8bit=True,
+        # device_map="auto",
     )
     model = get_lora_model(model)
 
