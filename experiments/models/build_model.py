@@ -32,21 +32,8 @@ def get_lora_model(model):
             "v_proj",
         ],
     )
-    for param in model.parameters():
-        param.requires_grad = False  # freeze the model - train adapters later
-        if param.ndim == 1:
-            # cast the small parameters (e.g. layernorm) to fp32 for stability
-            param.data = param.data.to(torch.float32)
-
     model.gradient_checkpointing_enable()  # reduce number of stored activations
     model.enable_input_require_grads()
-
-    class CastOutputToFloat(nn.Sequential):
-        def forward(self, x):
-            return super().forward(x).to(torch.float32)
-
-    model.score = CastOutputToFloat(model.score)
-
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
