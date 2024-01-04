@@ -24,7 +24,6 @@ class GLUEDataset(Dataset):
     def __init__(
         self,
         tokenizer,
-        model,
         model_type: str,
         dataset_type: str,
     ):
@@ -34,7 +33,7 @@ class GLUEDataset(Dataset):
         :param metrics: Metrics to evaluate the model
         :param prefix: Prefix to the inputs to start the summarization task
         """
-        super().__init__(tokenizer, model, model_type)
+        super().__init__(tokenizer, model_type)
         self.model_type = model_type.split("/")[-1]
         self.dataset_type = dataset_type
         self.metrics = evaluate.load("accuracy")
@@ -62,13 +61,13 @@ class GLUEDataset(Dataset):
         except FileNotFoundError:
             # If preprocessed data does not exist, load and preprocess
             print("No dataset found.")
-            dataset = load_dataset(
-                self.benchmark, self.dataset_type, streaming=True
-            )
+            dataset = load_dataset(self.benchmark, self.dataset_type)
 
             tokenized_dataset = dataset.map(
                 self.preprocess,
-                # remove_columns=dataset.column_names["train"],
+                batched=True,
+                batch_size=256,
+                remove_columns=dataset.column_names["train"],
             )
 
             print("Tokenization completed.")

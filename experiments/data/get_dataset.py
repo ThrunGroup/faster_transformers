@@ -21,7 +21,6 @@ from utils.constants import (
 def get_dataset(
     dataset_name: str,
     tokenizer,
-    model,
     model_type: str,
 ):
     """
@@ -34,17 +33,15 @@ def get_dataset(
     :return: tokenized dataset, data collator, and compute_metrics function
     """
     if dataset_name == BILLSUM:
-        dataset = Billsum(tokenizer, model, model_type)
+        dataset = Billsum(tokenizer, model_type)
     elif dataset_name == SQUAD:
-        dataset = SQuAD(tokenizer, model, model_type)
+        dataset = SQuAD(tokenizer, model_type)
     elif dataset_name == OPENWEBTEXT:
-        dataset = OpenWebText(tokenizer, model, model_type)
+        dataset = OpenWebText(tokenizer, model_type)
     elif dataset_name == SAMSUM:
-        dataset = Samsum(tokenizer, model, model_type)
+        dataset = Samsum(tokenizer, model_type)
     elif dataset_name in GLUE + SUPERGLUE:
-        dataset = GLUEDataset(
-            tokenizer, model, model_type, dataset_type=dataset_name
-        )
+        dataset = GLUEDataset(tokenizer, model_type, dataset_type=dataset_name)
     else:
         assert False, f"No dataset named {dataset_name} available."
 

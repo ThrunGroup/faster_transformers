@@ -2,9 +2,8 @@ from abc import ABC, abstractmethod
 
 
 class Dataset(ABC):
-    def __init__(self, tokenizer, model, model_type):
+    def __init__(self, tokenizer, model_type):
         self.tokenizer = tokenizer
-        self.model = model
         self.model_type = model_type
 
     @abstractmethod

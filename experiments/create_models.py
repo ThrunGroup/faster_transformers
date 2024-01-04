@@ -73,7 +73,7 @@ def finetune(
     """
     print("Finetuning started...")
     model_name = model_name.split("/")[-1]
-    dataset = get_dataset(dataset_name, tokenizer, model, model_type)
+    dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
 
     data_collator = dataset.get_data_collator()
@@ -315,7 +315,7 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [MISTRAL_7B]
+    model_types = [T5]
     for i in range(1):
         print("EXPERIMENT: ", i)
         for model_type in model_types:
