@@ -92,11 +92,11 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
-        eval_steps=10,
+        eval_steps=50,
         logging_steps=1,
         save_strategy="steps",
         # save_steps=100,
-        learning_rate=2.5e-6,
+        learning_rate=1e-5,
         max_steps=750,
         # warmup_steps=20,
         weight_decay=0.01,
@@ -176,6 +176,7 @@ def finetune(
 
     print("Training")
     trainer.train()
+
     if do_evaluation:
         if save_stats:
             model.activate_stats(model, True)
@@ -257,7 +258,7 @@ def create_model(
         )
         model_name += "_router_from_pretrained_alpha1"
     pre_trained_model_name = "t5-3b_rte_sp0_ar0"
-    model_name += run_name  # optional
+    model_name += run_name
 
     # captures the method parameters and model_name as a dictionary
     config = locals()
@@ -272,7 +273,6 @@ def create_model(
     )
 
     model.config.pad_token_id = model.config.eos_token_id
-
     tokenizer = AutoTokenizer.from_pretrained(model_type)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.pad_token_id = tokenizer.eos_token_id
