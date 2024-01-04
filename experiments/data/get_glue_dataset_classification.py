@@ -63,36 +63,24 @@ class GLUEDataset(Dataset):
             # If preprocessed data does not exist, load and preprocess
             print("No dataset found.")
             dataset = load_dataset(
-                self.benchmark,
-                self.dataset_type,
-                # streaming=True
+                self.benchmark, self.dataset_type, streaming=True
             )
 
-            max_data_points = 16
-            dataset = dataset["train"].select(range(3 * max_data_points))
             tokenized_dataset = dataset.map(
                 self.preprocess,
-                # remove_columns=dataset.column_names["train"],
+                remove_columns=dataset.column_names["train"],
             )
 
             print("Tokenization completed.")
 
-            train_dataset = tokenized_dataset.select(range(max_data_points))
-            test_dataset = tokenized_dataset.select(
-                range(max_data_points, 2 * max_data_points)
-            )
-            val_dataset = tokenized_dataset.select(
-                range(2 * max_data_points, 3 * max_data_points)
+            # GLUE doesn't provide answers for TEST, so we have to manually make them
+            train_test_dataset = tokenized_dataset["train"].train_test_split(
+                test_size=0.1
             )
 
-            # # GLUE doesn't provide answers for TEST, so we have to manually make them
-            # train_test_dataset = tokenized_dataset["train"].train_test_split(
-            #     test_size=0.1
-            # )
-
-            # train_dataset = train_test_dataset["train"]
-            # test_dataset = train_test_dataset["test"]
-            # val_dataset = tokenized_dataset["validation"]
+            train_dataset = train_test_dataset["train"]
+            test_dataset = train_test_dataset["test"]
+            val_dataset = tokenized_dataset["validation"]
 
             # Save the preprocessed data
             with open(train_path, "wb") as f:
