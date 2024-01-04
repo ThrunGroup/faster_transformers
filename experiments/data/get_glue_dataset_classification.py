@@ -69,10 +69,10 @@ class GLUEDataset(Dataset):
             )
 
             max_data_points = 16
-            dataset = dataset.select(range(3 * max_data_points))
+            dataset = dataset["train"].select(range(3 * max_data_points))
             tokenized_dataset = dataset.map(
                 self.preprocess,
-                remove_columns=dataset.column_names["train"],
+                # remove_columns=dataset.column_names["train"],
             )
 
             print("Tokenization completed.")
