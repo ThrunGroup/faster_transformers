@@ -75,7 +75,6 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    train_dataset = train_dataset.select(range(64))
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
@@ -124,13 +123,11 @@ def finetune(
         early_stopping_patience=5, early_stopping_threshold=0.01
     )
 
-    # trainer = trainer_class(
-    # trainer = MARETrainer(
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=train_dataset,  # TODO: Change it back to val_dataset
+        train_dataset=val_dataset,
+        eval_dataset=val_dataset,  # TODO: Change it back to val_dataset
         tokenizer=tokenizer,
         data_collator=data_collator,
         callbacks=[early_stopping],
