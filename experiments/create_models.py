@@ -281,7 +281,7 @@ def create_model(
         use_mare_mlp=use_mare_mlp,
         use_collect_stats=use_collect_stats,
         push_to_hub=kwargs["push_to_hub"],
-        pre_trained_model_name=pre_trained_model_name,
+        # pre_trained_model_name=pre_trained_model_name,
     )
 
 
