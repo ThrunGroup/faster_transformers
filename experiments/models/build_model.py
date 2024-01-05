@@ -60,9 +60,14 @@ def build_model(
     num_generalists: int = 0,
     num_experts: int = 0,
     expert_size: int = 0,
+    use_relu: bool = False,
 ):
     print("Loading the model...")
     config = AutoConfig.from_pretrained(model_type)
+
+    if use_relu:
+        config.hidden_act = "relu"
+
     model = AutoModelForSequenceClassification.from_pretrained(
         model_type,
         config=config,

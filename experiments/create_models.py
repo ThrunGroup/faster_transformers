@@ -122,10 +122,8 @@ def finetune(
     )
 
     early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=8, early_stopping_threshold=0.01
+        early_stopping_patience=5, early_stopping_threshold=0.01
     )
-
-    # trainer_class = MARETrainer if use_mare_mlp else CustomTrainer
 
     # trainer = trainer_class(
     # trainer = MARETrainer(
@@ -225,13 +223,9 @@ def create_model(
     num_generalists: int = 0,
     num_experts: int = 0,
     expert_size: int = 0,
-    do_evaluation: bool = True,
-    train_batch_size: int = 0,
-    test_batch_size: int = 0,
-    gradient_checkpointing: bool = False,
-    fixed_costs=0,
     generalist_ratios=0,
     save_stats: bool = False,
+    use_relu: bool = False,
     **kwargs,
 ):
     """
@@ -247,17 +241,12 @@ def create_model(
     """
     # Build a Gated Attention model
     model_name = f"{model_type}_{dataset_name}"
-    pre_trained_model_name = model_name
-    model_name += f"_sp{fixed_costs}_ar{generalist_ratios}"
-    model_name = model_name.replace(".", "_")
-    print(model_name)
 
     if use_mare_mlp:
         pre_trained_model_name += (
             f"_dense_epochs-{num_epochs}"  # -{num_epochs}
         )
         model_name += "_router_from_pretrained_alpha1"
-    pre_trained_model_name = "t5-3b_rte_sp0_ar0"
     model_name += run_name
 
     # captures the method parameters and model_name as a dictionary
@@ -270,6 +259,7 @@ def create_model(
         num_experts=num_experts,
         expert_size=expert_size,
         capacity_factor=capacity_factor,
+        use_relu=use_relu,
     )
 
     model.config.pad_token_id = model.config.eos_token_id
@@ -322,14 +312,17 @@ if __name__ == "__main__":
                 common_args = {
                     "model_type": model_type,
                     "dataset_name": dataset_type,
-                    "num_epochs": 6,
+                    "num_epochs": 14,
                     "train_batch_size": 48,
                     "test_batch_size": 80,
                     "gradient_checkpointing": True,
                 }
+
                 create_model(
                     **common_args,
                     push_to_hub=True,
+                    use_relu=True,
+                    run_name="_relu",
                 )
 
                 # total_size = total_sizes[model_type]
