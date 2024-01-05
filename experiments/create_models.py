@@ -75,6 +75,7 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
+    train_dataset = train_dataset.select(range(64))
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
@@ -92,13 +93,11 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
-        eval_steps=50,
+        eval_steps=2,
         logging_steps=1,
         save_strategy="steps",
-        # save_steps=100,
         learning_rate=1e-5,
         max_steps=750,
-        # warmup_steps=20,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -131,7 +130,7 @@ def finetune(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset=val_dataset,
+        eval_dataset=train_dataset,  # TODO: Change it back to val_dataset
         tokenizer=tokenizer,
         data_collator=data_collator,
         callbacks=[early_stopping],
