@@ -65,8 +65,8 @@ def build_model(
     print("Loading the model...")
     config = AutoConfig.from_pretrained(model_type)
 
-    if use_relu:
-        config.hidden_act = "relu"
+    # if use_relu:
+    #     config.hidden_act = "relu"
 
     model = AutoModelForSequenceClassification.from_pretrained(
         model_type, config=config
