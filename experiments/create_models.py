@@ -119,7 +119,7 @@ def finetune(
         data_seed=1,
     )
 
-    early_stopping = EarlyStoppingCallback(early_stopping_patience=5)
+    early_stopping = EarlyStoppingCallback(early_stopping_patience=3)
 
     trainer = Trainer(
         model=model,
