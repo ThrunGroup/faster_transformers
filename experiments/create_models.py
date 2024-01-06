@@ -115,7 +115,7 @@ def finetune(
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
         push_to_hub=True,
-        seed=1,
+        seed=2,
         data_seed=1,
     )
 
