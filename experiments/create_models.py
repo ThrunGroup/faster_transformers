@@ -119,15 +119,13 @@ def finetune(
         data_seed=1,
     )
 
-    early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=5, early_stopping_threshold=0.01
-    )
+    early_stopping = EarlyStoppingCallback(early_stopping_patience=5)
 
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=val_dataset,
-        eval_dataset=val_dataset,  # TODO: Change it back to val_dataset
+        train_dataset=train_dataset,
+        eval_dataset=val_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
         callbacks=[early_stopping],
