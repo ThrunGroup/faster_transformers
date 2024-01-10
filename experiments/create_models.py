@@ -74,9 +74,9 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    train_dataset = train_dataset.select(range(128))
-    val_dataset = train_dataset
-    test_datset = train_dataset
+    # train_dataset = train_dataset.select(range(128))
+    # val_dataset = train_dataset
+    # test_datset = train_dataset
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
@@ -85,7 +85,7 @@ def finetune(
         "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0
     ):
         wandb_run = wandb.init(
-            project=f"{model_name}_{dataset_type}_mlp",
+            project=f"{model_name}_{dataset_type}",
             name=model_name,
             reinit=True,
             config=config,

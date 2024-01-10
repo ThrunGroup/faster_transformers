@@ -84,7 +84,6 @@ def build_model(
 
     print("Applying LoRA...")
     model = get_lora_model(model)
-    print(model)
 
     return model
 

@@ -5,18 +5,25 @@ import torch.nn.functional as F
 
 
 class ReluficationRateScheduler(TrainerCallback):
-    def __init__(self, step_size=1, alpha_increment=0.01):
+    def __init__(self, step_size=10, alpha_increment=0.05):
         self.step_size = step_size
         self.alpha_increment = alpha_increment
 
     def on_step_end(self, args, state, control, **kwargs):
         model = kwargs["model"]
 
-        if state.global_step % self.step_size == 0:
+        if state.global_step % self.step_size == 10:
             for module in model.modules():
                 if isinstance(module, SwishToReLU):
-                    module.alpha += self.alpha_increment
-                    print(module.alpha)
+                    module.alpha = min(
+                        1.0, module.alpha + self.alpha_increment
+                    )
+
+        if state.global_step % self.step_size == 50:
+            for module in model.modules():
+                if isinstance(module, SwishToReLU):
+                    print("alpha: ", module.alpha)
+                    break
 
 
 class SwishToReLU(nn.Module):
