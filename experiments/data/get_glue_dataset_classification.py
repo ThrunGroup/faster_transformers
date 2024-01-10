@@ -37,6 +37,7 @@ class GLUEDataset(Dataset):
         self.dataset_type = dataset_type
         self.metrics = evaluate.load("accuracy")
         self.benchmark = "super_glue" if dataset_type in SUPERGLUE else "glue"
+        self.max_length = 100
 
     def get_tokenized_dataset(self):
         """
@@ -98,7 +99,7 @@ class GLUEDataset(Dataset):
         """
         data_collator = DataCollatorWithPadding(
             tokenizer=self.tokenizer,
-            max_length=512,
+            max_length=self.max_length,
         )
         return data_collator
 
@@ -119,10 +120,18 @@ class GLUEDataset(Dataset):
 
     def preprocess(self, examples):
         if self.dataset_type == COLA:
-            inputs = preprocess_cola(
-                self.tokenizer, self.dataset_type, examples
-            )
-        return inputs
+            input_texts = preprocess_cola(examples)
+
+        tokenized_inputs = self.tokenizer(
+            input_texts,
+            truncation=True,
+            padding="max_length",
+            max_length=self.max_length,
+        )
+
+        tokenized_inputs["labels"] = examples["label"]
+
+        return tokenized_inputs
 
     def preprocess_single(self, examples):
         input_texts = []
@@ -226,6 +235,7 @@ class GLUEDataset(Dataset):
         """
         # pred_ids = torch.argmax(logits[0], dim=-1)
         # print(logits)
+        print(logits.shape)
         pred_ids = torch.argmax(logits, dim=-1)
         # if "mistral" in self.model_type:
         #     pred_ids = logits[:, 0]
@@ -234,19 +244,12 @@ class GLUEDataset(Dataset):
         return pred_ids
 
 
-def preprocess_cola(tokenizer, data_type, examples):
+def preprocess_cola(examples):
     sentences = examples["sentence"]
     input_texts = [
         "cola classification: " + sentence for sentence in sentences
     ]
-    inputs = tokenizer(
-        input_texts,
-        truncation=True,
-        padding="max_length",
-        max_length=512,
-    )
-    inputs["labels"] = examples["label"]
-    return inputs
+    return input_texts
 
 
 if __name__ == "__main__":

@@ -14,10 +14,9 @@ import torch
 
 from data.get_dataset import get_dataset
 from models.build_model import build_model
-from experiments.models.t5_sparity_check.t5_sparsity_check_original import (
-    MLPRouter,
+from experiments.models.sparse_mistral.relufication import (
+    ReluficationRateScheduler,
 )
-from trainer import MARETrainer, CustomTrainer
 from utils.constants import (
     # Models
     GPT2,
@@ -75,6 +74,9 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
+    train_dataset = train_dataset.select(range(128))
+    val_dataset = train_dataset
+    test_datset = train_dataset
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
@@ -92,7 +94,7 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
-        eval_steps=25,
+        eval_steps=10,
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
@@ -120,6 +122,7 @@ def finetune(
     )
 
     early_stopping = EarlyStoppingCallback(early_stopping_patience=3)
+    relufication_scheduler = ReluficationRateScheduler()
 
     trainer = Trainer(
         model=model,
@@ -128,7 +131,7 @@ def finetune(
         eval_dataset=val_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        callbacks=[early_stopping],
+        callbacks=[early_stopping, relufication_scheduler],
         # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         compute_metrics=compute_metrics,
     )
@@ -156,15 +159,6 @@ def finetune(
                 print("Evaluating")
                 trainer.evaluate(train_dataset)
             model.activate_mare_mlp(model)
-
-    # Freeze all parameters
-    # for param in model.parameters():
-    #     param.requires_grad = False
-
-    # for name, param in model.named_parameters():
-    #     if "score" in name:
-    #         param.requires_grad = True
-    #         print(name)
 
     print("Training")
     trainer.train()
@@ -261,6 +255,7 @@ def create_model(
     )
 
     model.config.pad_token_id = model.config.eos_token_id
+
     tokenizer = AutoTokenizer.from_pretrained(model_type)
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.pad_token_id = tokenizer.eos_token_id
@@ -310,10 +305,10 @@ if __name__ == "__main__":
                 common_args = {
                     "model_type": model_type,
                     "dataset_name": dataset_type,
-                    "num_epochs": 14,
-                    "train_batch_size": 48,
-                    "test_batch_size": 80,
-                    "gradient_checkpointing": True,
+                    "num_epochs": 10,
+                    "train_batch_size": 64,
+                    "test_batch_size": 64,
+                    "gradient_checkpointing": False,
                 }
 
                 create_model(

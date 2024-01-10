@@ -6,6 +6,7 @@ import torch
 from torch import nn
 from peft import LoraConfig, TaskType, get_peft_model
 
+from experiments.models.sparse_mistral.relufication import apply_relufication
 from experiments.models.t5_sparity_check.t5_sparsity_check_new import (
     apply_sparsity_check_MLP,
 )
@@ -65,14 +66,12 @@ def build_model(
     print("Loading the model...")
     config = AutoConfig.from_pretrained(model_type)
 
-    # if use_relu:
-    #     config.hidden_act = "relu"
-
     model = AutoModelForSequenceClassification.from_pretrained(
         model_type, config=config
     )
-    print("Applying LoRA...")
-    model = get_lora_model(model)
+
+    if use_relu:
+        apply_relufication(model)
 
     if use_mare_mlp:
         apply_sparsity_check_MLP(
@@ -82,6 +81,10 @@ def build_model(
             num_experts=num_experts,
             expert_size=expert_size,
         )
+
+    print("Applying LoRA...")
+    model = get_lora_model(model)
+    print(model)
 
     return model
 
