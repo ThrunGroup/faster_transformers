@@ -314,8 +314,8 @@ if __name__ == "__main__":
                 create_model(
                     **common_args,
                     push_to_hub=True,
-                    use_relu=True,
-                    run_name="_relu",
+                    use_relu=False,
+                    run_name="_silu",
                 )
 
                 # total_size = total_sizes[model_type]
