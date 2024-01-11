@@ -26,7 +26,7 @@ class ReluficationRateScheduler(TrainerCallback):
 
         for module in model.modules():
             if isinstance(module, SwishToReLU):
-                model.increase_alpha_logarithmically(state.epoch)
+                module.increase_alpha_logarithmically(state.epoch)
                 new_alpha = model.alpha
 
         print("New alpha: ", new_alpha)
