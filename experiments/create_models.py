@@ -315,7 +315,7 @@ if __name__ == "__main__":
                     **common_args,
                     push_to_hub=True,
                     use_relu=True,
-                    run_name="_rsb_relu",
+                    run_name="_switrelu_log",
                 )
 
                 # total_size = total_sizes[model_type]
