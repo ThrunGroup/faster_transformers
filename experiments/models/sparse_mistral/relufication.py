@@ -6,30 +6,21 @@ import math
 
 
 class ReluficationRateScheduler(TrainerCallback):
-    def __init__(self, step_size=10, alpha_increment=0.05):
+    def __init__(self, step_size=10, alpha_increment=0.025):
         self.step_size = step_size
         self.alpha_increment = alpha_increment
 
-    # def on_step_end(self, args, state, control, **kwargs):
-    #     model = kwargs["model"]
-    #     new_alpha = 0
-
-    #     if state.global_step % self.step_size == 10:
-    #         for module in model.modules():
-    #             if isinstance(module, SwishToReLU):
-    #                 model.increase_alpha(by=self.alpha_increment)
-    #                 new_alpha = model.alpha
-
-    def on_epoch_end(self, args, state, control, **kwargs):
+    def on_step_end(self, args, state, control, **kwargs):
         model = kwargs["model"]
         new_alpha = 0
 
-        for module in model.modules():
-            if isinstance(module, SwishToReLU):
-                module.increase_alpha_logarithmically(state.epoch)
-                new_alpha = module.alpha
+        if state.global_step % self.step_size == 10:
+            for module in model.modules():
+                if isinstance(module, SwishToReLU):
+                    model.increase_alpha(by=self.alpha_increment)
+                    new_alpha = model.alpha
 
-        print("New alpha: ", new_alpha)
+            print("New alpha: ", new_alpha)
 
 
 class SwishToReLU(nn.Module):
