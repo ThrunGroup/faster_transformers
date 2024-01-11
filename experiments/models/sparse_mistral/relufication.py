@@ -15,9 +15,7 @@ class ReluficationRateScheduler(TrainerCallback):
         if state.global_step % self.step_size == 10:
             for module in model.modules():
                 if isinstance(module, SwishToReLU):
-                    module.alpha = min(
-                        1.0, module.alpha + self.alpha_increment
-                    )
+                    model.increase_alpha(by=self.alpha_increment)
 
         if state.global_step % self.step_size == 10:
             for module in model.modules():
@@ -32,9 +30,11 @@ class SwishToReLU(nn.Module):
         self.alpha = 0.0
 
     def increase_alpha(self, by=0.0):
-        self.alpha += by
+        self.alpha = min(1.0, self.alpha + by)
 
     def forward(self, x):
+        return F.relu(x)
+
         # (Swish -> ReLU) for negative inputs and SiLU for positive inputs
         silu_part = F.silu(x)
         relu_silu_part = self.alpha * F.relu(x) + (1 - self.alpha) * F.silu(x)
