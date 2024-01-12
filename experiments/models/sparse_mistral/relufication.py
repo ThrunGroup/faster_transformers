@@ -6,7 +6,7 @@ import math
 
 
 class ReluficationRateScheduler(TrainerCallback):
-    def __init__(self, step_size=10, alpha_increment=0.025):
+    def __init__(self, step_size=10, alpha_increment=0.01):
         self.step_size = step_size
         self.alpha_increment = alpha_increment
 
@@ -14,7 +14,7 @@ class ReluficationRateScheduler(TrainerCallback):
         model = kwargs["model"]
         new_alpha = 0
 
-        if state.global_step % self.step_size == 10:
+        if state.global_step % self.step_size == 5:
             for module in model.modules():
                 if isinstance(module, SwishToReLU):
                     model.increase_alpha(by=self.alpha_increment)
