@@ -17,8 +17,8 @@ class ReluficationRateScheduler(TrainerCallback):
         if state.global_step % self.step_size == 10:
             for module in model.modules():
                 if isinstance(module, SwishToReLU):
-                    model.increase_alpha(by=self.alpha_increment)
-                    new_alpha = model.alpha
+                    module.increase_alpha(by=self.alpha_increment)
+                    new_alpha = module.alpha
 
             print("New alpha: ", new_alpha)
 
