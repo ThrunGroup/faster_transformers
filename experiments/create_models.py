@@ -17,7 +17,7 @@ from models.build_model import build_model
 from experiments.models.sparse_mistral.relufication import (
     ReluficationRateScheduler,
 )
-from utils import set_master_port
+from utils.utils import set_master_port
 from utils.constants import (
     # Models
     GPT2,
