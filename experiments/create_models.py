@@ -7,7 +7,7 @@ from transformers import (
 )
 from torch.nn import functional as F
 import wandb
-import copy
+
 
 import gc
 import torch
@@ -17,6 +17,7 @@ from models.build_model import build_model
 from experiments.models.sparse_mistral.relufication import (
     ReluficationRateScheduler,
 )
+from utils import set_master_port
 from utils.constants import (
     # Models
     GPT2,
@@ -98,7 +99,7 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=750,
+        max_steps=5,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -108,7 +109,7 @@ def finetune(
         run_name=model_name,
         # for memory issues
         gradient_accumulation_steps=2,
-        deepspeed="ds_config.json",
+        # deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
@@ -275,6 +276,8 @@ def create_model(
 
 
 if __name__ == "__main__":
+    set_master_port()  # avoid conflicting ports
+
     dataset_types = [
         # BILLSUM,
         # SST2,
@@ -311,7 +314,7 @@ if __name__ == "__main__":
                     **common_args,
                     push_to_hub=True,
                     use_relu=True,
-                    run_name="_switrelu_log",
+                    run_name="_loading_test",
                 )
 
                 # total_size = total_sizes[model_type]
