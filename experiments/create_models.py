@@ -233,11 +233,8 @@ def create_model(
     """
     # Build a Gated Attention model
     model_name = f"{model_type}_{dataset_name}"
-
-    if use_mare_mlp:
-        pretrained_model_name += f"_dense_epochs-{num_epochs}"  # -{num_epochs}
-        model_name += "_router_from_pretrained_alpha1"
     model_name += run_name
+    pretrained_model_name = "Mistral-7B-v0.1_cola_silu"
 
     # captures the method parameters and model_name as a dictionary
     config = locals()
@@ -273,7 +270,7 @@ def create_model(
         use_mare_mlp=use_mare_mlp,
         use_collect_stats=use_collect_stats,
         push_to_hub=kwargs["push_to_hub"],
-        pretrained_model_name="Mistral-7B-v0.1_cola_silu",
+        pretrained_model_name=pretrained_model_name,
     )
 
 
