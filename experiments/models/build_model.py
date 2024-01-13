@@ -61,14 +61,20 @@ def build_model(
     num_generalists: int = 0,
     num_experts: int = 0,
     expert_size: int = 0,
+    pretrained_model_name: str = None,
     use_relu: bool = False,
 ):
     print("Loading the model...")
     config = AutoConfig.from_pretrained(model_type)
 
-    model = AutoModelForSequenceClassification.from_pretrained(
-        model_type, config=config
-    )
+    if pretrained_model_name:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            "thrunlab/Mistral-7B-v0.1_cola_silu"
+        )
+    else:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            model_type, config=config
+        )
 
     if use_relu:
         apply_relufication(model)

@@ -55,7 +55,7 @@ def finetune(
     save_stats: bool = False,
     use_mare_mlp: bool = False,
     use_collect_stats: bool = False,
-    pre_trained_model_name: str = None,
+    pretrained_model_name: str = None,
 ):
     """
     Finetune the model on a dataset
@@ -144,14 +144,14 @@ def finetune(
         if use_collect_stats and not use_mare_mlp:
             model.activate_stats(model)
         elif use_mare_mlp:
-            # model.from_pretrained(f"thrunlab/{pre_trained_model_name}")
-            print(f"thrunlab/{pre_trained_model_name}")
-            # state_dict = torch.load(f"thrunlab/{pre_trained_model_name}.pt")
+            # model.from_pretrained(f"thrunlab/{pretrained_model_name}")
+            print(f"thrunlab/{pretrained_model_name}")
+            state_dict = torch.load(f"thrunlab/{pretrained_model_name}.pt")
 
-            # model.load_state_dict(
-            #     state_dict,
-            #     strict=False,
-            # )
+            model.load_state_dict(
+                state_dict,
+                strict=False,
+            )
 
             # Collect Stats
             if use_collect_stats:
@@ -235,9 +235,7 @@ def create_model(
     model_name = f"{model_type}_{dataset_name}"
 
     if use_mare_mlp:
-        pre_trained_model_name += (
-            f"_dense_epochs-{num_epochs}"  # -{num_epochs}
-        )
+        pretrained_model_name += f"_dense_epochs-{num_epochs}"  # -{num_epochs}
         model_name += "_router_from_pretrained_alpha1"
     model_name += run_name
 
@@ -252,6 +250,7 @@ def create_model(
         expert_size=expert_size,
         capacity_factor=capacity_factor,
         use_relu=use_relu,
+        pretrained_model_name=pretrained_model_name,
     )
 
     model.config.pad_token_id = model.config.eos_token_id
@@ -274,7 +273,7 @@ def create_model(
         use_mare_mlp=use_mare_mlp,
         use_collect_stats=use_collect_stats,
         push_to_hub=kwargs["push_to_hub"],
-        # pre_trained_model_name=pre_trained_model_name,
+        pretrained_model_name="Mistral-7B-v0.1_cola_silu",
     )
 
 
