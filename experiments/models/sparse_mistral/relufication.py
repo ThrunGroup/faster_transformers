@@ -6,7 +6,7 @@ import math
 
 
 class ReluficationRateScheduler(TrainerCallback):
-    def __init__(self, step_size=5, alpha_increment=0.01):
+    def __init__(self, step_size=10, alpha_increment=0.02):
         self.step_size = step_size
         self.alpha_increment = alpha_increment
 
