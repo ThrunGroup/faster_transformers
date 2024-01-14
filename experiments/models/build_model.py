@@ -104,8 +104,8 @@ def build_model(
             expert_size=expert_size,
         )
 
-    # print("Applying LoRA...")
-    # model = get_lora_model(model)
+    print("Applying LoRA...")
+    model = get_lora_model(model)
 
     return model
 
