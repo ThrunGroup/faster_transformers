@@ -105,12 +105,6 @@ def build_model(
             expert_size=expert_size,
         )
 
-    # print("Scores")
-    # print(model.score.original_module[0])
-    # print(model.score.original_module[0].weight)
-    # print(model.score.modules_to_save.default[0])
-    # print(model.score.modules_to_save.default[0].weight)
-
     return model
 
 
