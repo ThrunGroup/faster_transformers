@@ -4,7 +4,12 @@ from transformers import (
 )
 import torch
 from torch import nn
-from peft import LoraConfig, TaskType, get_peft_model, PeftModel
+from peft import (
+    LoraConfig,
+    TaskType,
+    get_peft_model,
+    PeftModelForSequenceClassification,
+)
 
 from experiments.models.sparse_mistral.relufication import apply_relufication
 from experiments.models.t5_sparity_check.t5_sparsity_check_new import (
@@ -71,7 +76,9 @@ def build_model(
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
         )
-        model = PeftModel.from_pretrained(model, pretrained_model_name)
+        model = PeftModelForSequenceClassification.from_pretrained(
+            model, pretrained_model_name
+        )
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
