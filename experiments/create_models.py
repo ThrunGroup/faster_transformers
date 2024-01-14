@@ -75,7 +75,7 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    train_dataset = train_dataset.select(range(8))
+    train_dataset = train_dataset.select(range(64))
     val_dataset = train_dataset
     test_dataset = train_dataset
 
@@ -93,7 +93,7 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
-        eval_steps=2,
+        eval_steps=5,
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,

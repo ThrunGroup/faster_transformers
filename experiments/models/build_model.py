@@ -105,10 +105,6 @@ def build_model(
             expert_size=expert_size,
         )
 
-    print("Applying LoRA...")
-    model = get_lora_model(model)
-    print(model)
-
     # print("Scores")
     # print(model.score.original_module[0])
     # print(model.score.original_module[0].weight)
