@@ -80,9 +80,7 @@ def build_model(
         )
 
         score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")
-        model.score.weight = score_state_dict["original_module.0.weight"]
-        # model.score = CastOutputToFloat(model.score)
-
+        model.score.load_state_dict(score_state_dict)
         print("Model: ")
         print(model)
     else:
