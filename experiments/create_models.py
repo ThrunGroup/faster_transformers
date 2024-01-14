@@ -191,7 +191,12 @@ def finetune(
             print("pushing to hub")
             trainer.push_to_hub()
             os.makedirs("thrunlab", exist_ok=True)
+            os.makedirs("scores", exist_ok=True)
             torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
+
+            score_model = model.score
+            torch.save(score_model.state_dict(), f"scores/{model_name}.pt")
+            print(score_model.weight[0][:5])
         # model.from_pretrained(f"thrunlab/{model_name}")
 
     # Empty out gpu memory
@@ -235,7 +240,8 @@ def create_model(
     # Build a Gated Attention model
     model_name = f"{model_type}_{dataset_name}"
     model_name += run_name
-    pretrained_model_name = "Mistral-7B-v0.1_cola_silu"
+    # pretrained_model_name = "Mistral-7B-v0.1_cola_silu"
+    pretrained_model_name = None
 
     # captures the method parameters and model_name as a dictionary
     config = locals()
@@ -276,8 +282,6 @@ def create_model(
 
 
 if __name__ == "__main__":
-    set_master_port()  # avoid conflicting ports
-
     dataset_types = [
         # BILLSUM,
         # SST2,
@@ -296,7 +300,7 @@ if __name__ == "__main__":
         T5_3B: 16384,
     }
 
-    model_types = [MISTRAL_7B]
+    model_types = [GPT2]
     for i in range(1):
         print("EXPERIMENT: ", i)
         for model_type in model_types:
@@ -313,7 +317,7 @@ if __name__ == "__main__":
                 create_model(
                     **common_args,
                     push_to_hub=True,
-                    use_relu=True,
+                    use_relu=False,
                     run_name="_loading_test",
                 )
 
