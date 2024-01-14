@@ -77,14 +77,12 @@ def finetune(
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
     train_dataset = train_dataset.select(range(8))
     val_dataset = train_dataset
-    test_datset = train_dataset
+    test_dataset = train_dataset
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
 
-    if True or (
-        "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0
-    ):
+    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
             project=f"{model_name}_{dataset_type}",
             name=model_name,
@@ -162,22 +160,22 @@ def finetune(
             model.activate_mare_mlp(model)
 
     print("Training")
-    trainer.train()
+    # trainer.train()
 
-    if do_evaluation:
-        if save_stats:
-            model.activate_stats(model, True)
-        trainer.evaluate()
-        if save_stats:
-            dir_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "mare mlp stats histograms",
-            )
-            filename = (
-                f"data-{dataset_name}_epochs-{num_epochs}_int ff activations_"
-            )
-            model.plot_stats(model, os.path.join(dir_path, filename))
-            print("saved at: ", os.path.join(dir_path, filename))
+    # if do_evaluation:
+    #     if save_stats:
+    #         model.activate_stats(model, True)
+    #     trainer.evaluate()
+    #     if save_stats:
+    #         dir_path = os.path.join(
+    #             os.path.dirname(os.path.abspath(__file__)),
+    #             "mare mlp stats histograms",
+    #         )
+    #         filename = (
+    #             f"data-{dataset_name}_epochs-{num_epochs}_int ff activations_"
+    #         )
+    #         model.plot_stats(model, os.path.join(dir_path, filename))
+    #         print("saved at: ", os.path.join(dir_path, filename))
 
     results = trainer.evaluate(test_dataset)
     print("EVALUATION: ", results)
@@ -194,8 +192,6 @@ def finetune(
 
             score_model = model.score
             torch.save(score_model.state_dict(), f"scores/{model_name}.pt")
-            # print(score_model.weight[0][:5])
-        # model.from_pretrained(f"thrunlab/{model_name}")
 
     # Empty out gpu memory
     del trainer
@@ -239,8 +235,8 @@ def create_model(
     model_name = f"{model_type}_{dataset_name}"
     model_name += run_name
     # pretrained_model_name = "Mistral-7B-v0.1_cola_silu"
-    pretrained_model_name = None
-    # pretrained_model_name = "Mistral-7B-v0.1_cola_loading_test"
+    # pretrained_model_name = None
+    pretrained_model_name = "Mistral-7B-v0.1_cola_loading_test"
 
     # captures the method parameters and model_name as a dictionary
     config = locals()
