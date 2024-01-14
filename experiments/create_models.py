@@ -75,7 +75,7 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    train_dataset = train_dataset.select(range(64))
+    train_dataset = train_dataset.select(range(32))
     val_dataset = train_dataset
     test_dataset = train_dataset
 
