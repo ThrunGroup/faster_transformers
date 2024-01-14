@@ -75,7 +75,7 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    train_dataset = train_dataset.select(range(4))
+    train_dataset = train_dataset.select(range(8))
     val_dataset = train_dataset
     test_dataset = train_dataset
 
@@ -97,7 +97,7 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=5,
+        max_steps=10,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -139,25 +139,25 @@ def finetune(
     print("Training ", model_name)
     print("*********************\n")
 
-    if num_epochs != 0:
-        if use_collect_stats and not use_mare_mlp:
-            model.activate_stats(model)
-        elif use_mare_mlp:
-            # model.from_pretrained(f"thrunlab/{pretrained_model_name}")
-            print(f"thrunlab/{pretrained_model_name}")
-            state_dict = torch.load(f"thrunlab/{pretrained_model_name}.pt")
+    # if num_epochs != 0:
+    #     if use_collect_stats and not use_mare_mlp:
+    #         model.activate_stats(model)
+    #     elif use_mare_mlp:
+    #         # model.from_pretrained(f"thrunlab/{pretrained_model_name}")
+    #         print(f"thrunlab/{pretrained_model_name}")
+    #         state_dict = torch.load(f"thrunlab/{pretrained_model_name}.pt")
 
-            model.load_state_dict(
-                state_dict,
-                strict=False,
-            )
+    #         model.load_state_dict(
+    #             state_dict,
+    #             strict=False,
+    #         )
 
-            # Collect Stats
-            if use_collect_stats:
-                model.activate_stats(model, True)
-                print("Evaluating")
-                trainer.evaluate(train_dataset)
-            model.activate_mare_mlp(model)
+    #         # Collect Stats
+    #         if use_collect_stats:
+    #             model.activate_stats(model, True)
+    #             print("Evaluating")
+    #             trainer.evaluate(train_dataset)
+    #         model.activate_mare_mlp(model)
 
     print("Training")
     trainer.train()
@@ -179,7 +179,14 @@ def finetune(
 
     results = trainer.evaluate(test_dataset)
     print("EVALUATION: ", results)
-    wandb_run.finish()
+
+    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
+        wandb_run = wandb.init(
+            project=f"{model_name}_{dataset_type}",
+            name=model_name,
+            reinit=True,
+            config=config,
+        )
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run.finish()
@@ -304,8 +311,8 @@ if __name__ == "__main__":
                     "model_type": model_type,
                     "dataset_name": dataset_type,
                     "num_epochs": 10,
-                    "train_batch_size": 4,
-                    "test_batch_size": 4,
+                    "train_batch_size": 64,
+                    "test_batch_size": 64,
                     "gradient_checkpointing": False,
                 }
 
