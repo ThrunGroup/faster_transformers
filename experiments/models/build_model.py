@@ -111,10 +111,10 @@ def build_model(
     print(model)
 
     print("Scores")
-    print(model.score.original_module)
-    print(model.score.modules_to_save.default)
-    print(model.score.original_module.weight)
-    print(model.score.modules_to_save.default.weight)
+    print(model.score.original_module[0])
+    print(model.score.original_module[0].weight)
+    print(model.score.modules_to_save.default[0])
+    print(model.score.modules_to_save.default[0].weight)
 
     return model
 
