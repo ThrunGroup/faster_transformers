@@ -76,6 +76,9 @@ def build_model(
             model_type, config=config
         )
 
+    print("Model: ")
+    print(model)
+
     if use_relu:
         apply_relufication(model)
 
