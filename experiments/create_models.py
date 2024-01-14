@@ -75,9 +75,9 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    # train_dataset = train_dataset.select(range(128))
-    # val_dataset = train_dataset
-    # test_datset = train_dataset
+    train_dataset = train_dataset.select(range(128))
+    val_dataset = train_dataset
+    test_datset = train_dataset
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
@@ -99,7 +99,7 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=2,
+        max_steps=10,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -239,8 +239,8 @@ def create_model(
     model_name = f"{model_type}_{dataset_name}"
     model_name += run_name
     # pretrained_model_name = "Mistral-7B-v0.1_cola_silu"
-    # pretrained_model_name = None
-    pretrained_model_name = "Mistral-7B-v0.1_cola_loading_test"
+    pretrained_model_name = None
+    # pretrained_model_name = "Mistral-7B-v0.1_cola_loading_test"
 
     # captures the method parameters and model_name as a dictionary
     config = locals()
@@ -308,8 +308,8 @@ if __name__ == "__main__":
                     "model_type": model_type,
                     "dataset_name": dataset_type,
                     "num_epochs": 10,
-                    "train_batch_size": 2,
-                    "test_batch_size": 2,
+                    "train_batch_size": 32,
+                    "test_batch_size": 32,
                     "gradient_checkpointing": False,
                 }
 

@@ -74,24 +74,23 @@ def build_model(
     config = AutoConfig.from_pretrained(model_type)
 
     if pretrained_model_name:
-        # model = AutoModelForSequenceClassification.from_pretrained(
-        #     "thrunlab/" + pretrained_model_name, config=config
-        # )
-        # print("Loaded model: ", model)
+        model = AutoModelForSequenceClassification.from_pretrained(
+            "thrunlab/" + pretrained_model_name, config=config
+        )
 
         score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")
-        print(score_state_dict["original_module.0.weight"])
-        # model.score.load_state_dict(score_state_dict)
-        # model.score = CastOutputToFloat(model.score)
-        # print(model.score.weight)
+        model.score.weight = score_state_dict["original_module.0.weight"]
+        model.score = CastOutputToFloat(model.score)
 
+        print("Model: ")
+        print(model)
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
         )
-
-    print("Model: ")
-    print(model)
+        print("Applying LoRA...")
+        model = get_lora_model(model)
+        print(model)
 
     if use_relu:
         apply_relufication(model)
