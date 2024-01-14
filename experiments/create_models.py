@@ -160,7 +160,7 @@ def finetune(
             model.activate_mare_mlp(model)
 
     print("Training")
-    # trainer.train()
+    trainer.train()
 
     # if do_evaluation:
     #     if save_stats:
@@ -190,7 +190,7 @@ def finetune(
             os.makedirs("scores", exist_ok=True)
             torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
 
-            score_model = model.score
+            score_model = model.score.original_module[0]
             torch.save(score_model.state_dict(), f"scores/{model_name}.pt")
 
     # Empty out gpu memory
@@ -235,8 +235,8 @@ def create_model(
     model_name = f"{model_type}_{dataset_name}"
     model_name += run_name
     # pretrained_model_name = "Mistral-7B-v0.1_cola_silu"
-    # pretrained_model_name = None
-    pretrained_model_name = "Mistral-7B-v0.1_cola_loading_test"
+    pretrained_model_name = None
+    # pretrained_model_name = "Mistral-7B-v0.1_cola_loading_test"
 
     # captures the method parameters and model_name as a dictionary
     config = locals()
