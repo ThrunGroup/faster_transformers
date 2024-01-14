@@ -77,8 +77,16 @@ def build_model(
             model_type, config=config
         )
         model = PeftModelForSequenceClassification.from_pretrained(
-            model, pretrained_model_name
+            model, "thrunlab/" + pretrained_model_name
         )
+
+        # Load the saved "score" layer state dictionary
+        score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")
+
+        # Replace the "score" layer in the current model with the loaded state dict
+        model.score.load_state_dict(score_state_dict)
+        print(model.score.weight[0][:5])
+
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
