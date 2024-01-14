@@ -80,10 +80,10 @@ def build_model(
         print("Loaded model: ", model)
 
         # Load the saved "score" layer state dictionary
-        score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")
+        # score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")
 
         # Replace the "score" layer in the current model with the loaded state dict
-        model.score.load_state_dict(score_state_dict)
+        # model.score.load_state_dict(score_state_dict)
         # print(model.score.weight[0][:5])
 
     else:
@@ -109,6 +109,12 @@ def build_model(
     print("Applying LoRA...")
     model = get_lora_model(model)
     print(model)
+
+    print("Scores")
+    print(model.score.original_module)
+    print(model.score.modules_to_save.default)
+    print(model.score.original_module.weight)
+    print(model.score.modules_to_save.default.weight)
 
     return model
 
