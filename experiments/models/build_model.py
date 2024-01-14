@@ -77,12 +77,12 @@ def build_model(
             "thrunlab/" + pretrained_model_name, config=config
         )
 
-        # Load the saved "score" layer state dictionary
-        score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")
+        # # Load the saved "score" layer state dictionary
+        # score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")
 
-        # Replace the "score" layer in the current model with the loaded state dict
-        model.score.load_state_dict(score_state_dict)
-        print(model.score.weight[0][:5])
+        # # Replace the "score" layer in the current model with the loaded state dict
+        # model.score.load_state_dict(score_state_dict)
+        # print(model.score.weight[0][:5])
 
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
