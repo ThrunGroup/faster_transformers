@@ -4,7 +4,7 @@ from transformers import (
 )
 import torch
 from torch import nn
-from peft import LoraConfig, TaskType, get_peft_model
+from peft import LoraConfig, TaskType, get_peft_model, PeftModel
 
 from experiments.models.sparse_mistral.relufication import apply_relufication
 from experiments.models.t5_sparity_check.t5_sparsity_check_new import (
@@ -69,8 +69,9 @@ def build_model(
 
     if pretrained_model_name:
         model = AutoModelForSequenceClassification.from_pretrained(
-            "thrunlab/Mistral-7B-v0.1_cola_silu"
+            model_type, config=config
         )
+        model = PeftModel.from_pretrained(model, pretrained_model_name)
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
@@ -91,8 +92,8 @@ def build_model(
             expert_size=expert_size,
         )
 
-    print("Applying LoRA...")
-    model = get_lora_model(model)
+    # print("Applying LoRA...")
+    # model = get_lora_model(model)
 
     return model
 
