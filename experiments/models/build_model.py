@@ -74,7 +74,7 @@ def build_model(
 
     if pretrained_model_name:
         model = AutoModelForSequenceClassification.from_pretrained(
-            pretrained_model_name, config=config
+            "thrunlab/" + pretrained_model_name, config=config
         )
 
         # Load the saved "score" layer state dictionary
