@@ -26,6 +26,11 @@ from utils.constants import (
 )
 
 
+class CastOutputToFloat(nn.Sequential):
+    def forward(self, x):
+        return super().forward(x).to(torch.float32)
+
+
 def get_lora_model(model):
     lora_config = LoraConfig(
         r=16,
@@ -46,10 +51,6 @@ def get_lora_model(model):
 
     model.gradient_checkpointing_enable()  # reduce number of stored activations
     model.enable_input_require_grads()
-
-    class CastOutputToFloat(nn.Sequential):
-        def forward(self, x):
-            return super().forward(x).to(torch.float32)
 
     model.score = CastOutputToFloat(model.score)
 
@@ -76,15 +77,14 @@ def build_model(
         model = AutoModelForSequenceClassification.from_pretrained(
             "thrunlab/" + pretrained_model_name, config=config
         )
-
         print("Loaded model: ", model)
 
-        # Load the saved "score" layer state dictionary
-        # score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")
-
-        # Replace the "score" layer in the current model with the loaded state dict
-        # model.score.load_state_dict(score_state_dict)
-        # print(model.score.weight[0][:5])
+        score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")[
+            "original_module.0.state_dict"
+        ]
+        model.score.load_state_dict(score_state_dict)
+        model.score = CastOutputToFloat(model.score)
+        print(model.score.weight)
 
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
@@ -110,11 +110,11 @@ def build_model(
     model = get_lora_model(model)
     print(model)
 
-    print("Scores")
-    print(model.score.original_module[0])
-    print(model.score.original_module[0].weight)
-    print(model.score.modules_to_save.default[0])
-    print(model.score.modules_to_save.default[0].weight)
+    # print("Scores")
+    # print(model.score.original_module[0])
+    # print(model.score.original_module[0].weight)
+    # print(model.score.modules_to_save.default[0])
+    # print(model.score.modules_to_save.default[0].weight)
 
     return model
 
