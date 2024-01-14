@@ -52,7 +52,7 @@ def get_lora_model(model):
     model.gradient_checkpointing_enable()  # reduce number of stored activations
     model.enable_input_require_grads()
 
-    model.score = CastOutputToFloat(model.score)
+    # model.score = CastOutputToFloat(model.score)
 
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
@@ -81,7 +81,7 @@ def build_model(
 
         score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")
         model.score.weight = score_state_dict["original_module.0.weight"]
-        model.score = CastOutputToFloat(model.score)
+        # model.score = CastOutputToFloat(model.score)
 
         print("Model: ")
         print(model)
