@@ -194,7 +194,7 @@ def finetune(
 
             score_model = model.score
             torch.save(score_model.state_dict(), f"scores/{model_name}.pt")
-            print(score_model.weight[0][:5])
+            # print(score_model.weight[0][:5])
         # model.from_pretrained(f"thrunlab/{model_name}")
 
     # Empty out gpu memory
