@@ -74,17 +74,17 @@ def build_model(
     config = AutoConfig.from_pretrained(model_type)
 
     if pretrained_model_name:
-        model = AutoModelForSequenceClassification.from_pretrained(
-            "thrunlab/" + pretrained_model_name, config=config
-        )
-        print("Loaded model: ", model)
+        # model = AutoModelForSequenceClassification.from_pretrained(
+        #     "thrunlab/" + pretrained_model_name, config=config
+        # )
+        # print("Loaded model: ", model)
 
         score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")[
-            "original_module.0.state_dict"
+            "original_module.0"
         ]
-        model.score.load_state_dict(score_state_dict)
-        model.score = CastOutputToFloat(model.score)
-        print(model.score.weight)
+        # model.score.load_state_dict(score_state_dict)
+        # model.score = CastOutputToFloat(model.score)
+        # print(model.score.weight)
 
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
