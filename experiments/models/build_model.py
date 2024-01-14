@@ -74,6 +74,7 @@ def build_model(
     config = AutoConfig.from_pretrained(model_type)
 
     if pretrained_model_name:
+        print("Loading from thrunlab/" + pretrained_model_name)
         model = AutoModelForSequenceClassification.from_pretrained(
             "thrunlab/" + pretrained_model_name, config=config
         )
