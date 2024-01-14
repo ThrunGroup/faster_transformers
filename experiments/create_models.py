@@ -238,7 +238,8 @@ def create_model(
     # Build a Gated Attention model
     model_name = f"{model_type}_{dataset_name}"
     model_name += run_name
-    pretrained_model_name = "Mistral-7B-v0.1_cola_silu"
+    # pretrained_model_name = "Mistral-7B-v0.1_cola_silu"
+    pretrained_model_name = None
     # pretrained_model_name = "gpt2_cola_loading_test"
 
     # captures the method parameters and model_name as a dictionary
