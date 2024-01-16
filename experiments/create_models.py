@@ -91,7 +91,7 @@ def finetune(
         )
 
     if pretrained_model_name:
-        max_steps = 0
+        max_steps = 1
         push_to_hub = False
     else:
         max_steps = 10
