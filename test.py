@@ -2,6 +2,7 @@ from transformers import (
     AutoConfig,
     AutoModelForSequenceClassification,
 )
+import torch
 
 from utils.constants import MISTRAL_7B
 
@@ -15,4 +16,11 @@ model = AutoModelForSequenceClassification.from_pretrained(
 )
 
 for name, param in model.named_parameters():
-    print(name, param.requires_grad)
+    if "lora" in name or "score" in name:
+        param.requires_grad = True
+        print(name)
+
+score_state_dict = torch.load(f"scores/{pretrained_model_name}1.pt")
+print("original score: ", model.score.weight)
+model.score.load_state_dict(score_state_dict)
+print("Loaded score  : ", model.score.weight)
