@@ -229,6 +229,7 @@ def create_model(
     test_batch_size: int = 0,
     gradient_checkpointing: bool = False,
     generalist_ratios: float = 0,
+    pretrained_model_name: str = None,
     save_stats: bool = False,
     use_relu: bool = False,
     **kwargs,
@@ -247,9 +248,6 @@ def create_model(
     # Build a Gated Attention model
     model_name = f"{model_type}_{dataset_name}"
     model_name += run_name
-    # pretrained_model_name = "Mistral-7B-v0.1_cola_silu"
-    # pretrained_model_name = None
-    pretrained_model_name = "Mistral-7B-v0.1_cola_loading_test"
 
     # captures the method parameters and model_name as a dictionary
     config = locals()
@@ -324,9 +322,10 @@ if __name__ == "__main__":
 
                 create_model(
                     **common_args,
-                    push_to_hub=True,
+                    push_to_hub=False,
                     use_relu=False,
                     run_name="_loading_test",
+                    pretrained_model_name="Mistral-7B-v0.1_cola_loading_test",
                 )
 
                 # total_size = total_sizes[model_type]

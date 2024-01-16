@@ -98,7 +98,10 @@ def build_model(
         )
         print("Applying LoRA...")
         model = get_lora_model(model)
-        print(model)
+
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                print(name)
 
     if use_relu:
         apply_relufication(model)
