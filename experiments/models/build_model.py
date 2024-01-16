@@ -30,6 +30,17 @@ class CastOutputToFloat(nn.Sequential):
         return super().forward(x).to(torch.float32)
 
 
+def set_up_model(model):
+    for param in model.parameters():
+        # cast the small parameters (e.g. layernorm) to fp32 for stability
+        if param.ndim == 1:
+            param.data = param.data.to(torch.float32)
+
+    model.gradient_checkpointing_enable()  # reduce number of stored activations
+    model.enable_input_require_grads()
+    return model
+
+
 def get_lora_model(model):
     lora_config = LoraConfig(
         r=16,
@@ -42,17 +53,7 @@ def get_lora_model(model):
             "v_proj",
         ],
     )
-    for param in model.parameters():
-        param.requires_grad = False  # freeze the model - train adapters later
-        if param.ndim == 1:
-            # cast the small parameters (e.g. layernorm) to fp32 for stability
-            param.data = param.data.to(torch.float32)
-
-    model.gradient_checkpointing_enable()  # reduce number of stored activations
-    model.enable_input_require_grads()
-
-    # model.score = CastOutputToFloat(model.score)
-
+    model = set_up_model(model)
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
@@ -77,7 +78,7 @@ def build_model(
         model = AutoModelForSequenceClassification.from_pretrained(
             "thrunlab/" + pretrained_model_name, config=config
         )
-
+        model = set_up_model(model)
         # score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")
         # model.score.load_state_dict(score_state_dict)
         print("Score weights: ")

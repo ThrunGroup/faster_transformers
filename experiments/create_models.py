@@ -197,9 +197,10 @@ def finetune(
             os.makedirs("scores", exist_ok=True)
             torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
 
-            score_model = model.score.original_module
-            # print(score_model)
-            torch.save(score_model.state_dict(), f"scores/{model_name}.pt")
+            score_model1 = model.score.original_module
+            score_model2 = model.score.modules_to_save.default
+            torch.save(score_model1.state_dict(), f"scores/{model_name}1.pt")
+            torch.save(score_model2.state_dict(), f"scores/{model_name}2.pt")
 
     # Empty out gpu memory
     del trainer
