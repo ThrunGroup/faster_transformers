@@ -75,9 +75,9 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    train_dataset = train_dataset.select(range(32))
-    val_dataset = train_dataset
-    test_dataset = train_dataset
+    # train_dataset = train_dataset.select(range(32))
+    # val_dataset = train_dataset
+    # test_dataset = train_dataset
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
@@ -94,7 +94,7 @@ def finetune(
         max_steps = 1
         push_to_hub = False
     else:
-        max_steps = 10
+        max_steps = 750
         push_to_hub = True
 
     training_args = TrainingArguments(
@@ -322,8 +322,8 @@ if __name__ == "__main__":
                     "model_type": model_type,
                     "dataset_name": dataset_type,
                     "num_epochs": 10,
-                    "train_batch_size": 32,
-                    "test_batch_size": 32,
+                    "train_batch_size": 64,
+                    "test_batch_size": 64,
                     "gradient_checkpointing": False,
                 }
 
@@ -331,8 +331,8 @@ if __name__ == "__main__":
                     **common_args,
                     push_to_hub=False,
                     use_relu=False,
-                    run_name="_loading_test",
-                    pretrained_model_name="Mistral-7B-v0.1_cola_loading_test",
+                    run_name="_original_cola",
+                    # pretrained_model_name="Mistral-7B-v0.1_cola_loading_test",
                 )
 
                 # total_size = total_sizes[model_type]
