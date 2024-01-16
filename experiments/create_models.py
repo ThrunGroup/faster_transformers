@@ -97,7 +97,7 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=0,
+        max_steps=20,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -325,7 +325,7 @@ if __name__ == "__main__":
                     push_to_hub=False,
                     use_relu=False,
                     run_name="_loading_test",
-                    pretrained_model_name="Mistral-7B-v0.1_cola_loading_test",
+                    # pretrained_model_name="Mistral-7B-v0.1_cola_loading_test",
                 )
 
                 # total_size = total_sizes[model_type]
