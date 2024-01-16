@@ -89,6 +89,11 @@ def build_model(
             "thrunlab/" + pretrained_model_name, config=config
         )
         model = set_up_model(model)
+
+        for name, param in model.named_parameters():
+            if "lora" in name or "score" in name:
+                param.requires_grad = True
+
         # print(model)
         # score_state_dict = torch.load(f"scores/{pretrained_model_name}2.pt")
         # print("original score: ", model.score.weight)
