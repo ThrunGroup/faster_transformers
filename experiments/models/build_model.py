@@ -39,7 +39,6 @@ def set_up_model(model):
 
     model.gradient_checkpointing_enable()  # reduce number of stored activations
     model.enable_input_require_grads()
-    return model
 
 
 def get_lora_model(model):
@@ -54,7 +53,16 @@ def get_lora_model(model):
             "v_proj",
         ],
     )
-    model = set_up_model(model)
+
+    for param in model.parameters():
+        param.requires_grad = False
+        # cast the small parameters (e.g. layernorm) to fp32 for stability
+        if param.ndim == 1:
+            param.data = param.data.to(torch.float32)
+
+    model.gradient_checkpointing_enable()  # reduce number of stored activations
+    model.enable_input_require_grads()
+
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
