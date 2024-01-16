@@ -81,8 +81,8 @@ def build_model(
 
         score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")
         model.score.load_state_dict(score_state_dict)
-        print("Model: ")
-        print(model)
+        print("Score weights: ")
+        print(model.score.weights)
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
