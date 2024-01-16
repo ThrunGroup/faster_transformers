@@ -75,7 +75,7 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    train_dataset = train_dataset.select(range(32))
+    train_dataset = train_dataset.select(range(4))
     val_dataset = train_dataset
     test_dataset = train_dataset
 
@@ -97,7 +97,7 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=30,
+        max_steps=10,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -191,8 +191,10 @@ def finetune(
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run.finish()
         if push_to_hub:
-            print("pushing to hub")
+            print("Pushing to hub")
             trainer.push_to_hub()
+            print(f"Pushed to hub: thrunlab/{model_name}")
+
             os.makedirs("thrunlab", exist_ok=True)
             os.makedirs("scores", exist_ok=True)
             torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
@@ -246,8 +248,8 @@ def create_model(
     model_name = f"{model_type}_{dataset_name}"
     model_name += run_name
     # pretrained_model_name = "Mistral-7B-v0.1_cola_silu"
-    # pretrained_model_name = None
-    pretrained_model_name = "Mistral-7B-v0.1_cola_loading_test"
+    pretrained_model_name = None
+    # pretrained_model_name = "Mistral-7B-v0.1_cola_loading_test"
 
     # captures the method parameters and model_name as a dictionary
     config = locals()
