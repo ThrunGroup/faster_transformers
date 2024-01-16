@@ -8,7 +8,6 @@ from peft import (
     LoraConfig,
     TaskType,
     get_peft_model,
-    PeftModelForSequenceClassification,
 )
 
 from experiments.models.sparse_mistral.relufication import apply_relufication
@@ -82,7 +81,7 @@ def build_model(
         score_state_dict = torch.load(f"scores/{pretrained_model_name}.pt")
         model.score.load_state_dict(score_state_dict)
         print("Score weights: ")
-        print(model.score.weights)
+        print(model.score.weight)
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
