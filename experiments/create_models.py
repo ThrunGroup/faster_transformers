@@ -160,7 +160,7 @@ def finetune(
     #         model.activate_mare_mlp(model)
 
     print("Training")
-    # trainer.train()
+    trainer.train()
 
     # if do_evaluation:
     #     if save_stats:
