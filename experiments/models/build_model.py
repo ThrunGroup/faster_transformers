@@ -88,7 +88,8 @@ def build_model(
             "thrunlab/" + pretrained_model_name, config=config
         )
         model = set_up_model(model)
-        score_state_dict = torch.load(f"scores/{pretrained_model_name}1.pt")
+        print(model)
+        score_state_dict = torch.load(f"scores/{pretrained_model_name}2.pt")
         print("original score: ", model.score.weight)
         model.score.load_state_dict(score_state_dict)
         print("Loaded score  : ", model.score.weight)
