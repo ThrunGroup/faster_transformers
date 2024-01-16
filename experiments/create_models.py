@@ -97,7 +97,7 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=1,
+        max_steps=30,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -199,6 +199,8 @@ def finetune(
 
             score_model1 = model.score.original_module
             score_model2 = model.score.modules_to_save.default
+
+            print("New score weights: ", score_model1.weight)
             torch.save(score_model1.state_dict(), f"scores/{model_name}1.pt")
             torch.save(score_model2.state_dict(), f"scores/{model_name}2.pt")
 
