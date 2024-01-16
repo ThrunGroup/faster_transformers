@@ -97,7 +97,7 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=10,
+        max_steps=0,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
