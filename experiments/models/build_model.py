@@ -39,6 +39,7 @@ def set_up_model(model):
 
     model.gradient_checkpointing_enable()  # reduce number of stored activations
     model.enable_input_require_grads()
+    return model
 
 
 def get_lora_model(model):
