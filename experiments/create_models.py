@@ -75,7 +75,7 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    train_dataset = train_dataset.select(range(4))
+    train_dataset = train_dataset.select(range(64))
     val_dataset = train_dataset
     test_dataset = train_dataset
 
@@ -97,7 +97,7 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=10,
+        max_steps=30,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",

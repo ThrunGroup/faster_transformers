@@ -32,6 +32,7 @@ class CastOutputToFloat(nn.Sequential):
 
 def set_up_model(model):
     for param in model.parameters():
+        param.requires_grad = False
         # cast the small parameters (e.g. layernorm) to fp32 for stability
         if param.ndim == 1:
             param.data = param.data.to(torch.float32)
