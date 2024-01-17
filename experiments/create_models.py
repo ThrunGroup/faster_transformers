@@ -331,7 +331,7 @@ if __name__ == "__main__":
                     push_to_hub=False,
                     use_relu=False,
                     run_name="_test_download",
-                    # pretrained_model_name="Mistral-7B-v0.1_cola_loading_test",
+                    pretrained_model_name="Mistral-7B-v0.1_cola_original_cola",
                 )
 
                 # total_size = total_sizes[model_type]
