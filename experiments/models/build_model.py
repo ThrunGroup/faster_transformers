@@ -95,12 +95,12 @@ def build_model(
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
         )
+        apply_mistral_mlp_stats(
+            model, config, dead_threshold=0.1
+        )  # each MLP layer can collect stats
+
         print("Applying LoRA...")
         model = get_lora_model(model)
-
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                print(name)
 
     if use_relu:
         apply_relufication(model)
