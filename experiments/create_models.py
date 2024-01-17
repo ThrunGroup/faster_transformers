@@ -135,6 +135,9 @@ def finetune(
     print("Evaluating... ")
     results = trainer.evaluate(test_dataset)
     print("Test set evaluation: ", results)
+
+    print("Print dead neurons")
+    print(model)
     print_dead_neuron_stats(model)
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
@@ -153,15 +156,15 @@ def finetune(
             print(f"Pushed to hub: thrunlab/{model_name}")
 
             os.makedirs("thrunlab", exist_ok=True)
-            os.makedirs("scores", exist_ok=True)
-            torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
+            # os.makedirs("scores", exist_ok=True)
+            # torch.save(model.state_dict(), f"thrunlab/{model_name}.pt")
 
-            score_model1 = model.score.original_module
-            score_model2 = model.score.modules_to_save.default
+            # score_model1 = model.score.original_module
+            # score_model2 = model.score.modules_to_save.default
 
-            print("New score weights: ", score_model1.weight)
-            torch.save(score_model1.state_dict(), f"scores/{model_name}1.pt")
-            torch.save(score_model2.state_dict(), f"scores/{model_name}2.pt")
+            # print("New score weights: ", score_model1.weight)
+            # torch.save(score_model1.state_dict(), f"scores/{model_name}1.pt")
+            # torch.save(score_model2.state_dict(), f"scores/{model_name}2.pt")
 
     # Empty out gpu memory
     del trainer
@@ -279,7 +282,7 @@ if __name__ == "__main__":
 
                 create_model(
                     **common_args,
-                    push_to_hub=True,
+                    push_to_hub=False,
                     use_relu=True,
                     run_name="_phase2_relu_step40_alpha0_1",
                     pretrained_model_name="Mistral-7B-v0.1_cola_original_cola",
