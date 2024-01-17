@@ -103,7 +103,7 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=1,
+        max_steps=600,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -329,8 +329,8 @@ if __name__ == "__main__":
                 create_model(
                     **common_args,
                     push_to_hub=False,
-                    use_relu=False,
-                    run_name="_test_download",
+                    use_relu=True,
+                    run_name="_phase2_relu",
                     pretrained_model_name="Mistral-7B-v0.1_cola_original_cola",
                 )
 
