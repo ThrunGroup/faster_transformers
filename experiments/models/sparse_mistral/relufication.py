@@ -64,28 +64,19 @@ class MistralMLPStats(MistralMLP):
         return self.down_proj(swish * self.up_proj(x))
 
 
-def apply_mistral_mlp_stats(module, config, dead_threshold=0.01):
-    for name, child in module.named_children():
-        if isinstance(child, MistralMLP):
-            print(name)
-            new_mlp = MistralMLPStats(config, dead_threshold)
-            new_mlp.gate_proj = child.gate_proj
-            new_mlp.up_proj = child.up_proj
-            new_mlp.down_proj = child.down_proj
-            setattr(module, name, new_mlp)
-        else:
-            # Recursively search for MistralMLP in child modules
-            apply_mistral_mlp_stats(child, config, dead_threshold)
+def apply_mistral_mlp_stats(model, config, dead_threshold=0.01):
+    for layer in model.model.layers:
+        original_mlp = layer.mlp
+        new_mlp = MistralMLPStats(config, dead_threshold)
+        new_mlp.gate_proj = original_mlp.gate_proj
+        new_mlp.up_proj = original_mlp.up_proj
+        new_mlp.down_proj = original_mlp.down_proj
+        layer.mlp = new_mlp
 
 
-def print_dead_neuron_stats(module):
-    for name, child in module.named_children():
-        print(name, isinstance(child, MistralMLPStats))
-        if isinstance(child, MistralMLPStats):
-            print(f"{name} : {child.dead_neuron_percentage * 100}%")
-        else:
-            # Recursively search for MistralMLP in child modules
-            print_dead_neuron_stats(child)
+def print_dead_neuron_stats(model):
+    for i, layer in enumerate(model.model.layers):
+        print(f"{i} : {layer.mlp.dead_neuron_percentage * 100}%")
 
 
 def apply_relufication(
