@@ -53,7 +53,7 @@ class MistralMLPStats(MistralMLP):
 
         dead_neurons = swish.abs() <= self.dead_threshold
         dead_percentage = dead_neurons.float().mean()
-        swish[dead_neurons] = 0
+        # swish[dead_neurons] = 0
 
         if self.dead_percentage:
             # aggregate mean

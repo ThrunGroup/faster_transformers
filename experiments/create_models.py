@@ -283,7 +283,7 @@ if __name__ == "__main__":
                     **common_args,
                     push_to_hub=False,
                     use_relu=False,
-                    run_name="_ignore_0_1",
+                    run_name="_original2",
                     # pretrained_model_name="Mistral-7B-v0.1_cola_original_cola",
                 )
 
