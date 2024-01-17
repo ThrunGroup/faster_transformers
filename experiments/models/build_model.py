@@ -97,7 +97,7 @@ def build_model(
         )
         print(model)
         apply_mistral_mlp_stats(
-            model, config, dead_threshold=0.1
+            model, config, dead_threshold=0.2
         )  # each MLP layer can collect stats
 
         print("Applying LoRA...")
