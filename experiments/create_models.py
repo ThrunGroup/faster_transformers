@@ -330,7 +330,7 @@ if __name__ == "__main__":
                     **common_args,
                     push_to_hub=True,
                     use_relu=True,
-                    run_name="_phase2_relu",
+                    run_name="_phase2_relu_step40_alpha0_1",
                     pretrained_model_name="Mistral-7B-v0.1_cola_original_cola",
                 )
 

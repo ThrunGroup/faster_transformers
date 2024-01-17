@@ -6,7 +6,7 @@ import math
 
 
 class ReluficationRateScheduler(TrainerCallback):
-    def __init__(self, step_size=10, alpha_increment=0.05):
+    def __init__(self, step_size=40, alpha_increment=0.1):
         self.step_size = step_size
         self.alpha_increment = alpha_increment
 
@@ -36,9 +36,9 @@ class SwishToReLU(nn.Module):
 
     def forward(self, x):
         # (Swish -> ReLU) for negative inputs and SiLU for positive inputs
-        silu_part = F.silu(x)
-        relu_silu_part = self.alpha * F.relu(x) + (1 - self.alpha) * F.silu(x)
-        return torch.where(x < 0, relu_silu_part, silu_part)
+        silu = F.silu(x)
+        relu_silu = self.alpha * F.relu(x) + (1 - self.alpha) * silu
+        return torch.where(x < 0, relu_silu, silu)
 
 
 def apply_relufication(
