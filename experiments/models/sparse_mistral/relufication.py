@@ -46,6 +46,8 @@ class MistralMLPStats(MistralMLP):
     def __init__(self, config, dead_threshold=0.1):
         super().__init__(config)
         self.dead_neuron_percentage = None
+        self.mean = None
+        self.stddev = None
         self.dead_threshold = dead_threshold
 
     def forward(self, x):
@@ -54,12 +56,19 @@ class MistralMLPStats(MistralMLP):
         dead_neuron_percentage = (
             (swish.abs() <= self.dead_threshold).float().mean()
         )
-        if self.dead_neuron_percentage:
+        mean = swish.mean()
+        stddev = swish.std()
+
+        if self.mean:
             # aggregate mean
             dead_neuron_percentage = (
                 self.dead_neuron_percentage + dead_neuron_percentage
             ) / 2
+            mean = (self.mean + mean) / 2
+            stddev = (self.stddev + stddev) / 2
         self.dead_neuron_percentage = dead_neuron_percentage
+        self.mean = mean
+        self.stddev = stddev
 
         return self.down_proj(swish * self.up_proj(x))
 
@@ -76,7 +85,10 @@ def apply_mistral_mlp_stats(model, config, dead_threshold=0.1):
 
 def print_dead_neuron_stats(model):
     for i, layer in enumerate(model.model.layers):
-        print(f"{i} : {layer.mlp.dead_neuron_percentage * 100:2}%")
+        dead_percentage = layer.mlp.dead_neuron_percentage * 100
+        mean = layer.mlp.mean
+        stddev = layer.mlp.stddev
+        print(f"{i} : {dead_percentage:.3f}% | {mean:.3f} ({stddev:.3f})")
 
 
 def apply_relufication(
