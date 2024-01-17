@@ -328,7 +328,7 @@ if __name__ == "__main__":
 
                 create_model(
                     **common_args,
-                    push_to_hub=False,
+                    push_to_hub=True,
                     use_relu=True,
                     run_name="_phase2_relu",
                     pretrained_model_name="Mistral-7B-v0.1_cola_original_cola",
