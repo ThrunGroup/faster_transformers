@@ -79,6 +79,7 @@ def apply_mistral_mlp_stats(module, config, dead_threshold=0.01):
 
 def print_dead_neuron_stats(module):
     for name, child in module.named_children():
+        print(name, isinstance(child, MistralMLPStats))
         if isinstance(child, MistralMLPStats):
             print(f"{name} : {child.dead_neuron_percentage * 100}%")
         else:
