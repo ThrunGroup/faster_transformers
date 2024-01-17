@@ -64,7 +64,7 @@ class MistralMLPStats(MistralMLP):
         return self.down_proj(swish * self.up_proj(x))
 
 
-def apply_mistral_mlp_stats(model, config, dead_threshold=0.01):
+def apply_mistral_mlp_stats(model, config, dead_threshold=0.1):
     for layer in model.model.layers:
         original_mlp = layer.mlp
         new_mlp = MistralMLPStats(config, dead_threshold)
