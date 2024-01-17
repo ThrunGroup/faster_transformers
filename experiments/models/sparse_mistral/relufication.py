@@ -51,7 +51,9 @@ class MistralMLPStats(MistralMLP):
     def forward(self, x):
         swish = self.act_fn(self.gate_proj(x))
 
-        dead_neuron_percentage = (swish.abs() <= self.dead_threshold).mean()
+        dead_neuron_percentage = (
+            (swish.abs() <= self.dead_threshold).float().mean()
+        )
         if self.dead_neuron_percentage:
             # aggregate mean
             dead_neuron_percentage = (
