@@ -53,7 +53,7 @@ class MistralMLPStats(MistralMLP):
 
         dead_neurons = swish.abs() <= self.dead_threshold
         dead_percentage = dead_neurons.float().mean()
-        swish[dead_neurons] = 0
+        # swish[dead_neurons] = 0
 
         if self.dead_percentage:
             # aggregate mean
@@ -75,7 +75,7 @@ def apply_mistral_mlp_stats(model, config, dead_threshold=0.1):
 
 def print_dead_neuron_stats(model):
     for i, layer in enumerate(model.model.layers):
-        dead_percentage = layer.mlp.dead_neuron_percentage * 100
+        dead_percentage = layer.mlp.dead_percentage * 100
         print(f"{i} : {dead_percentage:.3f}%")
 
 
