@@ -89,7 +89,7 @@ def build_model(
         model = set_up_model_for_lora(model)
 
         apply_mistral_mlp_stats(
-            model, config, dead_threshold=0.01
+            model, config, dead_threshold=0.2
         )  # each MLP layer can collect stats
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
