@@ -87,7 +87,9 @@ def build_model(
             "thrunlab/" + pretrained_model_name, config=config
         )
         model = set_up_model_for_lora(model)
-        apply_mistral_mlp_stats(model)  # each MLP layer can collect stats
+        apply_mistral_mlp_stats(
+            model, config
+        )  # each MLP layer can collect stats
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
