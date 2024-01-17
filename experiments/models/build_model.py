@@ -93,12 +93,8 @@ def build_model(
         for name, param in model.named_parameters():
             if "lora" in name or "score" in name:
                 param.requires_grad = True
-
-        # print(model)
-        # score_state_dict = torch.load(f"scores/{pretrained_model_name}2.pt")
-        # print("original score: ", model.score.weight)
-        # model.score.load_state_dict(score_state_dict)
-        # print("Loaded score  : ", model.score.weight)
+            if "score" in name:
+                print(param.weight)
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config

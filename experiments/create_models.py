@@ -92,13 +92,9 @@ def finetune(
 
     if pretrained_model_name:
         max_steps = 1
-        push_to_hub = False
     else:
         max_steps = 750
-        push_to_hub = True
         print("max steps: ", max_steps)
-
-    push_to_hub = True
 
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
@@ -107,7 +103,7 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=750,
+        max_steps=1,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -332,9 +328,9 @@ if __name__ == "__main__":
 
                 create_model(
                     **common_args,
-                    push_to_hub=True,
+                    push_to_hub=False,
                     use_relu=False,
-                    run_name="_original_cola",
+                    run_name="_test_download",
                     # pretrained_model_name="Mistral-7B-v0.1_cola_loading_test",
                 )
 
