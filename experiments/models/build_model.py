@@ -88,8 +88,6 @@ def build_model(
         )
         model = set_up_model_for_lora(model)
 
-        print(model)
-
         apply_mistral_mlp_stats(
             model, config
         )  # each MLP layer can collect stats

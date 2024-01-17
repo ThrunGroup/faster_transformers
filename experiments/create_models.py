@@ -136,8 +136,7 @@ def finetune(
     results = trainer.evaluate(test_dataset)
     print("Test set evaluation: ", results)
 
-    print("Print dead neurons")
-    print(model)
+    print("Printing dead neurons")
     print_dead_neuron_stats(model)
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:

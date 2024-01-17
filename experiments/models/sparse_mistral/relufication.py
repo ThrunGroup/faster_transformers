@@ -43,7 +43,7 @@ class SwishToReLU(nn.Module):
 
 
 class MistralMLPStats(MistralMLP):
-    def __init__(self, config, dead_threshold=0.01):
+    def __init__(self, config, dead_threshold=0.1):
         super().__init__(config)
         self.dead_neuron_percentage = None
         self.dead_threshold = dead_threshold
@@ -76,7 +76,7 @@ def apply_mistral_mlp_stats(model, config, dead_threshold=0.01):
 
 def print_dead_neuron_stats(model):
     for i, layer in enumerate(model.model.layers):
-        print(f"{i} : {layer.mlp.dead_neuron_percentage * 100}%")
+        print(f"{i} : {layer.mlp.dead_neuron_percentage * 100:2}%")
 
 
 def apply_relufication(
