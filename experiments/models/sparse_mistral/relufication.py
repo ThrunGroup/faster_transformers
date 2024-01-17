@@ -67,6 +67,7 @@ class MistralMLPStats(MistralMLP):
 def apply_mistral_mlp_stats(module, config, dead_threshold=0.01):
     for name, child in module.named_children():
         if isinstance(child, MistralMLP):
+            print(name)
             new_mlp = MistralMLPStats(config, dead_threshold)
             new_mlp.gate_proj = child.gate_proj
             new_mlp.up_proj = child.up_proj
