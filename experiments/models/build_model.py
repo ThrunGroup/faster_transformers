@@ -10,7 +10,10 @@ from peft import (
     get_peft_model,
 )
 
-from experiments.models.sparse_mistral.relufication import apply_relufication
+from experiments.models.sparse_mistral.relufication import (
+    apply_relufication,
+    apply_mistral_mlp_stats,
+)
 from experiments.models.t5_sparity_check.t5_sparsity_check_new import (
     apply_sparsity_check_MLP,
 )
@@ -84,6 +87,7 @@ def build_model(
             "thrunlab/" + pretrained_model_name, config=config
         )
         model = set_up_model_for_lora(model)
+        apply_mistral_mlp_stats(model)  # each MLP layer can collect stats
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config

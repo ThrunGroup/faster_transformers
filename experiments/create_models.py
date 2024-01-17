@@ -14,30 +14,19 @@ import torch
 
 from data.get_dataset import get_dataset
 from models.build_model import build_model
+from models.sparse_mistral.relufication import print_dead_neuron_stats
 from experiments.models.sparse_mistral.relufication import (
     ReluficationRateScheduler,
 )
 from utils.utils import set_master_port
 from utils.constants import (
     # Models
-    GPT2,
-    GPT2_XL,
     T5,
     T5_LARGE,
     T5_3B,
     MISTRAL_7B,
     # Datasets
-    # SST2,
-    BILLSUM,
-    SQUAD,
-    QNLI,
-    SST2,
     COLA,
-    RTE,
-    MRPC,
-    WIC,
-    MULTIRC,
-    BOOLQ,
 )
 
 
@@ -103,7 +92,7 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=600,
+        max_steps=1,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -113,7 +102,7 @@ def finetune(
         run_name=model_name,
         # for memory issues
         gradient_accumulation_steps=2,
-        deepspeed="ds_config.json",
+        # deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
@@ -137,54 +126,16 @@ def finetune(
         tokenizer=tokenizer,
         data_collator=data_collator,
         callbacks=[early_stopping, relufication_scheduler],
-        # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         compute_metrics=compute_metrics,
     )
 
-    print("\n*********************")
-    print("Training ", model_name)
-    print("*********************\n")
-
-    # if num_epochs != 0:
-    #     if use_collect_stats and not use_mare_mlp:
-    #         model.activate_stats(model)
-    #     elif use_mare_mlp:
-    #         # model.from_pretrained(f"thrunlab/{pretrained_model_name}")
-    #         print(f"thrunlab/{pretrained_model_name}")
-    #         state_dict = torch.load(f"thrunlab/{pretrained_model_name}.pt")
-
-    #         model.load_state_dict(
-    #             state_dict,
-    #             strict=False,
-    #         )
-
-    #         # Collect Stats
-    #         if use_collect_stats:
-    #             model.activate_stats(model, True)
-    #             print("Evaluating")
-    #             trainer.evaluate(train_dataset)
-    #         model.activate_mare_mlp(model)
-
-    print("Training")
+    print("Training... ")
     trainer.train()
 
-    # if do_evaluation:
-    #     if save_stats:
-    #         model.activate_stats(model, True)
-    #     trainer.evaluate()
-    #     if save_stats:
-    #         dir_path = os.path.join(
-    #             os.path.dirname(os.path.abspath(__file__)),
-    #             "mare mlp stats histograms",
-    #         )
-    #         filename = (
-    #             f"data-{dataset_name}_epochs-{num_epochs}_int ff activations_"
-    #         )
-    #         model.plot_stats(model, os.path.join(dir_path, filename))
-    #         print("saved at: ", os.path.join(dir_path, filename))
-
+    print("Evaluating... ")
     results = trainer.evaluate(test_dataset)
-    print("EVALUATION: ", results)
+    print("Test set evaluation: ", results)
+    print_dead_neuron_stats(model)
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(

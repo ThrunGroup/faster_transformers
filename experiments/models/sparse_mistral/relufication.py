@@ -66,10 +66,22 @@ def apply_mistral_mlp_stats(module, config, dead_threshold=0.01):
     for name, child in module.named_children():
         if isinstance(child, MistralMLP):
             new_mlp = MistralMLPStats(config, dead_threshold)
+            new_mlp.gate_proj = child.gate_proj
+            new_mlp.up_proj = child.up_proj
+            new_mlp.down_proj = child.down_proj
             setattr(module, name, new_mlp)
         else:
             # Recursively search for MistralMLP in child modules
             apply_mistral_mlp_stats(child, config, dead_threshold)
+
+
+def print_dead_neuron_stats(module):
+    for name, child in module.named_children():
+        if isinstance(child, MistralMLPStats):
+            print(f"{name} : {child.dead_neuron_percentage * 100}%")
+        else:
+            # Recursively search for MistralMLP in child modules
+            print_dead_neuron_stats(child)
 
 
 def apply_relufication(
