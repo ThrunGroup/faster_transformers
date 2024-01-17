@@ -94,7 +94,7 @@ def build_model(
             if "lora" in name or "score" in name:
                 param.requires_grad = True
             if "score" in name:
-                print(param.weight)
+                print(param)
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
