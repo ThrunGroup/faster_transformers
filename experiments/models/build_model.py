@@ -30,10 +30,13 @@ class CastOutputToFloat(nn.Sequential):
         return super().forward(x).to(torch.float32)
 
 
-def set_up_model(model):
-    for param in model.parameters():
-        param.requires_grad = False
-        # cast the small parameters (e.g. layernorm) to fp32 for stability
+def set_up_model_for_lora(model):
+    for name, param in model.named_parameters():
+        if "lora" in name or "score" in name:
+            param.requires_grad = True
+        else:
+            param.requires_grad = False
+
         if param.ndim == 1:
             param.data = param.data.to(torch.float32)
 
@@ -55,15 +58,7 @@ def get_lora_model(model):
         ],
     )
 
-    for param in model.parameters():
-        param.requires_grad = False
-        # cast the small parameters (e.g. layernorm) to fp32 for stability
-        if param.ndim == 1:
-            param.data = param.data.to(torch.float32)
-
-    model.gradient_checkpointing_enable()  # reduce number of stored activations
-    model.enable_input_require_grads()
-
+    model = set_up_model_for_lora(model)
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
@@ -88,13 +83,7 @@ def build_model(
         model = AutoModelForSequenceClassification.from_pretrained(
             "thrunlab/" + pretrained_model_name, config=config
         )
-        model = set_up_model(model)
-
-        for name, param in model.named_parameters():
-            if "lora" in name or "score" in name:
-                param.requires_grad = True
-            if "score" in name:
-                print(param)
+        model = set_up_model_for_lora(model)
     else:
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config

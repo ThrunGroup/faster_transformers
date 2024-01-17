@@ -57,7 +57,6 @@ class GLUEDataset(Dataset):
             with open(validation_path, "rb") as f:
                 val_dataset = pickle.load(f)
             print("Loaded preprocessed data from disk.")
-
         except FileNotFoundError:
             # If preprocessed data does not exist, load and preprocess
             print("No dataset found.")

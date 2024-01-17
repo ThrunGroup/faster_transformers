@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from transformers.models.mistral.modeling_mistral import MistralMLP
 
 
 class ReluficationRateScheduler(TrainerCallback):
@@ -39,6 +40,36 @@ class SwishToReLU(nn.Module):
         silu = F.silu(x)
         relu_silu = self.alpha * F.relu(x) + (1 - self.alpha) * silu
         return torch.where(x < 0, relu_silu, silu)
+
+
+class MistralMLPStats(MistralMLP):
+    def __init__(self, config, dead_threshold=0.01):
+        super().__init__(config)
+        self.dead_neuron_percentage = None
+        self.dead_threshold = dead_threshold
+
+    def forward(self, x):
+        swish = self.act_fn(self.gate_proj(x))
+
+        dead_neuron_percentage = (swish.abs() <= self.dead_threshold).mean()
+        if self.dead_neuron_percentage:
+            # aggregate mean
+            dead_neuron_percentage = (
+                self.dead_neuron_percentage + dead_neuron_percentage
+            ) / 2
+        self.dead_neuron_percentage = dead_neuron_percentage
+
+        return self.down_proj(swish * self.up_proj(x))
+
+
+def apply_mistral_mlp_stats(module, config, dead_threshold=0.01):
+    for name, child in module.named_children():
+        if isinstance(child, MistralMLP):
+            new_mlp = MistralMLPStats(config, dead_threshold)
+            setattr(module, name, new_mlp)
+        else:
+            # Recursively search for MistralMLP in child modules
+            apply_mistral_mlp_stats(child, config, dead_threshold)
 
 
 def apply_relufication(
