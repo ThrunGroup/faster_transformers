@@ -95,6 +95,7 @@ def build_model(
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
         )
+        print(model)
         apply_mistral_mlp_stats(
             model, config, dead_threshold=0.1
         )  # each MLP layer can collect stats
