@@ -85,6 +85,7 @@ def build_model(
             "thrunlab/" + pretrained_model_name, config=config
         )
         model = set_up_model_for_lora(model)
+        print(model)
 
         # apply_mistral_mlp_stats(
         #     model, config, max_dead_threshold=0.2
