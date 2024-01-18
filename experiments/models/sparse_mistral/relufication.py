@@ -145,6 +145,8 @@ class MistralMLPDistillation(MistralMLP):
     def __init__(self, config):
         super().__init__(config)
         self.swish_outputs = None
+        self.relu_outputs = None
+        self.relu = nn.ReLU()
 
     # def forward(self, x):
     #     self.swish_outputs = self.act_fn(self.gate_proj(x))
