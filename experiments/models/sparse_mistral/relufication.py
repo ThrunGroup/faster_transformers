@@ -59,8 +59,8 @@ class MistralMLPStats(MistralMLP):
         self.dead_threshold = 0.0
 
     def increase_dead_threshold(self, by=0.02):
-        self.dead_percentage = min(
-            self.max_dead_threshold, self.dead_percentage + by
+        self.dead_threshold = min(
+            self.max_dead_threshold, self.dead_threshold + by
         )
 
     def forward(self, x):
