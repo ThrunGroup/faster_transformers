@@ -116,7 +116,6 @@ def finetune(
     early_stopping = EarlyStoppingCallback(early_stopping_patience=3)
     relufication_scheduler = ReluficationRateScheduler()
 
-    # trainer = Trainer(
     trainer = ReLUTrainer(
         model=model,
         args=training_args,
@@ -271,7 +270,7 @@ if __name__ == "__main__":
                     "num_epochs": 10,
                     "train_batch_size": 64,
                     "test_batch_size": 64,
-                    "gradient_checkpointing": False,
+                    "gradient_checkpointing": True,
                 }
 
                 create_model(
