@@ -7,7 +7,7 @@ from transformers.models.mistral.modeling_mistral import MistralMLP
 
 
 class ReluficationRateScheduler(TrainerCallback):
-    def __init__(self, step_size=200, alpha_increment=0.5):
+    def __init__(self, step_size=20, alpha_increment=0.01):
         self.step_size = step_size
         self.alpha_increment = alpha_increment
 
