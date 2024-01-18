@@ -256,7 +256,7 @@ def turn_on_collect_stats(model):
 
 
 def print_dead_neuron_stats(model):
-    for i, layer in enumerate(model.model.layers):
+    for i, layer in enumerate(model.model.model.layers):
         dead_percentage = layer.mlp.dead_percentage * 100
         print(f"{i} : {dead_percentage:.3f}%")
 
