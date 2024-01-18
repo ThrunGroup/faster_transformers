@@ -15,6 +15,10 @@ class ReluficationRateScheduler(TrainerCallback):
         model = kwargs["model"]
         dead_threshold = 0
 
+        for module in model.modules():
+            if isinstance(module, MistralMLPStats):
+                print("yesss")
+
         if state.global_step % self.step_size == 0:
             for module in model.modules():
                 if isinstance(module, MistralMLPStats):
