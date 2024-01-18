@@ -280,7 +280,7 @@ if __name__ == "__main__":
                     use_relu=False,
                     # run_name="_relu_s20_a01",
                     run_name="_ignore_02",
-                    pretrained_model_name="Mistral-7B-v0.1_cola_ignore_none",
+                    # pretrained_model_name="Mistral-7B-v0.1_cola_ignore_none",
                 )
 
                 # total_size = total_sizes[model_type]
