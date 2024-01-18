@@ -116,6 +116,13 @@ def build_model(
             print("New score head: ")
             print(model.model.score)
 
+        print("1")
+        print(model.model.score.weight)
+        score_dict = torch.load(f"scores/{pretrained_model_name}.pt")
+        model.model.score.load_state_dict(score_dict)
+        print("2")
+        print(model.model.score.weight)
+
     if use_relu:
         # apply_relufication(model)
         apply_mistral_mlp_relu_distillation(model, config)
