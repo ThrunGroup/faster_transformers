@@ -130,14 +130,14 @@ def finetune(
     print("Training... ")
     trainer.train()
 
-    turn_on_collect_stats(model)
+    # turn_on_collect_stats(model)
 
     print("Evaluating... ")
     results = trainer.evaluate(test_dataset)
     print("Test set evaluation: ", results)
 
-    print("Printing dead neurons")
-    print_dead_neuron_stats(model)
+    # print("Printing dead neurons")
+    # print_dead_neuron_stats(model)
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
