@@ -17,7 +17,7 @@ class ReLUTrainer(Trainer):
         self.steps = 0
         self.relu_loss = torch.nn.MSELoss()
         self.classification_loss = nn.CrossEntropyLoss()
-        self.alpha = 10
+        self.alpha = 1
         self.temperature = 2.0
 
     def training_step(
@@ -113,7 +113,7 @@ class ReLUTrainer(Trainer):
             classification_loss = superclass_loss
 
         # Combine losses
-        loss = 0 * classification_loss + self.alpha * distillation_loss
+        loss = classification_loss + self.alpha * distillation_loss
 
         return (loss, outputs) if return_outputs else loss
 
