@@ -83,7 +83,7 @@ def finetune(
         output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
         eval_steps=25,
-        logging_steps=1,
+        logging_steps=25,
         save_strategy="steps",
         learning_rate=1e-5,
         max_steps=750,
