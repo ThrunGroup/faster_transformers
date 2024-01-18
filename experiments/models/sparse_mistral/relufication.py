@@ -13,15 +13,28 @@ class ReluficationRateScheduler(TrainerCallback):
 
     def on_step_end(self, args, state, control, **kwargs):
         model = kwargs["model"]
-        new_alpha = 0
+        dead_threshold = 0
 
         if state.global_step % self.step_size == 0:
             for module in model.modules():
-                if isinstance(module, SwishToReLU):
-                    module.increase_alpha(by=self.alpha_increment)
-                    new_alpha = module.alpha
+                if isinstance(module, MistralMLPStats):
+                    module.increase_dead_threshold(by=self.alpha_increment)
+                    dead_threshold = module.dead_threshold
 
-            print(state.global_step, new_alpha)
+            if dead_threshold != 0:
+                print(state.global_step, dead_threshold)
+
+    # def on_step_end(self, args, state, control, **kwargs):
+    #     model = kwargs["model"]
+    #     new_alpha = 0
+
+    #     if state.global_step % self.step_size == 0:
+    #         for module in model.modules():
+    #             if isinstance(module, SwishToReLU):
+    #                 module.increase_alpha(by=self.alpha_increment)
+    #                 new_alpha = module.alpha
+
+    #         print(state.global_step, new_alpha)
 
 
 class SwishToReLU(nn.Module):
@@ -35,20 +48,26 @@ class SwishToReLU(nn.Module):
     def forward(self, x):
         # (Swish -> ReLU) for negative inputs and SiLU for positive inputs
         silu = F.silu(x)
-        relu_silu = self.alpha * F.relu(x) + (1 - self.alpha) * silu
+        relu_silu = (1 - self.alpha) * silu
         return torch.where(x < 0, relu_silu, silu)
 
 
 class MistralMLPStats(MistralMLP):
-    def __init__(self, config, dead_threshold=0.1):
+    def __init__(self, config, max_dead_threshold=0.1):
         super().__init__(config)
         self.dead_percentage = None
-        self.dead_threshold = dead_threshold
+        self.max_dead_threshold = max_dead_threshold
+        self.dead_threshold = 0.0
+
+    def increase_dead_threshold(self, by=0.02):
+        self.dead_percentage = min(
+            self.max_dead_threshold, self.dead_percentage + by
+        )
 
     def forward(self, x):
         swish = self.act_fn(self.gate_proj(x))
 
-        dead_neurons = swish.abs() <= self.dead_threshold
+        dead_neurons = swish.abs() <= self.max_dead_threshold
         dead_percentage = dead_neurons.float().mean()
         swish[dead_neurons] = 0
 
@@ -60,10 +79,10 @@ class MistralMLPStats(MistralMLP):
         return self.down_proj(swish * self.up_proj(x))
 
 
-def apply_mistral_mlp_stats(model, config, dead_threshold=0.1):
+def apply_mistral_mlp_stats(model, config, max_dead_threshold=0.1):
     for layer in model.model.layers:
         original_mlp = layer.mlp
-        new_mlp = MistralMLPStats(config, dead_threshold)
+        new_mlp = MistralMLPStats(config, max_dead_threshold)
         new_mlp.gate_proj = original_mlp.gate_proj
         new_mlp.up_proj = original_mlp.up_proj
         new_mlp.down_proj = original_mlp.down_proj

@@ -35,7 +35,8 @@ class GLUEDataset(Dataset):
         super().__init__(tokenizer, model_type)
         self.model_type = model_type.split("/")[-1]
         self.dataset_type = dataset_type
-        self.metrics = evaluate.load("accuracy")
+        self.glue_metrics = evaluate.load("glue", dataset_type)
+        self.accuracy = evaluate.load("accuracy")
         self.benchmark = "super_glue" if dataset_type in SUPERGLUE else "glue"
         self.max_length = 100
 
@@ -110,12 +111,11 @@ class GLUEDataset(Dataset):
         """
         preds, labels = preds
         preds = preds.argmax(-1)
-
-        # preds = np.array(
-        #     preds[0][:, 0] > 1 / 2, dtype=float
-        # )  # the output is sigmoid
-        # preds = np.array(preds > 1 / 2, dtype=float)  # the output is sigmoid
-        return self.metrics.compute(predictions=preds, references=labels)
+        glue_metrics = self.glue_metrics.compute(
+            predictions=preds, references=labels
+        )
+        accuracy = self.accuracy.compute(predictions=preds, references=labels)
+        return {"accuracy": accuracy, **glue_metrics}
 
     def preprocess(self, examples):
         if self.dataset_type == COLA:
