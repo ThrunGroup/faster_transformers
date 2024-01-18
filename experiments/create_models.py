@@ -84,8 +84,8 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
-        eval_steps=2,
-        save_steps=50,
+        eval_steps=10,
+        save_steps=10,
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
