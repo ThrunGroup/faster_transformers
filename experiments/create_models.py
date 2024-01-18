@@ -157,7 +157,6 @@ def finetune(
 
             os.makedirs("thrunlab", exist_ok=True)
             os.makedirs("scores", exist_ok=True)
-            model.score = model.score.original_module
             score_model = model.score
             torch.save(score_model.state_dict(), f"scores/{model_name}.pt")
 
