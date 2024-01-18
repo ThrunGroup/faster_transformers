@@ -13,7 +13,7 @@ class ReLUTrainer(Trainer):
         self.classification_loss = nn.CrossEntropyLoss()
         self.alpha = 10
 
-    def compute_penalty(self, model):
+    def compute_penalty_(self, model):
         loss = 0
         num_layers = 32
 
@@ -31,7 +31,7 @@ class ReLUTrainer(Trainer):
 
         return loss
 
-    def compute_penalty_(self, model):
+    def compute_penalty(self, model):
         loss = 0
         num_layers = 32
 
@@ -146,19 +146,19 @@ class MistralMLPDistillation(MistralMLP):
         super().__init__(config)
         self.swish_outputs = None
 
-    def forward(self, x):
-        self.swish_outputs = self.act_fn(self.gate_proj(x))
-        return self.down_proj(self.swish_outputs * self.up_proj(x))
-
     # def forward(self, x):
-    #     with torch.no_grad():
-    #         self.swish_outputs = self.down_proj(
-    #             self.act_fn(self.gate_proj(x)) * self.up_proj(x)
-    #         )
-    #     self.relu_outputs = self.down_proj(
-    #         self.relu(self.gate_proj(x)) * self.up_proj(x)
-    #     )
-    #     return self.relu_outputs
+    #     self.swish_outputs = self.act_fn(self.gate_proj(x))
+    #     return self.down_proj(self.swish_outputs * self.up_proj(x))
+
+    def forward(self, x):
+        with torch.no_grad():
+            self.swish_outputs = self.down_proj(
+                self.act_fn(self.gate_proj(x)) * self.up_proj(x)
+            )
+        self.relu_outputs = self.down_proj(
+            self.relu(self.gate_proj(x)) * self.up_proj(x)
+        )
+        return self.relu_outputs
 
 
 def apply_mistral_mlp_relu_distillation(model, config):
