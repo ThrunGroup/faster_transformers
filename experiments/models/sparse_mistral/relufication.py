@@ -229,7 +229,7 @@ class MistralMLPDistillation(MistralMLP):
 
 
 def apply_mistral_mlp_relu_distillation(model, config):
-    for layer in model.model.model.layers:
+    for layer in model.model.layers:
         original_mlp = layer.mlp
         new_mlp = MistralMLPDistillation(config)
         new_mlp.gate_proj = original_mlp.gate_proj
@@ -256,7 +256,7 @@ def turn_on_collect_stats(model):
 
 
 def print_dead_neuron_stats(model):
-    for i, layer in enumerate(model.model.model.layers):
+    for i, layer in enumerate(model.model.layers):
         dead_percentage = layer.mlp.dead_percentage * 100
         print(f"{i} : {dead_percentage:.3f}%")
 
