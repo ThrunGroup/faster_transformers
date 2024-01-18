@@ -84,11 +84,13 @@ def build_model(
         model = AutoModelForSequenceClassification.from_pretrained(
             "thrunlab/" + pretrained_model_name, config=config
         )
-        print(1, model)
-        # model = set_up_model_for_lora(model)
-        # score_dict = torch.load(f"scores/{pretrained_model_name}.pt")
-        # model.score.load_state_dict(score_dict)
-        # print(model)
+        print("1")
+        print(model.score.weight)
+        model = set_up_model_for_lora(model)
+        score_dict = torch.load(f"scores/{pretrained_model_name}.pt")
+        model.score.load_state_dict(score_dict)
+        print("2")
+        print(model.score.weight)
 
         # apply_mistral_mlp_stats(
         #     model, config, max_dead_threshold=0.2
@@ -106,6 +108,15 @@ def build_model(
         model = get_lora_model(model)
         print(2, model)
 
+        print("Score head: ")
+        print(model.model.score)
+
+        if not isinstance(model.model.score, nn.Linear):
+            print("Changing model score")
+            model.model.score = model.model.score.original_module
+            print("New score head: ")
+            print(model.model.score)
+
     if use_relu:
         # apply_relufication(model)
         apply_mistral_mlp_relu_distillation(model, config)
@@ -118,15 +129,6 @@ def build_model(
             num_experts=num_experts,
             expert_size=expert_size,
         )
-
-    print("Score head: ")
-    print(model.model.score)
-
-    if not isinstance(model.model.score, nn.Linear):
-        print("Changing model score")
-        model.model.score = model.model.score.original_module
-        print("New score head: ")
-        print(model.model.score)
 
     return model
 
