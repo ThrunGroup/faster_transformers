@@ -278,7 +278,7 @@ if __name__ == "__main__":
                     push_to_hub=True,
                     use_relu=False,
                     # run_name="_relu_s20_a01",
-                    run_name="_ignore_01",
+                    run_name="_ignore_02",
                     pretrained_model_name="Mistral-7B-v0.1_cola_ignore_none",
                 )
 
