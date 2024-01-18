@@ -95,10 +95,10 @@ def build_model(
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
         )
-        print(model)
-        apply_mistral_mlp_stats(
-            model, config, dead_threshold=0.2
-        )  # each MLP layer can collect stats
+        # print(model)
+        # apply_mistral_mlp_stats(
+        #     model, config, dead_threshold=0.2
+        # )  # each MLP layer can collect stats
 
         print("Applying LoRA...")
         model = get_lora_model(model)

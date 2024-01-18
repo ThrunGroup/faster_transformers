@@ -79,12 +79,6 @@ def finetune(
             config=config,
         )
 
-    if pretrained_model_name:
-        max_steps = 1
-    else:
-        max_steps = 750
-        print("max steps: ", max_steps)
-
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
@@ -281,9 +275,9 @@ if __name__ == "__main__":
 
                 create_model(
                     **common_args,
-                    push_to_hub=False,
+                    push_to_hub=True,
                     use_relu=False,
-                    run_name="_ignore_0_2",
+                    run_name="_ignore_none",
                     # pretrained_model_name="Mistral-7B-v0.1_cola_original_cola",
                 )
 
