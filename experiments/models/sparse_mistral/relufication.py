@@ -51,7 +51,7 @@ class ReLUTrainer(Trainer):
                 loss.mean()
             )  # mean() to average on multi-gpu parallel training
 
-        self.accelerator.backward(loss, retain_graph=False)
+        self.accelerator.backward(loss, retain_graph=True)
 
         return loss.detach() / self.args.gradient_accumulation_steps
 
