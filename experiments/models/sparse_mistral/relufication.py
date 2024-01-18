@@ -27,7 +27,7 @@ class ReluficationRateScheduler(TrainerCallback):
 class SwishToReLU(nn.Module):
     def __init__(self):
         super(SwishToReLU, self).__init__()
-        self.alpha = 0.5
+        self.alpha = 0.0
 
     def increase_alpha(self, by=0.0):
         self.alpha = min(1.0, self.alpha + by)
