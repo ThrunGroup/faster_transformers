@@ -18,7 +18,7 @@ class ReLUTrainer(Trainer):
         num_layers = 32
 
         for module in model.modules():
-            if isinstance(module, MistralMLPStats):
+            if isinstance(module, MistralMLPDistillation):
                 relu_loss = self.relu_loss(
                     module.swish_outputs,
                     module.relu_outputs,
