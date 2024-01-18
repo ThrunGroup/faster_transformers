@@ -10,6 +10,8 @@ class ReLUTrainer(Trainer):
         super(ReLUTrainer, self).__init__(*args, **kwargs)
         self.steps = 0
         self.relu_loss = torch.nn.MSELoss()
+        self.classification_loss = nn.CrossEntropyLoss()
+        self.alpha = 0.5
 
     def compute_penalty(self, model):
         loss = 0
@@ -39,9 +41,12 @@ class ReLUTrainer(Trainer):
         labels = labels.to(logits.dtype)
 
         # get penalty term
-        lambda_coeff = 0.5
-        distillation_loss = lambda_coeff * self.compute_penalty(model)
-        loss = F.binary_cross_entropy(logits, labels) + distillation_loss
+        distillation_loss = self.compute_penalty(model)
+        classification_loss = self.compute_classification(logits, labels)
+        loss = (
+            self.alpha * classification_loss
+            + (1 - self.alpha) * distillation_loss
+        )
 
         return (loss, outputs) if return_outputs else loss
 
