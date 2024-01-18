@@ -19,6 +19,24 @@ class ReLUTrainer(Trainer):
 
         for module in model.modules():
             if isinstance(module, MistralMLPDistillation):
+                if module.swish_outputs is not None:
+                    swish_outputs = module.swish_outputs.detach()
+                    negative_outputs = F.relu(-swish_outputs).sum()
+                    loss += negative_outputs
+
+        loss /= num_layers
+
+        if self.state.global_step % 20 == 0 and loss != 0:
+            print("Distillation loss: ", loss.item())
+
+        return loss
+
+    def compute_penalty_(self, model):
+        loss = 0
+        num_layers = 32
+
+        for module in model.modules():
+            if isinstance(module, MistralMLPDistillation):
                 if (
                     module.swish_outputs is not None
                     and module.relu_outputs is not None
@@ -28,7 +46,7 @@ class ReLUTrainer(Trainer):
                     relu_loss = self.relu_loss(swish_outputs, relu_outputs)
                     loss += relu_loss
 
-        loss /= num_layers
+        # loss /= num_layers
 
         if self.state.global_step % 20 == 0 and loss != 0:
             print("Distillation loss: ", loss.item())
@@ -127,18 +145,20 @@ class MistralMLPDistillation(MistralMLP):
     def __init__(self, config):
         super().__init__(config)
         self.swish_outputs = None
-        self.relu_outputs = None
-        self.relu = nn.ReLU()
 
     def forward(self, x):
-        with torch.no_grad():
-            self.swish_outputs = self.down_proj(
-                self.act_fn(self.gate_proj(x)) * self.up_proj(x)
-            )
-        self.relu_outputs = self.down_proj(
-            self.relu(self.gate_proj(x)) * self.up_proj(x)
-        )
-        return self.relu_outputs
+        self.swish_outputs = self.act_fn(self.gate_proj(x))
+        return self.down_proj(self.swish_outputs * self.up_proj(x))
+
+    # def forward(self, x):
+    #     with torch.no_grad():
+    #         self.swish_outputs = self.down_proj(
+    #             self.act_fn(self.gate_proj(x)) * self.up_proj(x)
+    #         )
+    #     self.relu_outputs = self.down_proj(
+    #         self.relu(self.gate_proj(x)) * self.up_proj(x)
+    #     )
+    #     return self.relu_outputs
 
 
 def apply_mistral_mlp_relu_distillation(model, config):
