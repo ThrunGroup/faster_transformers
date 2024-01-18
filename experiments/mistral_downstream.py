@@ -251,12 +251,11 @@ def train_mistral(
 def main():
     home_dir = "/scr/jay"
 
-
     for dataset_type in [BOOLQ, MULTIRC]:
         output_dir = f"mistral7b_{dataset_type}_finetuned"
         output_dir = os.path.join(home_dir, output_dir)
-        train_mistral(dataset_type, False, False)
-        train_mistral(dataset_type, True, False, output_dir)
+        train_mistral(dataset_type, use_relu=False, use_quantization=False)
+        train_mistral(dataset_type, use_relu=True, use_quantization=False,)# pretrained_dir=output_dir)
     # parser = argparse.ArgumentParser()
     # parser.add_argument("--model", type=str, default=MISTRAL_7B, help="Model types")
     # parser.add_argument("--dataset", type=str, default=BOOLQ, help="dataset")
