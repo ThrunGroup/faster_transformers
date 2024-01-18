@@ -52,7 +52,7 @@ class ReLUTrainer(Trainer):
                     relu_outputs = F.log_softmax(relu_outputs, dim=1)
                     div_loss = nn.KLDivLoss(reduction="batchmean")(
                         relu_outputs, swish_outputs
-                    ) * (self.temperature**2)
+                    )
                     loss += div_loss
 
         # loss /= num_layers
