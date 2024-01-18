@@ -84,7 +84,10 @@ def build_model(
         model = AutoModelForSequenceClassification.from_pretrained(
             "thrunlab/" + pretrained_model_name, config=config
         )
+        print(1, model)
         model = set_up_model_for_lora(model)
+        score_dict = torch.load(f"scores/{model_name}.pt")
+        model.score.load_state_dict(score_dict)
         # print(model)
 
         # apply_mistral_mlp_stats(
