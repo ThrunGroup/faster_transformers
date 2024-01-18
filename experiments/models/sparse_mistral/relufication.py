@@ -19,11 +19,12 @@ class ReLUTrainer(Trainer):
 
         for module in model.modules():
             if isinstance(module, MistralMLPDistillation):
-                relu_loss = self.relu_loss(
-                    module.swish_outputs,
-                    module.relu_outputs,
-                )
-                loss += relu_loss
+                if module.swish_outputs and module.relu_outputs:
+                    relu_loss = self.relu_loss(
+                        module.swish_outputs,
+                        module.relu_outputs,
+                    )
+                    loss += relu_loss
 
         loss /= num_layers
 
@@ -126,11 +127,10 @@ class MistralMLPDistillation(MistralMLP):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        if self.training:
-            with torch.no_grad():
-                self.swish_outputs = self.down_proj(
-                    self.act_fn(self.gate_proj(x)) * self.up_proj(x)
-                )
+        with torch.no_grad():
+            self.swish_outputs = self.down_proj(
+                self.act_fn(self.gate_proj(x)) * self.up_proj(x)
+            )
         self.relu_outputs = self.down_proj(
             self.relu(self.gate_proj(x)) * self.up_proj(x)
         )
