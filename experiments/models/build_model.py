@@ -55,7 +55,7 @@ def get_lora_model(model):
         lora_dropout=0.05,
         bias="none",
         task_type=TaskType.SEQ_CLS,
-        target_modules=["q_proj", "v_proj", "gate_proj"],
+        target_modules=["q_proj", "v_proj", "gate_proj", "down_proj"],
     )
 
     model = set_up_model_for_lora(model)
