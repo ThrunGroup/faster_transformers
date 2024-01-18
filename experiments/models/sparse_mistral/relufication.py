@@ -27,23 +27,28 @@ class ReLUTrainer(Trainer):
 
         loss /= num_layers
 
-        # if self.state.global_step % 10 == 0:
-        print("Distillation loss: ", loss)
+        if self.state.global_step % 10 == 0:
+            print("Distillation loss: ", loss)
 
         return loss
 
     def compute_loss(self, model, inputs, return_outputs=False):
         # get penalty term
         distillation_loss = self.compute_penalty(model)
-        classification_loss = super().compute_loss(
-            model, inputs, return_outputs
-        )
+        superclass_loss = super().compute_loss(model, inputs, return_outputs)
+
+        if return_outputs:
+            classification_loss, outputs = superclass_loss
+        else:
+            classification_loss = superclass_loss
+
+        # Combine losses
         loss = (
             self.alpha * classification_loss
             + (1 - self.alpha) * distillation_loss
         )
 
-        return loss
+        return (loss, outputs) if return_outputs else loss
 
 
 class ReluficationRateScheduler(TrainerCallback):
