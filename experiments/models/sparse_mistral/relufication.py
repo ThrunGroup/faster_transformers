@@ -7,7 +7,7 @@ from transformers.models.mistral.modeling_mistral import MistralMLP
 
 
 class ReluficationRateScheduler(TrainerCallback):
-    def __init__(self, step_size=100, alpha_increment=0.34):
+    def __init__(self, step_size=200, alpha_increment=0.5):
         self.step_size = step_size
         self.alpha_increment = alpha_increment
 
@@ -21,16 +21,13 @@ class ReluficationRateScheduler(TrainerCallback):
                     module.increase_alpha(by=self.alpha_increment)
                     new_alpha = module.alpha
 
-            print(state.global_step, new_alpha)
+        print(state.global_step, new_alpha)
 
 
 class SwishToReLU(nn.Module):
     def __init__(self):
         super(SwishToReLU, self).__init__()
-        self.alpha = 0.0
-
-    def increase_alpha_logarithmically(self, epoch):
-        self.alpha = min(1.0, math.log10(epoch + 1))
+        self.alpha = 0.5
 
     def increase_alpha(self, by=0.0):
         self.alpha = min(1.0, self.alpha + by)
