@@ -21,7 +21,7 @@ class ReluficationRateScheduler(TrainerCallback):
                     module.increase_alpha(by=self.alpha_increment)
                     new_alpha = module.alpha
 
-        print(state.global_step, new_alpha)
+            print(state.global_step, new_alpha)
 
 
 class SwishToReLU(nn.Module):
