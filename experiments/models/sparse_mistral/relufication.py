@@ -21,8 +21,7 @@ class ReluficationRateScheduler(TrainerCallback):
                     module.increase_dead_threshold(by=self.alpha_increment)
                     dead_threshold = module.dead_threshold
 
-            if dead_threshold != 0:
-                print(state.global_step, dead_threshold)
+            print(state.global_step, dead_threshold)
 
     # def on_step_end(self, args, state, control, **kwargs):
     #     model = kwargs["model"]
