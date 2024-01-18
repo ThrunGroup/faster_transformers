@@ -2,6 +2,13 @@ from transformers import TrainerCallback, Trainer
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import (
+    Any,
+    Dict,
+    Union,
+)
+from apex import amp
+
 from transformers.models.mistral.modeling_mistral import MistralMLP
 
 
@@ -13,6 +20,45 @@ class ReLUTrainer(Trainer):
         self.classification_loss = nn.CrossEntropyLoss()
         self.alpha = 10
         self.temperature = 2.0
+
+    def training_step(
+        self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
+    ) -> torch.Tensor:
+        """
+        Perform a training step on a batch of inputs.
+
+        Subclass and override to inject custom behavior.
+
+        Args:
+            model (`nn.Module`):
+                The model to train.
+            inputs (`Dict[str, Union[torch.Tensor, Any]]`):
+                The inputs and targets of the model.
+
+                The dictionary will be unpacked before being fed to the model. Most models expect the targets under the
+                argument `labels`. Check your model's documentation for all accepted arguments.
+
+        Return:
+            `torch.Tensor`: The tensor with training loss on this batch.
+        """
+        model.train()
+        inputs = self._prepare_inputs(inputs)
+
+        with self.compute_loss_context_manager():
+            loss = self.compute_loss(model, inputs)
+
+        if self.args.n_gpu > 1:
+            loss = (
+                loss.mean()
+            )  # mean() to average on multi-gpu parallel training
+
+        if self.use_apex:
+            with amp.scale_loss(loss, self.optimizer) as scaled_loss:
+                scaled_loss.backward(retain_graph=True)
+        else:
+            self.accelerator.backward(loss, retain_graph=True)
+
+        return loss.detach() / self.args.gradient_accumulation_steps
 
     def compute_penalty(self, model):
         loss = 0
