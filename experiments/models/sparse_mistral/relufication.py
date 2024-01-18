@@ -14,7 +14,7 @@ class ReLUTrainer(Trainer):
         self.alpha = 10
         self.temperature = 2.0
 
-    def compute_penalty_(self, model):
+    def compute_penalty(self, model):
         loss = 0
         num_layers = 32
 
@@ -25,14 +25,12 @@ class ReLUTrainer(Trainer):
                     negative_outputs = F.relu(-swish_outputs).sum()
                     loss += negative_outputs
 
-        loss /= num_layers
-
         if self.state.global_step % 20 == 0 and loss != 0:
-            print("Distillation loss: ", loss.item())
+            print("Negative relularizer loss: ", loss.item())
 
         return loss
 
-    def compute_penalty(self, model):
+    def compute_penalty_(self, model):
         loss = 0
         num_layers = 32
 
@@ -157,19 +155,19 @@ class MistralMLPDistillation(MistralMLP):
         self.relu_outputs = None
         self.relu = nn.ReLU()
 
-    # def forward(self, x):
-    #     self.swish_outputs = self.act_fn(self.gate_proj(x))
-    #     return self.down_proj(self.swish_outputs * self.up_proj(x))
-
     def forward(self, x):
-        with torch.no_grad():
-            self.swish_outputs = self.down_proj(
-                self.act_fn(self.gate_proj(x)) * self.up_proj(x)
-            )
-        self.relu_outputs = self.down_proj(
-            self.relu(self.gate_proj(x)) * self.up_proj(x)
-        )
-        return self.relu_outputs
+        self.swish_outputs = self.act_fn(self.gate_proj(x))
+        return self.down_proj(self.swish_outputs * self.up_proj(x))
+
+    # def forward(self, x):
+    #     with torch.no_grad():
+    #         self.swish_outputs = self.down_proj(
+    #             self.act_fn(self.gate_proj(x)) * self.up_proj(x)
+    #         )
+    #     self.relu_outputs = self.down_proj(
+    #         self.relu(self.gate_proj(x)) * self.up_proj(x)
+    #     )
+    #     return self.relu_outputs
 
 
 def apply_mistral_mlp_relu_distillation(model, config):
