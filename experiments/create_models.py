@@ -84,8 +84,8 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
-        eval_steps=25,
-        save_steps=25,
+        eval_steps=5,
+        save_steps=5,
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
@@ -277,10 +277,10 @@ if __name__ == "__main__":
                     **common_args,
                     push_to_hub=True,
                     use_relu=True,
-                    run_name="_sparse_swiglu_scratch",
+                    run_name="_sparse_swiglu_ignore_0_1",
                     # run_name="_ignore_02",
                     # pretrained_model_name="Mistral-7B-v0.1_cola_ignore_none",
-                    # pretrained_model_name="Mistral-7B-v0.1_cola_original2",
+                    pretrained_model_name="Mistral-7B-v0.1_cola_sparse_swiglu_scratch",
                 )
 
                 # total_size = total_sizes[model_type]
