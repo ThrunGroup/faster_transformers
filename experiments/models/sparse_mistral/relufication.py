@@ -51,7 +51,6 @@ class ReLUTrainer(Trainer):
                 loss.mean()
             )  # mean() to average on multi-gpu parallel training
 
-        print(self.use_apex)
         self.accelerator.backward(loss, retain_graph=True)
 
         return loss.detach() / self.args.gradient_accumulation_steps
@@ -64,8 +63,10 @@ class ReLUTrainer(Trainer):
             if isinstance(module, MistralMLPDistillation):
                 if module.swish_outputs is not None:
                     swish_outputs = module.swish_outputs
-                    negative_outputs = F.relu(-swish_outputs).sum()
+                    negative_outputs = F.relu(-swish_outputs).mean()
                     loss += negative_outputs
+
+        loss /= num_layers
 
         if self.state.global_step % 20 == 0 and loss != 0:
             print("Negative relularizer loss: ", loss.item())
