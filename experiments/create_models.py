@@ -84,11 +84,11 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
-        eval_steps=20,
+        eval_steps=50,
         logging_steps=10,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=1,
+        max_steps=750,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -275,12 +275,12 @@ if __name__ == "__main__":
 
                 create_model(
                     **common_args,
-                    push_to_hub=False,
+                    push_to_hub=True,
                     use_relu=False,
-                    run_name="_loading_original2",
+                    run_name="_original2",
                     # run_name="_ignore_02",
                     # pretrained_model_name="Mistral-7B-v0.1_cola_ignore_none",
-                    pretrained_model_name="Mistral-7B-v0.1_cola_original2",
+                    # pretrained_model_name="Mistral-7B-v0.1_cola_original2",
                 )
 
                 # total_size = total_sizes[model_type]
