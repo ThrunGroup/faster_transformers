@@ -12,6 +12,7 @@ class ReLUTrainer(Trainer):
         self.relu_loss = torch.nn.MSELoss()
         self.classification_loss = nn.CrossEntropyLoss()
         self.alpha = 10
+        self.temperature = 2.0
 
     def compute_penalty_(self, model):
         loss = 0
@@ -41,10 +42,18 @@ class ReLUTrainer(Trainer):
                     module.swish_outputs is not None
                     and module.relu_outputs is not None
                 ):
-                    swish_outputs = module.swish_outputs.detach()
-                    relu_outputs = module.relu_outputs.detach()
-                    relu_loss = self.relu_loss(swish_outputs, relu_outputs)
-                    loss += relu_loss
+                    swish_outputs = (
+                        module.swish_outputs.detach() / self.temperature
+                    )
+                    relu_outputs = (
+                        module.relu_outputs.detach() / self.temperature
+                    )
+                    swish_outputs = F.softmax(swish_outputs, dim=1)
+                    relu_outputs = F.log_softmax(relu_outputs, dim=1)
+                    div_loss = nn.KLDivLoss(reduction="batchmean")(
+                        relu_outputs, swish_outputs
+                    ) * (self.temperature**2)
+                    loss += div_loss
 
         # loss /= num_layers
 
