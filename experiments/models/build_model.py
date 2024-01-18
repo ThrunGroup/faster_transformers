@@ -107,9 +107,6 @@ def build_model(
         model = get_lora_model(model)
         print(model)
 
-        print("Score head: ")
-        print(model.model.score)
-
         if not isinstance(model.model.score, nn.Linear):
             print("Changing model score")
             model.model.score = model.model.score.original_module
