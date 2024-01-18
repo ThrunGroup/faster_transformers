@@ -1,8 +1,7 @@
-from transformers import TrainerCallback, Trainer,
+from transformers import TrainerCallback, Trainer
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 from transformers.models.mistral.modeling_mistral import MistralMLP
 
 
@@ -137,6 +136,7 @@ class MistralMLPDistillation(MistralMLP):
         )
         return self.relu_outputs
 
+
 def apply_mistral_mlp_relu_distillation(model, config):
     for layer in model.model.layers:
         original_mlp = layer.mlp
@@ -146,6 +146,7 @@ def apply_mistral_mlp_relu_distillation(model, config):
         new_mlp.down_proj = original_mlp.down_proj
         layer.mlp = new_mlp
 
+
 def apply_mistral_mlp_stats(model, config, max_dead_threshold=0.1):
     for layer in model.model.layers:
         original_mlp = layer.mlp
@@ -154,6 +155,7 @@ def apply_mistral_mlp_stats(model, config, max_dead_threshold=0.1):
         new_mlp.up_proj = original_mlp.up_proj
         new_mlp.down_proj = original_mlp.down_proj
         layer.mlp = new_mlp
+
 
 def print_dead_neuron_stats(model):
     for i, layer in enumerate(model.model.layers):
