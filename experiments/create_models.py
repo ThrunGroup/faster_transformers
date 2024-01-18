@@ -20,7 +20,7 @@ from experiments.models.sparse_mistral.relufication import (
     ReLUTrainer,
     turn_on_collect_stats,
 )
-from utils.utils import set_master_port
+
 from utils.constants import (
     # Models
     T5,
@@ -66,9 +66,6 @@ def finetune(
     model_name = model_name.split("/")[-1]
     dataset = get_dataset(dataset_name, tokenizer, model_type)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    # train_dataset = train_dataset.select(range(32))
-    # val_dataset = train_dataset
-    # test_dataset = train_dataset
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
@@ -84,9 +81,9 @@ def finetune(
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
-        eval_steps=20,
+        eval_steps=20,  # early stopping counts only when eval step and save step match
         save_steps=20,
-        logging_steps=1,
+        logging_steps=5,
         save_strategy="steps",
         learning_rate=1e-5,
         weight_decay=0.01,
@@ -98,14 +95,12 @@ def finetune(
         greater_is_better=False,
         report_to="wandb",
         run_name=model_name,
-        # for memory issues
         gradient_accumulation_steps=2,
         deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
         bf16=True,
-        # fp16=True,
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
         push_to_hub=push_to_hub,
