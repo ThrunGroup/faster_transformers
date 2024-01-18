@@ -11,7 +11,7 @@ class ReLUTrainer(Trainer):
         self.steps = 0
         self.relu_loss = torch.nn.MSELoss()
         self.classification_loss = nn.CrossEntropyLoss()
-        self.alpha = 0.5
+        self.alpha = 10
 
     def compute_penalty(self, model):
         loss = 0
@@ -27,8 +27,8 @@ class ReLUTrainer(Trainer):
 
         loss /= num_layers
 
-        if self.state.global_step % 10 == 0:
-            print("Distillation loss: ", loss)
+        if self.state.global_step % 20 == 0:
+            print("Distillation loss: ", loss.item())
 
         return loss
 
@@ -43,10 +43,7 @@ class ReLUTrainer(Trainer):
             classification_loss = superclass_loss
 
         # Combine losses
-        loss = (
-            self.alpha * classification_loss
-            + (1 - self.alpha) * distillation_loss
-        )
+        loss = classification_loss + self.alpha * distillation_loss
 
         return (loss, outputs) if return_outputs else loss
 
