@@ -19,7 +19,7 @@ class ReLUTrainer(Trainer):
 
         for module in model.modules():
             if isinstance(module, MistralMLPDistillation):
-                if module.swish_outputs and module.relu_outputs:
+                if module.swish_outputs is not None:
                     relu_loss = self.relu_loss(
                         module.swish_outputs,
                         module.relu_outputs,
