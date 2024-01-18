@@ -27,7 +27,6 @@ class ReLUTrainer(Trainer):
 
         if self.state.global_step % 20 == 0 and loss != 0:
             print("Negative relularizer loss: ", loss.item())
-
         return loss
 
     def compute_penalty_(self, model):
