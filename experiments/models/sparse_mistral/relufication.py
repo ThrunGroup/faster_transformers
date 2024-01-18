@@ -42,7 +42,9 @@ class ReLUTrainer(Trainer):
 
         # get penalty term
         distillation_loss = self.compute_penalty(model)
-        classification_loss = self.classification_loss(logits, labels)
+        classification_loss = self.classification_loss(
+            logits.view(-1, 2), labels.view(-1)
+        )
         loss = (
             self.alpha * classification_loss
             + (1 - self.alpha) * distillation_loss
