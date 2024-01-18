@@ -199,7 +199,7 @@ class MistralMLPDistillation(MistralMLP):
 
         self.collect_stats = True
         self.dead_percentage = None
-        self.dead_threshold = 2.0
+        self.dead_threshold = 0.2
 
     def forward(self, x):
         self.swish_outputs = self.act_fn(self.gate_proj(x))
