@@ -94,6 +94,7 @@ def finetune(
         save_total_limit=1,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
+        greater_is_better=False,
         report_to="wandb",
         run_name=model_name,
         # for memory issues
