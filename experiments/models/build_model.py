@@ -103,7 +103,7 @@ def build_model(
 
     if use_relu:
         # apply_relufication(model)
-        apply_mistral_mlp_relu_distillation(model)
+        apply_mistral_mlp_relu_distillation(model, config)
 
     if use_mare_mlp:
         apply_sparsity_check_MLP(
