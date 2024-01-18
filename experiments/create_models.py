@@ -89,7 +89,7 @@ def finetune(
         logging_steps=10,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=750,
+        max_steps=3,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -114,7 +114,7 @@ def finetune(
         data_seed=1,
     )
 
-    early_stopping = EarlyStoppingCallback(early_stopping_patience=3)
+    early_stopping = EarlyStoppingCallback(early_stopping_patience=2)
     relufication_scheduler = ReluficationRateScheduler()
 
     trainer = ReLUTrainer(
@@ -131,14 +131,14 @@ def finetune(
     print("Training... ")
     trainer.train()
 
-    # turn_on_collect_stats(model)
+    turn_on_collect_stats(model)
 
     print("Evaluating... ")
     results = trainer.evaluate(test_dataset)
     print("Test set evaluation: ", results)
 
-    # print("Printing dead neurons")
-    # print_dead_neuron_stats(model)
+    print("Printing dead neurons")
+    print_dead_neuron_stats(model)
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
@@ -269,7 +269,7 @@ if __name__ == "__main__":
                     "model_type": model_type,
                     "dataset_name": dataset_type,
                     "num_epochs": 10,
-                    "train_batch_size": 64,
+                    "train_batch_size": 32,
                     "test_batch_size": 64,
                     "gradient_checkpointing": True,
                 }
@@ -277,11 +277,11 @@ if __name__ == "__main__":
                 create_model(
                     **common_args,
                     push_to_hub=True,
-                    use_relu=False,
-                    run_name="_original2",
+                    use_relu=True,
+                    run_name="_sparse_swiglu",
                     # run_name="_ignore_02",
                     # pretrained_model_name="Mistral-7B-v0.1_cola_ignore_none",
-                    # pretrained_model_name="Mistral-7B-v0.1_cola_original2",
+                    pretrained_model_name="Mistral-7B-v0.1_cola_original2",
                 )
 
                 # total_size = total_sizes[model_type]
