@@ -44,7 +44,7 @@ def set_up_model_for_lora(model):
         if param.ndim == 1:
             param.data = param.data.to(torch.float32)
 
-    model.gradient_checkpointing_enable()  # reduce number of stored activations
+    # model.gradient_checkpointing_enable()  # reduce number of stored activations
     model.enable_input_require_grads()
     return model
 
