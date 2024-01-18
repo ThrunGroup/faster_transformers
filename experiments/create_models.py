@@ -7,8 +7,6 @@ from transformers import (
 )
 from torch.nn import functional as F
 import wandb
-
-
 import gc
 import torch
 
@@ -16,9 +14,8 @@ from data.get_dataset import get_dataset
 from models.build_model import build_model
 from models.sparse_mistral.relufication import print_dead_neuron_stats
 from experiments.models.sparse_mistral.relufication import (
-    ReluficationRateScheduler,
-    ReLUTrainer,
-    turn_on_collect_stats,
+    SparseSiLUTrainer,
+    enable_sparse_silu,
 )
 
 from utils.constants import (
@@ -47,7 +44,8 @@ def finetune(
     save_stats: bool = False,
     use_mare_mlp: bool = False,
     use_collect_stats: bool = False,
-    pretrained_model_name: str = None,
+    use_sparse_regularization: bool = False,
+    use_sparse_silu: bool = False,
 ):
     """
     Finetune the model on a dataset
@@ -108,31 +106,36 @@ def finetune(
         data_seed=1,
     )
 
-    early_stopping = EarlyStoppingCallback(early_stopping_patience=2)
-    relufication_scheduler = ReluficationRateScheduler()
+    early_stopping = EarlyStoppingCallback(early_stopping_patience=3)
 
-    trainer = ReLUTrainer(
+    trainer = SparseSiLUTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         tokenizer=tokenizer,
         data_collator=data_collator,
-        callbacks=[early_stopping, relufication_scheduler],
+        callbacks=[early_stopping],
         compute_metrics=compute_metrics,
+        use_sparse_regularization=use_sparse_regularization,
     )
+
+    if use_sparse_silu:
+        print(
+            "Sparse SiLU enabled. It will zero out swish outputs smaller than 0.1"
+        )
+        enable_sparse_silu(model)
 
     print("Training... ")
     trainer.train()
-
-    turn_on_collect_stats(model)
 
     print("Evaluating... ")
     results = trainer.evaluate(test_dataset)
     print("Test set evaluation: ", results)
 
-    print("Printing dead neurons")
-    print_dead_neuron_stats(model)
+    if use_sparse_silu:
+        print("Printing dead neurons")
+        print_dead_neuron_stats(model)
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
@@ -179,7 +182,8 @@ def create_model(
     generalist_ratios: float = 0,
     pretrained_model_name: str = None,
     save_stats: bool = False,
-    use_relu: bool = False,
+    use_sparse_silu: bool = False,
+    use_sparse_regularization: bool = False,
     **kwargs,
 ):
     """
@@ -207,7 +211,7 @@ def create_model(
         num_experts=num_experts,
         expert_size=expert_size,
         capacity_factor=capacity_factor,
-        use_relu=use_relu,
+        use_sparse_silu=use_sparse_silu,
         pretrained_model_name=pretrained_model_name,
     )
 
@@ -231,13 +235,13 @@ def create_model(
         use_mare_mlp=use_mare_mlp,
         use_collect_stats=use_collect_stats,
         push_to_hub=kwargs["push_to_hub"],
-        pretrained_model_name=pretrained_model_name,
+        use_sparse_regularization=use_sparse_regularization,
+        use_sparse_silu=use_sparse_silu,
     )
 
 
 if __name__ == "__main__":
     dataset_types = [
-        # BILLSUM,
         # SST2,
         COLA,
         # RTE,
@@ -247,12 +251,6 @@ if __name__ == "__main__":
         # MULTIRC,
         # WIC,
     ]
-
-    total_sizes = {
-        T5: 3072,
-        T5_LARGE: 4096,
-        T5_3B: 16384,
-    }
 
     model_types = [MISTRAL_7B]
     for i in range(1):
@@ -268,44 +266,13 @@ if __name__ == "__main__":
                     "gradient_checkpointing": False,
                 }
 
+                # "pretrained_model_name" here means a model finetuned on a downstream task that you want to build upon
+                # If you omit the parameter, it will automatically download a pretrained model (not finetuned)
                 create_model(
                     **common_args,
-                    push_to_hub=True,
-                    use_relu=True,
+                    push_to_hub=True,  # whether to save the model both in local and remote repositories
+                    use_sparse_silu=False,  # when turned on, it kills negligible swish outputs < 0.1
+                    use_sparse_regularization=True,  # for sparse silu regularization
                     run_name="_sparse_swiglu_ignore_0_1",
-                    # run_name="_ignore_02",
-                    # pretrained_model_name="Mistral-7B-v0.1_cola_ignore_none",
                     pretrained_model_name="Mistral-7B-v0.1_cola_sparse_swiglu_scratch",
                 )
-
-                # total_size = total_sizes[model_type]
-                # expert_size = 16
-                # fixed_costs = [
-                #     0.05,
-                #     0.1,
-                #     # 0.3,
-                # ]
-                # generalist_ratios = [0.0]
-
-                # print("______MARE_______")
-
-                # for fixed_cost in fixed_costs:
-                #     for generalist_ratio in generalist_ratios:
-                #         # continue
-                #         total_nums = int(total_size / expert_size * fixed_cost)
-                #         num_generalists = (
-                #             int(total_nums * generalist_ratio) * 2 // 2
-                #         )  # To make it even
-                #         num_experts = total_nums - num_generalists
-                #         create_model(
-                #             use_mare_mlp=True,
-                #             **common_args,
-                #             save_stats=False,
-                #             use_collect_stats=False,
-                #             push_to_hub=False,
-                #             num_generalists=num_generalists,
-                #             num_experts=num_experts,
-                #             expert_size=expert_size,
-                #             fixed_costs=fixed_cost,
-                #             generalist_ratios=generalist_ratio,
-                #         )

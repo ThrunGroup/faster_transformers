@@ -11,34 +11,21 @@ from typing import (
 from transformers.models.mistral.modeling_mistral import MistralMLP
 
 
-class ReLUTrainer(Trainer):
+class SparseSiLUTrainer(Trainer):
     def __init__(self, *args, **kwargs):
-        super(ReLUTrainer, self).__init__(*args, **kwargs)
-        self.steps = 0
-        self.relu_loss = torch.nn.MSELoss()
-        self.classification_loss = nn.CrossEntropyLoss()
-        self.alpha = 1
-        self.temperature = 2.0
+        super(SparseSiLUTrainer, self).__init__(*args, **kwargs)
+        self.regularization_coefficient = 1
+        self.use_sparse_regularization = kwargs.pop(
+            "use_sparse_regularization", False
+        )
 
     def training_step(
         self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
     ) -> torch.Tensor:
         """
-        Perform a training step on a batch of inputs.
-
-        Subclass and override to inject custom behavior.
-
-        Args:
-            model (`nn.Module`):
-                The model to train.
-            inputs (`Dict[str, Union[torch.Tensor, Any]]`):
-                The inputs and targets of the model.
-
-                The dictionary will be unpacked before being fed to the model. Most models expect the targets under the
-                argument `labels`. Check your model's documentation for all accepted arguments.
-
-        Return:
-            `torch.Tensor`: The tensor with training loss on this batch.
+        Override the huggingface's training_step function to add a regularization term.
+        A regularization term is computed with intermediate values, which are freed after "backward()."
+        You need to set `retain_graph=True` inside `backward` function to keep the values.
         """
         model.train()
         inputs = self._prepare_inputs(inputs)
@@ -51,16 +38,22 @@ class ReLUTrainer(Trainer):
                 loss.mean()
             )  # mean() to average on multi-gpu parallel training
 
-        self.accelerator.backward(loss, retain_graph=True)
+        # important for a regularization loss
+        self.accelerator.backward(
+            loss, retain_graph=self.use_sparse_regularization
+        )
 
         return loss.detach() / self.args.gradient_accumulation_steps
 
-    def compute_penalty(self, model):
+    def compute_regularization(self, model):
+        """
+        Compute a sparse regularization loss for SiLU
+        """
         loss = 0
         num_layers = 32
 
         for module in model.modules():
-            if isinstance(module, MistralMLPDistillation):
+            if isinstance(module, MistralSparseSiluMLP):
                 if module.swish_outputs is not None:
                     swish_outputs = module.swish_outputs
                     negative_outputs = F.relu(-swish_outputs).mean()
@@ -72,198 +65,71 @@ class ReLUTrainer(Trainer):
             print("Negative relularizer loss: ", loss.item())
         return loss
 
-    def compute_penalty_(self, model):
-        loss = 0
-        num_layers = 32
-
-        for module in model.modules():
-            if isinstance(module, MistralMLPDistillation):
-                if (
-                    module.swish_outputs is not None
-                    and module.relu_outputs is not None
-                ):
-                    swish_outputs = (
-                        module.swish_outputs.detach() / self.temperature
-                    )
-                    relu_outputs = (
-                        module.relu_outputs.detach() / self.temperature
-                    )
-                    swish_outputs = F.softmax(swish_outputs, dim=1)
-                    relu_outputs = F.log_softmax(relu_outputs, dim=1)
-                    div_loss = nn.KLDivLoss(reduction="batchmean")(
-                        relu_outputs, swish_outputs
-                    )
-                    loss += div_loss
-
-        # loss /= num_layers
-
-        if self.state.global_step % 20 == 0 and loss != 0:
-            print("Distillation loss: ", loss.item())
-
-        return loss
-
     def compute_loss(self, model, inputs, return_outputs=False):
-        # get penalty term
-        distillation_loss = self.compute_penalty(model)
-        superclass_loss = super().compute_loss(model, inputs, return_outputs)
+        loss = super().compute_loss(model, inputs, return_outputs)
 
         if return_outputs:
-            classification_loss, outputs = superclass_loss
+            classification_loss, outputs = loss
         else:
-            classification_loss = superclass_loss
+            classification_loss = loss
 
-        # Combine losses
-        loss = classification_loss + self.alpha * distillation_loss
+        loss = classification_loss
+        if self.use_sparse_regularization:
+            regularization_loss = self.compute_regularization(model)
+            loss += self.regularization_coefficient * regularization_loss
 
         return (loss, outputs) if return_outputs else loss
 
 
-class ReluficationRateScheduler(TrainerCallback):
-    def __init__(self, step_size=20, alpha_increment=0.05):
-        self.step_size = step_size
-        self.alpha_increment = alpha_increment
-
-    # def on_step_end(self, args, state, control, **kwargs):
-    #     model = kwargs["model"]
-    #     dead_threshold = 0
-
-    #     if state.global_step % self.step_size == 0:
-    #         for module in model.modules():
-    #             if isinstance(module, MistralMLPStats):
-    #                 module.increase_dead_threshold(by=self.alpha_increment)
-    #                 dead_threshold = module.dead_threshold
-
-    #         print(state.global_step, dead_threshold)
-
-    # def on_step_end(self, args, state, control, **kwargs):
-    #     model = kwargs["model"]
-    #     new_alpha = 0
-
-    #     if state.global_step % self.step_size == 0:
-    #         for module in model.modules():
-    #             if isinstance(module, SwishToReLU):
-    #                 module.increase_alpha(by=self.alpha_increment)
-    #                 new_alpha = module.alpha
-
-    #         print(state.global_step, new_alpha)
-
-
-class SwishToReLU(nn.Module):
-    def __init__(self):
-        super(SwishToReLU, self).__init__()
-        self.alpha = 0.0
-
-    def increase_alpha(self, by=0.0):
-        self.alpha = min(1.0, self.alpha + by)
-
-    def forward(self, x):
-        # (Swish -> ReLU) for negative inputs and SiLU for positive inputs
-        silu = F.silu(x)
-        relu_silu = (1 - self.alpha) * silu
-        return torch.where(x < 0, relu_silu, silu)
-
-
-class MistralMLPStats(MistralMLP):
-    def __init__(self, config, max_dead_threshold=0.1):
-        super().__init__(config)
-        self.dead_percentage = None
-        self.max_dead_threshold = max_dead_threshold
-        self.dead_threshold = 2.0
-
-    def increase_dead_threshold(self, by=0.02):
-        self.dead_threshold = min(
-            self.max_dead_threshold, self.dead_threshold + by
-        )
-
-    def forward(self, x):
-        swish = self.act_fn(self.gate_proj(x))
-
-        dead_neurons = swish.abs() <= self.dead_threshold
-        dead_percentage = dead_neurons.float().mean()
-        swish[dead_neurons] = 0
-
-        if self.dead_percentage:
-            # aggregate mean
-            dead_percentage = (self.dead_percentage + dead_percentage) / 2
-        self.dead_percentage = dead_percentage
-
-        return self.down_proj(swish * self.up_proj(x))
-
-
-class MistralMLPDistillation(MistralMLP):
+class MistralSparseSiluMLP(MistralMLP):
     def __init__(self, config):
         super().__init__(config)
         self.swish_outputs = None
-        self.relu_outputs = None
         self.relu = nn.ReLU()
 
-        self.collect_stats = True
+        self.kill_sparse_swish_outputs = False
         self.dead_percentage = None
         self.dead_threshold = 0.1
 
     def forward(self, x):
-        self.swish_outputs = self.act_fn(self.gate_proj(x))
+        """
+        If kill_sparse_swish_outputs is set to False, this layer functions exactly like a normal MLP layer.
+        """
+        swish_outputs = self.act_fn(self.gate_proj(x))
 
-        if self.collect_stats:
-            dead_neurons = self.swish_outputs.abs() <= self.dead_threshold
+        if self.kill_sparse_swish_outputs:
+            dead_neurons = swish_outputs.abs() <= self.dead_threshold
             dead_percentage = dead_neurons.float().mean()
 
             if self.dead_percentage:
                 # aggregate mean
                 dead_percentage = (self.dead_percentage + dead_percentage) / 2
             self.dead_percentage = dead_percentage
+            swish_outputs[dead_neurons] = 0
 
-            self.swish_outputs[dead_neurons] = 0
-
-        return self.down_proj(self.swish_outputs * self.up_proj(x))
-
-    # def forward(self, x):
-    #     with torch.no_grad():
-    #         self.swish_outputs = self.down_proj(
-    #             self.act_fn(self.gate_proj(x)) * self.up_proj(x)
-    #         )
-    #     self.relu_outputs = self.down_proj(
-    #         self.relu(self.gate_proj(x)) * self.up_proj(x)
-    #     )
-    #     return self.relu_outputs
+        out = self.down_proj(swish_outputs * self.up_proj(x))
+        self.swish_outputs = swish_outputs
+        return out
 
 
-def apply_mistral_mlp_relu_distillation(model, config):
+def apply_mistral_sparse_silu_mlp(model, config):
     for layer in model.model.layers:
         original_mlp = layer.mlp
-        new_mlp = MistralMLPDistillation(config)
+        new_mlp = MistralSparseSiluMLP(config)
         new_mlp.gate_proj = original_mlp.gate_proj
         new_mlp.up_proj = original_mlp.up_proj
         new_mlp.down_proj = original_mlp.down_proj
         layer.mlp = new_mlp
 
 
-def apply_mistral_mlp_stats(model, config, max_dead_threshold=0.1):
-    for layer in model.model.layers:
-        original_mlp = layer.mlp
-        new_mlp = MistralMLPStats(config, max_dead_threshold)
-        new_mlp.gate_proj = original_mlp.gate_proj
-        new_mlp.up_proj = original_mlp.up_proj
-        new_mlp.down_proj = original_mlp.down_proj
-        layer.mlp = new_mlp
-
-
-def turn_on_collect_stats(model):
-    print("Turning on collect_stats")
+def enable_sparse_silu(model):
+    print("Enabling SparseSilu")
     for module in model.modules():
-        if isinstance(module, MistralMLPDistillation):
-            module.collect_stats = True
+        if isinstance(module, MistralSparseSiluMLP):
+            module.kill_sparse_swish_outputs = True
 
 
 def print_dead_neuron_stats(model):
     for i, layer in enumerate(model.model.layers):
         dead_percentage = layer.mlp.dead_percentage * 100
         print(f"{i} : {dead_percentage:.3f}%")
-
-
-def apply_relufication(
-    model,
-):
-    print(model)
-    for layers in model.model.layers:
-        layers.mlp.act_fn = SwishToReLU()

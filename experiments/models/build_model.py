@@ -11,9 +11,7 @@ from peft import (
 )
 
 from experiments.models.sparse_mistral.relufication import (
-    apply_relufication,
-    apply_mistral_mlp_stats,
-    apply_mistral_mlp_relu_distillation,
+    apply_mistral_sparse_silu_mlp,
 )
 from experiments.models.t5_sparity_check.t5_sparsity_check_new import (
     apply_sparsity_check_MLP,
@@ -21,9 +19,7 @@ from experiments.models.t5_sparity_check.t5_sparsity_check_new import (
 
 from utils.constants import (
     # models
-    GPT2,
     T5,
-    MISTRAL_7B,
     # datasets
     BILLSUM,
 )
@@ -35,6 +31,10 @@ class CastOutputToFloat(nn.Sequential):
 
 
 def set_up_model_for_lora(model):
+    """
+    Use this function to a model finetuned with LoRA.
+    @luke: Maybe there is a cleaner way to do this, but I'm leaving it for now.
+    """
     for name, param in model.named_parameters():
         if "lora" in name or "score" in name:
             param.requires_grad = True
@@ -44,7 +44,6 @@ def set_up_model_for_lora(model):
         if param.ndim == 1:
             param.data = param.data.to(torch.float32)
 
-    # model.gradient_checkpointing_enable()  # reduce number of stored activations
     model.enable_input_require_grads()
     return model
 
@@ -74,35 +73,28 @@ def build_model(
     num_experts: int = 0,
     expert_size: int = 0,
     pretrained_model_name: str = None,
-    use_relu: bool = False,
+    use_sparse_silu: bool = False,
 ):
     print("Loading the model...")
     config = AutoConfig.from_pretrained(model_type)
 
     if pretrained_model_name:
+        # Load a finetuned model
         print("Loading from thrunlab/" + pretrained_model_name)
         model = AutoModelForSequenceClassification.from_pretrained(
             "thrunlab/" + pretrained_model_name, config=config
         )
-        print("1")
-        print(model.score.weight)
         model = set_up_model_for_lora(model)
+
+        # As there is a bug with loading a score head from huggingface repository,
+        # load it from a local file
         score_dict = torch.load(f"scores/{pretrained_model_name}.pt")
         model.score.load_state_dict(score_dict)
-        print("2")
-        print(model.score.weight)
-
-        # apply_mistral_mlp_stats(
-        #     model, config, max_dead_threshold=0.2
-        # )  # each MLP layer can collect stats
     else:
+        # Load a pretrained model not finetuned on a specific downstream task
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
         )
-        # print(model)
-        # apply_mistral_mlp_stats(
-        #     model, config, max_dead_threshold=0.2
-        # )  # each MLP layer can collect stats
         print("Applying LoRA...")
         model = get_lora_model(model)
         print(model)
@@ -113,26 +105,16 @@ def build_model(
             print("New score head: ")
             print(model.model.score)
 
-        print("1")
-        print(model.model.score.weight)
-        pretrained_model_name = "Mistral-7B-v0.1_cola_original2"
-        score_dict = torch.load(f"scores/{pretrained_model_name}.pt")
-        model.model.score.load_state_dict(score_dict)
-        print("2")
-        print(model.model.score.weight)
+        # You can optionally uncomment this block
+        # to load a finetuned score head for faster finetuning
+        # pretrained_model_name = "Mistral-7B-v0.1_cola_original2"
+        # score_dict = torch.load(f"scores/{pretrained_model_name}.pt")
+        # model.model.score.load_state_dict(score_dict)
 
-    if use_relu:
-        # apply_relufication(model)
-        apply_mistral_mlp_relu_distillation(model, config)
-
-    if use_mare_mlp:
-        apply_sparsity_check_MLP(
-            model,
-            config,
-            num_generalists=num_generalists,
-            num_experts=num_experts,
-            expert_size=expert_size,
-        )
+    # Replace a normal MLP layer with a MistralSparseSiluMLP layer.
+    # By default, it behaves exactly as a normal MLP layer unless
+    # you turn on use_sparse_silu in `create_models.py`
+    apply_mistral_sparse_silu_mlp(model, config)
 
     return model
 

@@ -36,7 +36,7 @@ from utils.constants import (
 )
 
 
-class ReLUTrainer(Trainer):
+class SparseSiLUTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         super(MARETrainer, self).__init__(*args, **kwargs)
         self.steps = 0
