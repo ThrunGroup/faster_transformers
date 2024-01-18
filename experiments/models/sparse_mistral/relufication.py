@@ -7,21 +7,21 @@ from transformers.models.mistral.modeling_mistral import MistralMLP
 
 
 class ReluficationRateScheduler(TrainerCallback):
-    def __init__(self, step_size=50, alpha_increment=0.1):
+    def __init__(self, step_size=20, alpha_increment=0.05):
         self.step_size = step_size
         self.alpha_increment = alpha_increment
 
-    def on_step_end(self, args, state, control, **kwargs):
-        model = kwargs["model"]
-        dead_threshold = 0
+    # def on_step_end(self, args, state, control, **kwargs):
+    #     model = kwargs["model"]
+    #     dead_threshold = 0
 
-        if state.global_step % self.step_size == 0:
-            for module in model.modules():
-                if isinstance(module, MistralMLPStats):
-                    module.increase_dead_threshold(by=self.alpha_increment)
-                    dead_threshold = module.dead_threshold
+    #     if state.global_step % self.step_size == 0:
+    #         for module in model.modules():
+    #             if isinstance(module, MistralMLPStats):
+    #                 module.increase_dead_threshold(by=self.alpha_increment)
+    #                 dead_threshold = module.dead_threshold
 
-            print(state.global_step, dead_threshold)
+    #         print(state.global_step, dead_threshold)
 
     # def on_step_end(self, args, state, control, **kwargs):
     #     model = kwargs["model"]
