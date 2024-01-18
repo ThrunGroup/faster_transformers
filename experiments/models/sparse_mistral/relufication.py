@@ -197,9 +197,9 @@ class MistralMLPDistillation(MistralMLP):
         self.relu_outputs = None
         self.relu = nn.ReLU()
 
-        self.collect_stats = True
+        self.collect_stats = False
         self.dead_percentage = None
-        self.dead_threshold = 0.2
+        self.dead_threshold = 0.1
 
     def forward(self, x):
         self.swish_outputs = self.act_fn(self.gate_proj(x))
@@ -207,12 +207,13 @@ class MistralMLPDistillation(MistralMLP):
         if self.collect_stats:
             dead_neurons = self.swish_outputs.abs() <= self.dead_threshold
             dead_percentage = dead_neurons.float().mean()
-            # self.swish_outputs[dead_neurons] = 0
 
             if self.dead_percentage:
                 # aggregate mean
                 dead_percentage = (self.dead_percentage + dead_percentage) / 2
             self.dead_percentage = dead_percentage
+
+            # self.swish_outputs[dead_neurons] = 0
 
         return self.down_proj(self.swish_outputs * self.up_proj(x))
 
