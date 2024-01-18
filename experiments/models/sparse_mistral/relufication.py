@@ -21,7 +21,7 @@ class ReLUTrainer(Trainer):
         for module in model.modules():
             if isinstance(module, MistralMLPDistillation):
                 if module.swish_outputs is not None:
-                    swish_outputs = module.swish_outputs.detach()
+                    swish_outputs = module.swish_outputs
                     negative_outputs = F.relu(-swish_outputs).sum()
                     loss += negative_outputs
 
