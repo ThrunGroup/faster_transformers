@@ -15,10 +15,6 @@ class ReluficationRateScheduler(TrainerCallback):
         model = kwargs["model"]
         dead_threshold = 0
 
-        for module in model.modules():
-            if isinstance(module, MistralMLPStats):
-                print("yesss")
-
         if state.global_step % self.step_size == 0:
             for module in model.modules():
                 if isinstance(module, MistralMLPStats):
@@ -71,7 +67,7 @@ class MistralMLPStats(MistralMLP):
     def forward(self, x):
         swish = self.act_fn(self.gate_proj(x))
 
-        dead_neurons = swish.abs() <= self.max_dead_threshold
+        dead_neurons = swish.abs() <= self.dead_threshold
         dead_percentage = dead_neurons.float().mean()
         swish[dead_neurons] = 0
 
