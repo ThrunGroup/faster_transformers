@@ -27,7 +27,7 @@ class ReLUTrainer(Trainer):
 
         loss /= num_layers
 
-        if self.state.global_step % 20 == 0:
+        if self.state.global_step % 20 == 0 and loss != 0:
             print("Distillation loss: ", loss.item())
 
         return loss
