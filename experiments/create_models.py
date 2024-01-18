@@ -89,7 +89,6 @@ def finetune(
         logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=3,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -268,7 +267,7 @@ if __name__ == "__main__":
                 common_args = {
                     "model_type": model_type,
                     "dataset_name": dataset_type,
-                    "num_epochs": 10,
+                    "num_epochs": 40,
                     "train_batch_size": 8,
                     "test_batch_size": 16,
                     "gradient_checkpointing": False,
