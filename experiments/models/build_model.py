@@ -101,9 +101,10 @@ def build_model(
         # apply_mistral_mlp_stats(
         #     model, config, max_dead_threshold=0.2
         # )  # each MLP layer can collect stats
-
+        print(1, model)
         print("Applying LoRA...")
         model = get_lora_model(model)
+        print(2, model)
 
     if use_relu:
         # apply_relufication(model)
