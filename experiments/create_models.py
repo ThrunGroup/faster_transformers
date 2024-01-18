@@ -86,7 +86,7 @@ def finetune(
         evaluation_strategy="steps",
         eval_steps=2,
         save_steps=50,
-        logging_steps=10,
+        logging_steps=1,
         save_strategy="steps",
         learning_rate=1e-5,
         max_steps=3,
@@ -100,7 +100,7 @@ def finetune(
         report_to="wandb",
         run_name=model_name,
         # for memory issues
-        gradient_accumulation_steps=1,
+        gradient_accumulation_steps=2,
         deepspeed="ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
