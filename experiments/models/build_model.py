@@ -115,6 +115,7 @@ def build_model(
 
         print("1")
         print(model.model.score.weight)
+        pretrained_model_name = "Mistral-7B-v0.1_cola_original2"
         score_dict = torch.load(f"scores/{pretrained_model_name}.pt")
         model.model.score.load_state_dict(score_dict)
         print("2")
