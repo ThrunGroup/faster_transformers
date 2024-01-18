@@ -33,24 +33,17 @@ class ReLUTrainer(Trainer):
         return loss
 
     def compute_loss(self, model, inputs, return_outputs=False):
-        labels = inputs.pop("labels")
-
-        # forward pass
-        outputs = model(**inputs)
-        logits = outputs.get("logits")
-        labels = labels.to(logits.dtype)
-
         # get penalty term
         distillation_loss = self.compute_penalty(model)
-        classification_loss = self.classification_loss(
-            logits.view(-1, 2), labels.view(-1)
+        classification_loss = super().compute_loss(
+            model, inputs, return_outputs
         )
         loss = (
             self.alpha * classification_loss
             + (1 - self.alpha) * distillation_loss
         )
 
-        return (loss, outputs) if return_outputs else loss
+        return loss
 
 
 class ReluficationRateScheduler(TrainerCallback):
