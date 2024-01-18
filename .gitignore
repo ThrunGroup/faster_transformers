@@ -4,4 +4,4 @@ wandb
 **/__pycache__/
 thrunlab/*
 ckpt/*
-scores/*
+scores/
