@@ -88,7 +88,7 @@ def finetune(
         logging_steps=5,
         save_strategy="steps",
         learning_rate=1e-5,
-        max_steps=1,
+        max_steps=750,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -281,7 +281,7 @@ if __name__ == "__main__":
                     use_relu=True,
                     run_name="_relu_distillation",
                     # run_name="_ignore_02",
-                    pretrained_model_name="Mistral-7B-v0.1_cola_ignore_none",
+                    # pretrained_model_name="Mistral-7B-v0.1_cola_ignore_none",
                     # pretrained_model_name="Mistral-7B-v0.1_cola_relu_distillation",
                 )
 
