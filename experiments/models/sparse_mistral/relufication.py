@@ -7,7 +7,6 @@ from typing import (
     Dict,
     Union,
 )
-from apex import amp
 
 from transformers.models.mistral.modeling_mistral import MistralMLP
 
@@ -52,11 +51,8 @@ class ReLUTrainer(Trainer):
                 loss.mean()
             )  # mean() to average on multi-gpu parallel training
 
-        if self.use_apex:
-            with amp.scale_loss(loss, self.optimizer) as scaled_loss:
-                scaled_loss.backward(retain_graph=True)
-        else:
-            self.accelerator.backward(loss, retain_graph=True)
+        print(self.use_apex)
+        self.accelerator.backward(loss, retain_graph=True)
 
         return loss.detach() / self.args.gradient_accumulation_steps
 
