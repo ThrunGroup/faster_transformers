@@ -276,9 +276,9 @@ if __name__ == "__main__":
                 create_model(
                     **common_args,
                     push_to_hub=True,
-                    use_relu=False,
-                    run_name="_ignore_none",
-                    # pretrained_model_name="Mistral-7B-v0.1_cola_original_cola",
+                    use_relu=True,
+                    run_name="_relu_s50_a1",
+                    pretrained_model_name="Mistral-7B-v0.1_cola_ignore_none",
                 )
 
                 # total_size = total_sizes[model_type]
