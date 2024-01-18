@@ -17,6 +17,7 @@ from models.build_model import build_model
 from models.sparse_mistral.relufication import print_dead_neuron_stats
 from experiments.models.sparse_mistral.relufication import (
     ReluficationRateScheduler,
+    ReLUTrainer,
 )
 from utils.utils import set_master_port
 from utils.constants import (
@@ -113,7 +114,8 @@ def finetune(
     early_stopping = EarlyStoppingCallback(early_stopping_patience=3)
     relufication_scheduler = ReluficationRateScheduler()
 
-    trainer = Trainer(
+    # trainer = Trainer(
+    trainer = ReLUTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
@@ -277,10 +279,10 @@ if __name__ == "__main__":
                 create_model(
                     **common_args,
                     push_to_hub=True,
-                    use_relu=False,
-                    # run_name="_relu_s20_a01",
-                    run_name="_ignore_02",
-                    # pretrained_model_name="Mistral-7B-v0.1_cola_ignore_none",
+                    use_relu=True,
+                    run_name="_relu_distillation",
+                    # run_name="_ignore_02",
+                    pretrained_model_name="Mistral-7B-v0.1_cola_ignore_none",
                 )
 
                 # total_size = total_sizes[model_type]

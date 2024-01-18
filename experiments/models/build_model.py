@@ -13,6 +13,7 @@ from peft import (
 from experiments.models.sparse_mistral.relufication import (
     apply_relufication,
     apply_mistral_mlp_stats,
+    apply_mistral_mlp_relu_distillation,
 )
 from experiments.models.t5_sparity_check.t5_sparsity_check_new import (
     apply_sparsity_check_MLP,
@@ -101,7 +102,8 @@ def build_model(
         model = get_lora_model(model)
 
     if use_relu:
-        apply_relufication(model)
+        # apply_relufication(model)
+        apply_mistral_mlp_relu_distillation(model)
 
     if use_mare_mlp:
         apply_sparsity_check_MLP(

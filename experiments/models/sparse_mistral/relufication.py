@@ -1,9 +1,50 @@
-from transformers import TrainerCallback
+from transformers import TrainerCallback, Trainer,
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
 from transformers.models.mistral.modeling_mistral import MistralMLP
+
+
+class ReLUTrainer(Trainer):
+    def __init__(self, *args, **kwargs):
+        super(ReLUTrainer, self).__init__(*args, **kwargs)
+        self.steps = 0
+        self.relu_loss = torch.nn.MSELoss()
+
+    def compute_penalty(self, model):
+        loss = 0
+        num_layers = 32
+
+        for module in model.modules():
+            if isinstance(module, MistralMLPStats):
+                relu_loss = self.relu_loss(
+                    module.swish_outputs,
+                    module.relu_outputs,
+                )
+                loss += relu_loss
+
+        loss /= num_layers
+
+        # if self.state.global_step % 10 == 0:
+        print("Distillation loss: ", loss)
+
+        return loss
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.pop("labels")
+
+        # forward pass
+        outputs = model(**inputs)
+        logits = outputs.get("logits")
+        labels = labels.to(logits.dtype)
+
+        # get penalty term
+        lambda_coeff = 0.5
+        distillation_loss = lambda_coeff * self.compute_penalty(model)
+        loss = F.binary_cross_entropy(logits, labels) + distillation_loss
+
+        return (loss, outputs) if return_outputs else loss
 
 
 class ReluficationRateScheduler(TrainerCallback):
@@ -78,6 +119,33 @@ class MistralMLPStats(MistralMLP):
         return self.down_proj(swish * self.up_proj(x))
 
 
+class MistralMLPDistillation(MistralMLP):
+    def __init__(self, config):
+        super().__init__(config)
+        self.swish_outputs = None
+        self.relu_outputs = None
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        if self.training:
+            with torch.no_grad():
+                self.swish_outputs = self.down_proj(
+                    self.act_fn(self.gate_proj(x)) * self.up_proj(x)
+                )
+        self.relu_outputs = self.down_proj(
+            self.relu(self.gate_proj(x)) * self.up_proj(x)
+        )
+        return self.relu_outputs
+
+def apply_mistral_mlp_relu_distillation(model, config):
+    for layer in model.model.layers:
+        original_mlp = layer.mlp
+        new_mlp = MistralMLPDistillation(config)
+        new_mlp.gate_proj = original_mlp.gate_proj
+        new_mlp.up_proj = original_mlp.up_proj
+        new_mlp.down_proj = original_mlp.down_proj
+        layer.mlp = new_mlp
+
 def apply_mistral_mlp_stats(model, config, max_dead_threshold=0.1):
     for layer in model.model.layers:
         original_mlp = layer.mlp
@@ -86,7 +154,6 @@ def apply_mistral_mlp_stats(model, config, max_dead_threshold=0.1):
         new_mlp.up_proj = original_mlp.up_proj
         new_mlp.down_proj = original_mlp.down_proj
         layer.mlp = new_mlp
-
 
 def print_dead_neuron_stats(model):
     for i, layer in enumerate(model.model.layers):
