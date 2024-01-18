@@ -277,7 +277,7 @@ if __name__ == "__main__":
                 create_model(
                     **common_args,
                     push_to_hub=True,
-                    use_relu=True,
+                    use_relu=False,
                     run_name="_relu_distillation",
                     # run_name="_ignore_02",
                     # pretrained_model_name="Mistral-7B-v0.1_cola_ignore_none",
