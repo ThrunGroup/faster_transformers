@@ -11,7 +11,7 @@ class ReLUTrainer(Trainer):
         self.steps = 0
         self.relu_loss = torch.nn.MSELoss()
         self.classification_loss = nn.CrossEntropyLoss()
-        self.alpha = 10
+        self.alpha = 1
 
     def compute_penalty(self, model):
         loss = 0
