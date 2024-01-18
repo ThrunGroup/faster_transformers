@@ -71,7 +71,7 @@ class ReLUTrainer(Trainer):
             classification_loss = superclass_loss
 
         # Combine losses
-        loss = classification_loss + self.alpha * distillation_loss
+        loss = 0 * classification_loss + self.alpha * distillation_loss
 
         return (loss, outputs) if return_outputs else loss
 
