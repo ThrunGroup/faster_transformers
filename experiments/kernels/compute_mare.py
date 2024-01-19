@@ -66,7 +66,7 @@ class MistralSparseMLP(MistralMLP):
     def forward(self, x):
         probs = self.svd_act_fn(self.sv_proj(self.u_proj(x)))
         print(probs)
-        topk_values, topk_idcs = torch.topk(probs, k=self.K, dim=-1)
+        _, topk_idcs = torch.topk(probs, k=self.K, dim=-1)
         mask = torch.zeros(
             x.shape[:-1] + (self.intermediate_size,),
             dtype=probs.dtype,
