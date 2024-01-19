@@ -102,7 +102,7 @@ class MistralSparseSiluMLP(MistralMLP):
             dead_percentage = dead_neurons.float().mean()
 
             if self.dead_percentage:
-                # aggregate mean
+                # aggregate mean @jay: Have to fix this
                 dead_percentage = (self.dead_percentage + dead_percentage) / 2
             self.dead_percentage = dead_percentage
             swish_outputs[dead_neurons] = 0
