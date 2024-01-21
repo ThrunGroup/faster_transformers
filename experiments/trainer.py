@@ -1,39 +1,11 @@
-import os
 from transformers import (
     Trainer,
-    TrainingArguments,
-    EarlyStoppingCallback,
-    AutoTokenizer,
 )
 from torch.nn import functional as F
-import wandb
-import copy
-
-import gc
 import torch
 
 from data.get_dataset import get_dataset
 from models.build_model import build_model
-from experiments.models.t5_sparity_check.t5_sparsity_check_original import (
-    MLPRouter,
-)
-from utils.constants import (
-    # Models
-    GPT2,
-    GPT2_XL,
-    T5,
-    T5_3B,
-    # Datasets
-    # SST2,
-    BILLSUM,
-    SQUAD,
-    QNLI,
-    SST2,
-    COLA,
-    WIC,
-    MULTIRC,
-    BOOLQ,
-)
 
 
 class SparseSiLUTrainer(Trainer):

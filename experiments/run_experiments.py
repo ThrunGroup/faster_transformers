@@ -81,7 +81,7 @@ def finetune(
         evaluation_strategy="steps",
         eval_steps=20,  # early stopping counts only when eval step and save step match
         save_steps=20,
-        logging_steps=5,
+        logging_steps=10,
         save_strategy="steps",
         learning_rate=1e-5,
         weight_decay=0.01,
@@ -164,7 +164,7 @@ def finetune(
     gc.collect()
 
 
-def create_model(
+def run_experiment(
     model_type: str,
     dataset_name: str,
     num_epochs: int = 5,
@@ -200,6 +200,7 @@ def create_model(
     # Build a Gated Attention model
     model_name = f"{model_type}_{dataset_name}"
     model_name += run_name
+    pretrained_model_name = model_name + pretrained_model_name
 
     # captures the method parameters and model_name as a dictionary
     config = locals()
@@ -260,19 +261,33 @@ if __name__ == "__main__":
                 common_args = {
                     "model_type": model_type,
                     "dataset_name": dataset_type,
-                    "num_epochs": 40,
+                    "num_epochs": 40,  # it normally early stops before 40th epoch
                     "train_batch_size": 8,
                     "test_batch_size": 16,
                     "gradient_checkpointing": False,
                 }
 
-                # "pretrained_model_name" here means a model finetuned on a downstream task that you want to build upon
-                # If you omit the parameter, it will automatically download a pretrained model (not finetuned)
-                create_model(
+                # finetune an original model
+                run_experiment(
                     **common_args,
                     push_to_hub=True,  # whether to save the model both in local and remote repositories
-                    use_sparse_silu=False,  # when turned on, it kills negligible swish outputs < 0.1
-                    use_sparse_regularization=True,  # for sparse silu regularization
-                    run_name="_sparse_swiglu_ignore_0_1",
-                    pretrained_model_name="Mistral-7B-v0.1_cola_sparse_swiglu_scratch",
+                    run_name=f"_original{i}",
+                )
+
+                # finetune an original model with sparse regularization
+                run_experiment(
+                    **common_args,
+                    push_to_hub=True,
+                    use_sparse_regularization=True,
+                    run_name="_sparse_regularization{i}",
+                )
+
+                # finetune a sparse silu model while zeroing out swish outputs smaller than a threshold
+                run_experiment(
+                    **common_args,
+                    push_to_hub=True,
+                    use_sparse_regularization=True,
+                    use_sparse_silu=True,  # when turned on, it kills negligible swish outputs < 0.1
+                    pretrained_model_name=f"_sparse_regularization{i}",  # resume finetuning with this model
+                    run_name="_sparse_silu_ignore_0_1",
                 )
