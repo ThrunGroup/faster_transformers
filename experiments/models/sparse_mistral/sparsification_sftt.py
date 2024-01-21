@@ -1,6 +1,7 @@
 from transformers import TrainerCallback, Trainer
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 from datasets import Dataset
+from transformers.utils import is_sagemaker_mp_enabled
 
 import torch
 import torch.nn as nn
@@ -12,12 +13,19 @@ from typing import (
 )
 
 from transformers.models.mistral.modeling_mistral import MistralMLP, MistralAttention
+
+
 class SparseSFTTTrainer(SFTTrainer):
     def __init__(self, *args, **kwargs):
         self.regularization_coefficient = kwargs.pop("regularization_coefficient", 1)
         self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", False)
-        self.regularization_type = kwargs.pop("regularization_type", "L2 activation")
-        assert self.regularization_type in ["L2 activation", "L1 positive activation"], f"Invalid regularization type: {self.regularization_type}"
+        self.regularization_type = kwargs.pop(
+            "regularization_type", "L1 positive activation"
+        )
+        assert self.regularization_type in [
+            "L2 activation",
+            "L1 positive activation",
+        ], f"Invalid regularization type: {self.regularization_type}"
         self.sparse_layers = []
         super(SparseSFTTTrainer, self).__init__(*args, **kwargs)
 
@@ -53,7 +61,7 @@ class SparseSFTTTrainer(SFTTrainer):
         Compute a sparse regularization loss for SiLU
         """
         loss = 0
-        if len(self.initialize_sparse_silu_layers()) == 0:
+        if len(self.sparse_layers) == 0:
             self.initialize_sparse_silu_layers(model)
         num_layers = len(self.sparse_layers)
 
@@ -118,7 +126,9 @@ class MistralSparseSiluMLP(MistralMLP):
             dead_percentage = dead_neurons.float().mean()
 
             if self.is_stats:
-                self.dead_percentage = (self.dead_percentage * self.counts + dead_percentage)/self.counts
+                self.dead_percentage = (
+                    self.dead_percentage * self.counts + dead_percentage
+                ) / (self.counts + 1)
                 self.counts += 1
             swish_outputs[dead_neurons] = 0
 
@@ -128,7 +138,11 @@ class MistralSparseSiluMLP(MistralMLP):
 
 
 def apply_mistral_sparse_silu_mlp(model, config):
+    # counts = 0
     for layer in model.model.layers:
+        # counts += 1
+        # if counts < 4:
+        #     continue
         original_mlp = layer.mlp
         new_mlp = MistralSparseSiluMLP(config)
         new_mlp.gate_proj = original_mlp.gate_proj
@@ -136,9 +150,11 @@ def apply_mistral_sparse_silu_mlp(model, config):
         new_mlp.down_proj = original_mlp.down_proj
         layer.mlp = new_mlp
 
+
 def activate_stats(model):
     for layer in model.model.layers:
-        layer.mlp.activate_stats()
+        if isinstance(layer.mlp, MistralSparseSiluMLP):
+            layer.mlp.activate_stats()
 
 
 def enable_sparse_silu(model):
@@ -150,5 +166,6 @@ def enable_sparse_silu(model):
 
 def print_dead_neuron_stats(model):
     for i, layer in enumerate(model.model.layers):
-        dead_percentage = layer.mlp.dead_percentage * 100
-        print(f"{i} : {dead_percentage:.3f}%")
+        if isinstance(layer.mlp, MistralSparseSiluMLP):
+            dead_percentage = layer.mlp.dead_percentage * 100
+            print(f"{i} : {dead_percentage:.3f}%")

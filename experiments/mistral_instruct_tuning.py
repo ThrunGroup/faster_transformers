@@ -147,7 +147,7 @@ def find_left_of_a(np_array, a):
 
 
 # https://github.com/huggingface/trl/issues/862
-def extract_response(tokenizer, logits, labels):
+def extract_response(logits, labels):
     # eos_token_id = tokenizer.eos_token_id
     # logits = find_left_of_a(logits, eos_token_id)
     # labels = find_left_of_a(labels, eos_token_id)
@@ -162,8 +162,9 @@ def extract_response(tokenizer, logits, labels):
         for idx in range(len(labels[0])):
             if labels_row[idx] not in [
                 -100,
-                tokenizer.eos_token_id,
-                tokenizer.pad_token_id,
+                2,
+                # tokenizer.eos_token_id,
+                # tokenizer.pad_token_id,
             ]:
                 new_logits_row.append(logits_row[idx - 1])
                 new_labels_row.append(labels_row[idx])
@@ -188,7 +189,7 @@ def compute_metrics(eval_preds):
 
 
 def train(args):
-    dataset_type = "boolq"
+    dataset_type = "cola"
     if dataset_type == "cola":
         dataset = load_cola()
         formatting_func = formatting_func_cola
@@ -218,8 +219,8 @@ def train(args):
     args = TrainingArguments(
         output_dir=os.path.join("/scr/jay/ckpt", model_name),
         evaluation_strategy="steps",
-        eval_steps=20,  # early stopping counts only when eval step and save step match
-        save_steps=20,
+        eval_steps=50,  # early stopping counts only when eval step and save step match
+        # save_steps=50,
         logging_steps=5,
         save_strategy="steps",
         learning_rate=1e-5,
@@ -262,9 +263,9 @@ def train(args):
         callbacks=[early_stopping],
         use_sparse_regularization=True,
     )
-    activate_stats(model)
-    print(trainer.evaluate())
-
+    # activate_stats(model.get_base_model())
+    # print(trainer.evaluate())
+    # activate_stats(model.get_base_model())
     trainer.train()
     model = model.merge_and_unload()
     activate_stats(model)
@@ -283,6 +284,7 @@ def prepare_sparse_model():
         "mistralai/Mistral-7B-Instruct-v0.1",
     )
     apply_mistral_sparse_silu_mlp(model, model.config)
+    enable_sparse_silu(model)
 
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
 
@@ -296,19 +298,42 @@ def prepare_sparse_model():
 
     return model, tokenizer
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(description="Training script for text classification")
+    parser = argparse.ArgumentParser(
+        description="Training script for text classification"
+    )
 
-    parser.add_argument('--model_name', type=str, default="Mistral_Sparse_0.1", help='Name of the model')
-    parser.add_argument('--num_epochs', type=int, default=5, help='Number of training epochs')
-    parser.add_argument('--push_to_hub', type=bool, default=False, help='Whether to push the model to Hugging Face Hub')
-    parser.add_argument('--train_batch_size', type=int, default=8, help='Training batch size')
-    parser.add_argument('--test_batch_size', type=int, default=16, help='Testing batch size')
-    parser.add_argument('--gradient_checkpointing', type=bool, default=False, help='Use gradient checkpointing')
-
+    parser.add_argument(
+        "--model_name", type=str, default="Mistral_Sparse_0.1", help="Name of the model"
+    )
+    parser.add_argument(
+        "--num_epochs", type=int, default=5, help="Number of training epochs"
+    )
+    parser.add_argument(
+        "--push_to_hub",
+        type=bool,
+        default=False,
+        help="Whether to push the model to Hugging Face Hub",
+    )
+    parser.add_argument(
+        "--train_batch_size", type=int, default=8, help="Training batch size"
+    )
+    parser.add_argument(
+        "--test_batch_size", type=int, default=16, help="Testing batch size"
+    )
+    parser.add_argument(
+        "--gradient_checkpointing",
+        type=bool,
+        default=False,
+        help="Use gradient checkpointing",
+    )
+    parser.add_argument("--local_rank", type=int, default=0)
     # Add more arguments as needed
 
     return parser.parse_args()
+
+
 if __name__ == "__main__":
     args = parse_args()
     train(args)
