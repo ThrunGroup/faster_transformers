@@ -5,6 +5,8 @@ from transformers import (
     BitsAndBytesConfig,
     TrainingArguments,
     EarlyStoppingCallback,
+    MistralForCausalLM,
+    MistralConfig,
 )
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 from datasets import Dataset, load_dataset, load_metric
@@ -15,6 +17,8 @@ from peft import (
     prepare_model_for_kbit_training,
 )
 from evaluate import load
+from transformers.utils import is_sagemaker_mp_enabled, is_sagemaker_dp_enabled
+
 
 import torch
 import os
@@ -29,7 +33,12 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     activate_stats,
     enable_sparse_silu,
     print_dead_neuron_stats,
+    set_sparse_threshold,
+    plot_pre_act,
+    deactivate_stats,
 )
+from utils.mistral_utils import compress_mistral
+from utils.utils import print_size_of_model
 
 
 def load_cola():
@@ -188,8 +197,17 @@ def compute_metrics(eval_preds):
     return results
 
 
-def train(args):
-    dataset_type = "cola"
+def train(config):
+    model_name = config.model_name
+    num_epochs = config.num_epochs
+    train_batch_size = config.train_batch_size
+    test_batch_size = config.test_batch_size
+    gradient_checkpointing = config.gradient_checkpointing
+    push_to_hub = config.push_to_hub
+    is_debugging = config.is_debugging
+    dataset_type = config.dataset_type
+    is_plot = config.is_plot
+
     if dataset_type == "cola":
         dataset = load_cola()
         formatting_func = formatting_func_cola
@@ -199,27 +217,41 @@ def train(args):
         formatting_func = formatting_func_boolq
         create_prompt = create_boolq_prompt
 
-    model, tokenizer = prepare_sparse_model()
-    print(create_prompt(dataset["train"][0]))
+    model, tokenizer = prepare_sparse_model(is_debugging)
 
-    model_name = args.model_name
-    num_epochs = args.num_epochs
-    push_to_hub = args.push_to_hub
-    train_batch_size = args.train_batch_size
-    test_batch_size = args.test_batch_size
-    gradient_checkpointing = args.gradient_checkpointing
-    push_to_hub = args.push_to_hub
+    if is_debugging:
+        debugging_output_dir = "debugging_output"
+        os.makedirs(debugging_output_dir, exist_ok=True)
+        dataset["train"] = Dataset.from_dict(dataset["train"][:300])
+        dataset["validation"] = Dataset.from_dict(dataset["validation"][:300])
+        dataset["test"] = Dataset.from_dict(dataset["test"][:100])
 
-    os.environ["WANDB_PROJECT"] = f"Mistral 7b on {dataset_type}"
-    os.environ["WANDB_WATCH"] = "gradients"
+    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
+        wandb_run = wandb.init(
+            project=f"{model_name}_{dataset_type}",
+            name=model_name,
+            reinit=True,
+            config=config,
+        )
+    else:
+        if is_debugging:
+            wandb_run = wandb.init(
+                project=f"{model_name}_{dataset_type}_debugging",
+                name=model_name,
+                reinit=True,
+                config=config,
+            )
 
     response_template = "Response:"
     collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
 
-    args = TrainingArguments(
-        output_dir=os.path.join("/scr/jay/ckpt", model_name),
+    config = TrainingArguments(
+        output_dir=os.path.join("/scr/jay/ckpt", model_name)
+        if not is_debugging
+        else debugging_output_dir,
         evaluation_strategy="steps",
         eval_steps=50,  # early stopping counts only when eval step and save step match
+        max_steps=1,
         # save_steps=50,
         logging_steps=5,
         save_strategy="steps",
@@ -234,11 +266,11 @@ def train(args):
         report_to="wandb",
         run_name=model_name,
         gradient_accumulation_steps=2,
-        deepspeed="mistral_ds_config.json",
+        deepspeed="mistral_ds_config.json" if not is_debugging else None,
         per_device_train_batch_size=train_batch_size,
         per_device_eval_batch_size=test_batch_size,
         gradient_checkpointing=gradient_checkpointing,
-        bf16=True,
+        bf16=True if not is_debugging else False,
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
         push_to_hub=push_to_hub,
@@ -255,7 +287,7 @@ def train(args):
         tokenizer=tokenizer,
         data_collator=collator,
         formatting_func=formatting_func,
-        args=args,
+        args=config,
         train_dataset=Dataset.from_dict(dataset["train"][:]),
         eval_dataset=Dataset.from_dict(dataset["validation"][:]),
         compute_metrics=compute_metrics,
@@ -264,13 +296,36 @@ def train(args):
         use_sparse_regularization=True,
     )
     # activate_stats(model.get_base_model())
-    # print(trainer.evaluate())
-    # activate_stats(model.get_base_model())
+    # eval_result = trainer.evaluate()
+    # print(eval_result)
+    # wandb.log(eval_result)
+    # print_dead_neuron_stats(model.get_base_model())
+
+    # Collect statistics and find the threshold for given sparsity
+    activate_stats(model.get_base_model())
+    trainer.evaluate()
+    if is_plot:
+        plot_pre_act(model.get_base_model())
+    set_sparse_threshold(model.get_base_model(), 0.9)
+
+
+    # Train Model after deactivating collecting statistics
+    deactivate_stats(model.get_base_model())
     trainer.train()
     model = model.merge_and_unload()
+
+    test_dataset = trainer._prepare_non_packed_dataloader(
+        tokenizer,
+        dataset["test"],
+        None,
+        max_seq_length,
+        formatting_func=formatting_func,
+    )
     activate_stats(model)
-    print(trainer.evaluate())
+    eval_result = trainer.evaluate(test_dataset)
+    print(eval_result)
     print_dead_neuron_stats(model)
+    wandb_run.log({"Final test accuracy": eval_result["eval_accuracy"]})
 
     # Empty out gpu memory
     del trainer
@@ -279,10 +334,19 @@ def train(args):
     gc.collect()
 
 
-def prepare_sparse_model():
-    model = AutoModelForCausalLM.from_pretrained(
-        "mistralai/Mistral-7B-Instruct-v0.1",
-    )
+def prepare_sparse_model(is_debugging=False):
+    if is_debugging:
+        config = MistralConfig(
+            hidden_size=64,
+            intermediate_size=64,
+            num_hidden_layers=2,
+            # num_attention_heads=4,
+        )
+        model = MistralForCausalLM(config=config)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            "mistralai/Mistral-7B-Instruct-v0.1",
+        )
     apply_mistral_sparse_silu_mlp(model, model.config)
     enable_sparse_silu(model)
 
@@ -307,8 +371,9 @@ def parse_args():
     parser.add_argument(
         "--model_name", type=str, default="Mistral_Sparse_0.1", help="Name of the model"
     )
+    parser.add_argument("--dataset_type", type=str, default="cola", help="Dataset Type")
     parser.add_argument(
-        "--num_epochs", type=int, default=5, help="Number of training epochs"
+        "--num_epochs", type=int, default=7, help="Number of training epochs"
     )
     parser.add_argument(
         "--push_to_hub",
@@ -317,10 +382,10 @@ def parse_args():
         help="Whether to push the model to Hugging Face Hub",
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=8, help="Training batch size"
+        "--train_batch_size", type=int, default=4, help="Training batch size"
     )
     parser.add_argument(
-        "--test_batch_size", type=int, default=16, help="Testing batch size"
+        "--test_batch_size", type=int, default=4, help="Testing batch size"
     )
     parser.add_argument(
         "--gradient_checkpointing",
@@ -329,6 +394,8 @@ def parse_args():
         help="Use gradient checkpointing",
     )
     parser.add_argument("--local_rank", type=int, default=0)
+    parser.add_argument("--is_debugging", type=bool, default=False)
+    parser.add_argument("--is_plot", type=bool, default=False)
     # Add more arguments as needed
 
     return parser.parse_args()
