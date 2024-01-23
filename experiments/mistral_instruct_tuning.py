@@ -8,6 +8,7 @@ from transformers import (
     MistralForCausalLM,
     MistralConfig,
 )
+from transformers.integrations.deepspeed import deepspeed_init
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 from datasets import Dataset, load_dataset, load_metric
 from peft import (
@@ -25,6 +26,7 @@ import os
 import gc
 import wandb
 import numpy as np
+import sys
 import argparse
 
 from experiments.models.sparse_mistral.sparsification_sftt import (
@@ -303,11 +305,21 @@ def train(config):
 
     # Collect statistics and find the threshold for given sparsity
     activate_stats(model.get_base_model())
+
+    # To prevent ValueError: ValueErrorZeRO inference only makes sense with ZeRO Stage 3...
+    # trainer.deepspeed shouldn't be none. See this link, https://shorturl.at/AKOZ5.
+    # if trainer.is_deepspeed_enabled:
+    #     trainer.optimizer, trainer.lr_scheduler = deepspeed_init(
+    #         trainer, num_training_steps=sys.maxsize
+    #     )
+    #     trainer.model_wrapped = trainer._wrap_model(trainer.model)
+    #     trainer.deepspeed = trainer.model_wrapped
+    trainer.is_deepspeed_enabled = False
     trainer.evaluate()
     if is_plot:
         plot_pre_act(model.get_base_model())
     set_sparse_threshold(model.get_base_model(), 0.9)
-
+    trainer.is_deepspeed_enabled = True
 
     # Train Model after deactivating collecting statistics
     deactivate_stats(model.get_base_model())
