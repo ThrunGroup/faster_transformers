@@ -9,10 +9,11 @@ from torch.nn import functional as F
 import wandb
 import gc
 import torch
+import argparse
 
-from data.get_dataset import get_dataset
-from models.build_model import build_model
-from models.sparse_mistral.relufication import print_dead_neuron_stats
+from experiments.data.get_dataset import get_dataset
+from experiments.models.build_model import build_model
+from experiments.models.sparse_mistral.relufication import print_dead_neuron_stats
 from experiments.models.sparse_mistral.relufication import (
     SparseSiLUTrainer,
     enable_sparse_silu,
@@ -46,6 +47,7 @@ def finetune(
     use_collect_stats: bool = False,
     use_sparse_regularization: bool = False,
     use_sparse_silu: bool = False,
+    use_lora: bool = True,
 ):
     """
     Finetune the model on a dataset
@@ -76,8 +78,10 @@ def finetune(
             config=config,
         )
 
+    # @TODO: Unification of output dir
+
     training_args = TrainingArguments(
-        output_dir=os.path.join("ckpt", model_name),
+        output_dir=os.path.join("/scr/jay/ckpt", model_name),
         evaluation_strategy="steps",
         eval_steps=20,  # early stopping counts only when eval step and save step match
         save_steps=20,
@@ -94,7 +98,7 @@ def finetune(
         report_to="wandb",
         run_name=model_name,
         gradient_accumulation_steps=2,
-        deepspeed="ds_config.json",
+        deepspeed="mistral_ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
@@ -135,7 +139,10 @@ def finetune(
 
     if use_sparse_silu:
         print("Printing dead neurons")
-        print_dead_neuron_stats(model)
+        if use_lora:
+            print_dead_neuron_stats(model.get_base_model())
+        else:
+            print_dead_neuron_stats(model)
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
@@ -184,6 +191,7 @@ def create_model(
     save_stats: bool = False,
     use_sparse_silu: bool = False,
     use_sparse_regularization: bool = False,
+    use_lora: bool = True,
     **kwargs,
 ):
     """
@@ -237,6 +245,7 @@ def create_model(
         push_to_hub=kwargs["push_to_hub"],
         use_sparse_regularization=use_sparse_regularization,
         use_sparse_silu=use_sparse_silu,
+        use_lora=use_lora,
     )
 
 
@@ -260,10 +269,11 @@ if __name__ == "__main__":
                 common_args = {
                     "model_type": model_type,
                     "dataset_name": dataset_type,
-                    "num_epochs": 40,
-                    "train_batch_size": 8,
+                    "num_epochs": 20,
+                    "train_batch_size": 4,
                     "test_batch_size": 16,
                     "gradient_checkpointing": False,
+                    "use_lora": True,
                 }
 
                 # "pretrained_model_name" here means a model finetuned on a downstream task that you want to build upon
@@ -271,8 +281,18 @@ if __name__ == "__main__":
                 create_model(
                     **common_args,
                     push_to_hub=True,  # whether to save the model both in local and remote repositories
+                    use_sparse_silu=True,  # when turned on, it kills negligible swish outputs < 0.1
+                    use_sparse_regularization=True,  # for sparse silu regularization
+                    # run_name="Mistral-7B-v0.1_cola_swiglu"
+                    run_name="_sparse_swiglu_ignore_0_1",
+                    pretrained_model_name="Mistral-7B-v0.1_cola_sparse_swiglu_scratch",
+                )
+                create_model(
+                    **common_args,
+                    push_to_hub=True,  # whether to save the model both in local and remote repositories
                     use_sparse_silu=False,  # when turned on, it kills negligible swish outputs < 0.1
                     use_sparse_regularization=True,  # for sparse silu regularization
-                    run_name="_sparse_swiglu_ignore_0_1",
+                    # run_name="Mistral-7B-v0.1_cola_swiglu"
+                    run_name="Mistral_scratch_cola",
                     pretrained_model_name="Mistral-7B-v0.1_cola_sparse_swiglu_scratch",
                 )

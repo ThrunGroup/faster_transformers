@@ -1,3 +1,5 @@
+import os.path
+
 from transformers import (
     AutoConfig,
     AutoModelForSequenceClassification,
@@ -74,6 +76,7 @@ def build_model(
     expert_size: int = 0,
     pretrained_model_name: str = None,
     use_sparse_silu: bool = False,
+    use_lora: bool = True,
 ):
     print("Loading the model...")
     config = AutoConfig.from_pretrained(model_type)
@@ -87,23 +90,16 @@ def build_model(
         model = set_up_model_for_lora(model)
 
         # As there is a bug with loading a score head from huggingface repository,
-        # load it from a local file
-        score_dict = torch.load(f"scores/{pretrained_model_name}.pt")
-        model.score.load_state_dict(score_dict)
+        # load it from a local file if it exists
+        score_path = f"scores/{pretrained_model_name}.pt"
+        if os.path.exists(score_path):
+            score_dict = torch.load(f"scores/{pretrained_model_name}.pt")
+            model.score.load_state_dict(score_dict)
     else:
         # Load a pretrained model not finetuned on a specific downstream task
         model = AutoModelForSequenceClassification.from_pretrained(
             model_type, config=config
         )
-        print("Applying LoRA...")
-        model = get_lora_model(model)
-        print(model)
-
-        if not isinstance(model.model.score, nn.Linear):
-            print("Changing model score")
-            model.model.score = model.model.score.original_module
-            print("New score head: ")
-            print(model.model.score)
 
         # You can optionally uncomment this block
         # to load a finetuned score head for faster finetuning
@@ -115,6 +111,17 @@ def build_model(
     # By default, it behaves exactly as a normal MLP layer unless
     # you turn on use_sparse_silu in `create_models.py`
     apply_mistral_sparse_silu_mlp(model, config)
+
+    if use_lora:
+        print("Applying LoRA...")
+        model = get_lora_model(model)
+    # print(model)
+    #
+    # if not isinstance(model.model.score, nn.Linear):
+    #     print("Changing model score")
+    #     model.model.score = model.model.score.original_module
+    #     print("New score head: ")
+    #     print(model.model.score)
 
     return model
 
