@@ -258,6 +258,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     train_batch_size = exp_config.train_batch_size
     test_batch_size = exp_config.test_batch_size
     gradient_checkpointing = exp_config.gradient_checkpointing
+    use_gradual_sparsification = exp_config.gradual_sparsification
+    num_warmup_steps = exp_config.num_warmup_steps
+    increment_ratio = exp_config.increment_ratio
     push_to_hub = exp_config.push_to_hub
     is_debugging = exp_config.is_debugging
     dataset_type = exp_config.dataset_type
@@ -343,6 +346,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         )
         if is_debugging:
             run_name += "_debugging"
+        if use_gradual_sparsification:
+            run_name += "_warmup"
         run_name += "_" + get_datetime(True)
         wandb.name = run_name
 
@@ -398,7 +403,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     early_stopping = EarlyStoppingCallback(early_stopping_patience=3)
     sparsification_scheduler = GradualSparsificationScheduler(
-        num_warmup_steps=2, increment_ratio=0.5
+        num_warmup_steps=num_warmup_steps,
+        increment_ratio=increment_ratio,
+        is_enabled=use_gradual_sparsification,
     )
     trainer = SparseSFTTTrainer(
         model=model,
@@ -605,6 +612,18 @@ def parse_args():
         action="store_true",
         default=False,
         help="Whether to do gradually increase the threshold for killing neurons",
+    )
+    parser.add_argument(
+        "--num_warmup_steps",
+        action="store_true",
+        default=40,
+        help="Number of training steps required to reach the dead threshold",
+    )
+    parser.add_argument(
+        "--increment_ratio",
+        action="store_true",
+        default=0.5,
+        help="By how much to increase the dead threshold",
     )
     parser.add_argument(
         "--print_act_stats",

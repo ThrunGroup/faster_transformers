@@ -245,6 +245,7 @@ class GradualSparsificationScheduler(TrainerCallback):
         self,
         num_warmup_steps=40,
         increment_ratio=0.5,
+        is_enabled: bool = False,
     ):
         """Scheduler for gradually increasing a dead threshold until it reaches the desired threshold.
 
@@ -255,8 +256,12 @@ class GradualSparsificationScheduler(TrainerCallback):
         self.num_warmup_steps = num_warmup_steps
         self.increment_ratio = increment_ratio
         self.step_size = int(num_warmup_steps * increment_ratio)
+        self.is_enabled = is_enabled
 
     def on_step_end(self, args, state, control, **kwargs):
+        if not self.is_enabled:
+            return
+
         model = kwargs["model"]
         current_dead_threshold = 0
 
