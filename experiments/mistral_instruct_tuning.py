@@ -19,6 +19,9 @@ from peft import (
 )
 from evaluate import load
 from transformers.utils import is_sagemaker_mp_enabled, is_sagemaker_dp_enabled
+import logging
+deepspeed_logger = logging.getLogger("deepspeed")
+deepspeed_logger.setLevel(logging.ERROR)
 
 
 import torch
@@ -269,6 +272,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     debugging_output_dir = ""
 
+    print("Loading a dataset...")
     if dataset_type == "cola":
         dataset = load_glue(dataset_type, seed=seed)
         formatting_func = formatting_func_cola
