@@ -5,9 +5,7 @@ from datetime import datetime
 
 
 def get_sweep_config(
-    dataset_type: str = "cola",
-    train_batch_size: int = 16,
-    eval_batch_size: int = 32,
+    config
 ):
     sweep_config = {
         "method": "random",
@@ -15,13 +13,13 @@ def get_sweep_config(
         "parameters": {
             "seed": {"distribution": "constant", "value": 0},
             "model_name": {"distribution": "constant", "value": "Mistral_Sparse_0.1"},
-            "dataset_type": {"distribution": "constant", "value": dataset_type},
+            "dataset_type": {"distribution": "constant", "value": config.dataset_type},
             "output_dir": {"distribution": "constant", "value": "/scr/jay/ckpt"},
-            "num_epochs": {"distribution": "constant", "value": 8},
+            "num_epochs": {"distribution": "constant", "value": config.num_epochs},
             "push_to_hub": {"distribution": "constant", "value": False},
             "model_save": {"distribution": "constant", "value": False},
-            "train_batch_size": {"distribution": "constant", "value": 8},
-            "test_batch_size": {"distribution": "constant", "value": 16},
+            "train_batch_size": {"distribution": "constant", "value": config.train_batch_size},
+            "test_batch_size": {"distribution": "constant", "value": config.test_batch_size},
             "gradient_checkpointing": {"distribution": "constant", "value": False},
             "local_rank": {"distribution": "constant", "value": 0},
             "is_debugging": {"distribution": "constant", "value": False},
@@ -48,10 +46,14 @@ if __name__ == "__main__":
         description="Hyperparameter sweep script for MistralModel"
     )
     parser.add_argument("--project_name", type=str, default="Sweep_SparseMistralMLP")
+    parser.add_argument("--num_epochs", type=int, default=8)
+    parser.add_argument("--train_batch_size", type=int, default=16)
+    parser.add_argument("--test_batch_size", type=int, default=32)
     parser.add_argument("--dataset_type", type=str, default="cola")
     parser.add_argument("--local_rank", type=int, default=0)  # To run deepspeed
     config = parser.parse_args()
     project_name = config.project_name
+    project_name += f"_{config.dataset_type}"
     if is_running_deepspeed():
         project_name += "_deepspeed"
 
@@ -66,4 +68,4 @@ if __name__ == "__main__":
     def wrapper_for_train(exp_config=None):
         return train(exp_config=exp_config, use_wandb=True, use_sweep=True)
 
-    wandb.agent(sweep_id, wrapper_for_train, count=10)
+    wandb.agent(sweep_id, wrapper_for_train, count=16)

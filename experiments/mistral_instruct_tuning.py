@@ -52,8 +52,13 @@ from utils.constants import MISTRAL_YES_ID, MISTRAL_NO_ID
 
 
 def load_glue(data_type: str, seed: int = 0):
-    # Load CoLA dataset
-    dataset = load_dataset("glue", data_type)
+    # Load = dataset
+    if data_type == "cola":
+        dataset = load_dataset("glue", data_type)
+    elif data_type == "boolq":
+        dataset = load_dataset("super_glue", data_type)
+    else:
+        raise NotImplementedError(f"{data_type} is not implemented.")
 
     # Split the training dataset into 85% train and 15% new validation
     train_dataset = dataset["train"].train_test_split(test_size=0.15, seed=seed)
@@ -284,15 +289,25 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             "attention_mask": outputs["attention_mask"],
         }
 
-    # Deepspeed
+    # Roundabout way to avoid error
     test_dataset = dataset["test"].map(
+        tokenize,
+        batched=True,
+        remove_columns=dataset["test"].column_names,
+        num_proc=None,
+        batch_size=test_batch_size,
+    )
+    sampled_train_dataset = Dataset.from_dict(dataset["train"][:1000])
+
+    # Use only 1000 samples of training dataset to collect statistics
+    if exp_config.set_sparsity_aware_threshold:
+        sampled_train_dataset = sampled_train_dataset.map(
             tokenize,
             batched=True,
-            remove_columns=dataset["test"].column_names ,
+            remove_columns=sampled_train_dataset.column_names,
             num_proc=None,
-            batch_size=test_batch_size,
+            batch_size=train_batch_size,
         )
-
 
     if is_debugging:
         debugging_output_dir = "debugging_output"
@@ -393,16 +408,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         else:
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
             trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
-
-            # Use only 1000 samples of training dataset to collect statistics
-            train_dataset = trainer._prepare_non_packed_dataloader(
-                tokenizer,
-                Dataset.from_dict(dataset["train"][:1000]),
-                None,
-                max_seq_length,
-                formatting_func=formatting_func,
-            )
-            trainer.evaluate(train_dataset)
+            trainer.evaluate(sampled_train_dataset)
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(model.get_base_model(), act_hist_path)
 
