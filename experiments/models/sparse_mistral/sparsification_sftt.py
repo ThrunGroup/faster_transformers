@@ -264,6 +264,7 @@ class GradualSparsificationScheduler(TrainerCallback):
             for module in model.modules():
                 if isinstance(module, MistralSparseSiluMLP):
                     desired_dead_threshold = module.dead_threshold
+                    print(desired_dead_threshold)
                     current_dead_threshold = module.current_dead_threshold
                     current_dead_threshold += (
                         self.increment_ratio * desired_dead_threshold
