@@ -414,9 +414,15 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     # Collect statistics and find the threshold for given sparsity
     if exp_config.set_sparsity_aware_threshold:
         if is_debugging:
-            act_hist_path = "/tmp/pre_finetune__act_hist.pt"
+            # act_hist_path = "/tmp/pre_finetune__act_hist.pt"
+            act_hist_path = (
+                f"histograms/debugging/{model_name}/{dataset_type}_act_hist.pt"
+            )
         else:
-            act_hist_path = f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist.pt"
+            # act_hist_path = f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist.pt"
+            act_hist_path = (
+                f"histograms/{model_name}/{dataset_type}_act_hist.pt"
+            )
 
         activate_stats(model.get_base_model())
         if os.path.exists(act_hist_path):
