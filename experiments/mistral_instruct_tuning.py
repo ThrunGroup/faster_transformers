@@ -615,7 +615,7 @@ def parse_args():
     )
     parser.add_argument(
         "--num_warmup_steps",
-        type=float,
+        type=int,
         default=40,
         help="Number of training steps required to reach the dead threshold",
     )
