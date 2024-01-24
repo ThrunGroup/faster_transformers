@@ -4,22 +4,27 @@ from experiments.mistral_instruct_tuning import train, is_running_deepspeed
 from datetime import datetime
 
 
-def get_sweep_config(
-    config
-):
+def get_sweep_config(config):
     sweep_config = {
         "method": "random",
         "metric": {"name": "test_accuracy", "goal": "maximize"},
         "parameters": {
             "seed": {"distribution": "constant", "value": 0},
+            "use_wandb": {"distribution": "constant", "value": True},
             "model_name": {"distribution": "constant", "value": "Mistral_Sparse_0.1"},
             "dataset_type": {"distribution": "constant", "value": config.dataset_type},
             "output_dir": {"distribution": "constant", "value": "/scr/jay/ckpt"},
             "num_epochs": {"distribution": "constant", "value": config.num_epochs},
             "push_to_hub": {"distribution": "constant", "value": False},
             "model_save": {"distribution": "constant", "value": False},
-            "train_batch_size": {"distribution": "constant", "value": config.train_batch_size},
-            "test_batch_size": {"distribution": "constant", "value": config.test_batch_size},
+            "train_batch_size": {
+                "distribution": "constant",
+                "value": config.train_batch_size,
+            },
+            "test_batch_size": {
+                "distribution": "constant",
+                "value": config.test_batch_size,
+            },
             "gradient_checkpointing": {"distribution": "constant", "value": False},
             "local_rank": {"distribution": "constant", "value": 0},
             "is_debugging": {"distribution": "constant", "value": False},

@@ -28,6 +28,7 @@ import wandb
 import numpy as np
 import sys
 import argparse
+import time
 
 from experiments.models.sparse_mistral.sparsification_sftt import (
     SparseSFTTTrainer,
@@ -227,16 +228,18 @@ def compute_metrics(eval_preds):
 
 
 def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
+    print(f"Using wandb: {use_wandb}")
     if use_wandb:
         if is_running_deepspeed():
             if int(os.environ["LOCAL_RANK"]) == 0:
-                wandb_run = wandb.init()
+                wandb.init()
             if use_sweep:
                 exp_config = wandb.config
             else:
                 wandb.config = exp_config
+            time.sleep(15)
         else:
-            wandb_run = wandb.init()
+            wandb.init()
             if use_sweep:
                 exp_config = wandb.config
             else:
@@ -467,6 +470,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     gc.collect()
     torch.cuda.empty_cache()
     gc.collect()
+
+    if use_wandb:
+        wandb.finish()
 
 
 def prepare_sparse_model(
