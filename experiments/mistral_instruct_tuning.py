@@ -51,25 +51,12 @@ from utils.utils import (
 from utils.constants import MISTRAL_YES_ID, MISTRAL_NO_ID
 
 
-def load_cola():
+def load_glue(data_type: str, seed: int = 0):
     # Load CoLA dataset
-    dataset = load_dataset("glue", "cola")
+    dataset = load_dataset("glue", data_type)
 
     # Split the training dataset into 85% train and 15% new validation
-    train_dataset = dataset["train"].train_test_split(test_size=0.15)
-
-    # Set the new splits
-    dataset["train"] = train_dataset["train"]
-    dataset["validation"] = train_dataset["test"]
-    dataset["test"] = dataset["validation"]  # Set original validation
-    return dataset
-
-
-def load_boolq():
-    dataset = load_dataset("super_glue", "boolq")
-
-    # Split the training dataset into 85% train and 15% new validation
-    train_dataset = dataset["train"].train_test_split(test_size=0.15)
+    train_dataset = dataset["train"].train_test_split(test_size=0.15, seed=seed)
 
     # Set the new splits
     dataset["train"] = train_dataset["train"]
@@ -269,15 +256,43 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     debugging_output_dir = ""
 
     if dataset_type == "cola":
-        dataset = load_cola()
+        dataset = load_glue(dataset_type, seed=seed)
         formatting_func = formatting_func_cola
         create_prompt = create_cola_prompt
     elif dataset_type == "boolq":
-        dataset = load_boolq()
+        dataset = load_glue(dataset_type, seed=seed)
         formatting_func = formatting_func_boolq
         create_prompt = create_boolq_prompt
 
-    model, tokenizer = prepare_sparse_model(is_debugging, exp_config.use_sparse_model, exp_config.use_sparse_regularization)
+    model, tokenizer = prepare_sparse_model(
+        is_debugging, exp_config.use_sparse_model, exp_config.use_sparse_regularization
+    )
+    max_seq_length = 1024
+
+    def tokenize(element):
+        outputs = tokenizer(
+            formatting_func(element),
+            add_special_tokens=True,
+            truncation=True,
+            padding=False,
+            max_length=max_seq_length,
+            return_overflowing_tokens=False,
+            return_length=False,
+        )
+        return {
+            "input_ids": outputs["input_ids"],
+            "attention_mask": outputs["attention_mask"],
+        }
+
+    # Deepspeed
+    test_dataset = dataset["test"].map(
+            tokenize,
+            batched=True,
+            remove_columns=dataset["test"].column_names ,
+            num_proc=None,
+            batch_size=test_batch_size,
+        )
+
 
     if is_debugging:
         debugging_output_dir = "debugging_output"
@@ -346,7 +361,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         data_seed=seed,
     )
 
-    max_seq_length = 1024
     early_stopping = EarlyStoppingCallback(early_stopping_patience=3)
     trainer = SparseSFTTTrainer(
         model=model,
@@ -408,13 +422,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     # Evaluate on test dataset
     model = model.merge_and_unload()
-    test_dataset = trainer._prepare_non_packed_dataloader(
-        tokenizer,
-        dataset["test"],
-        None,
-        max_seq_length,
-        formatting_func=formatting_func,
-    )
 
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
@@ -474,7 +481,9 @@ def prepare_sparse_model(
             "mistralai/Mistral-7B-Instruct-v0.1",
         )
     if use_sparse_model:
-        apply_mistral_sparse_silu_mlp(model, model.config, use_sparse_regularization=use_sparse_regularization)
+        apply_mistral_sparse_silu_mlp(
+            model, model.config, use_sparse_regularization=use_sparse_regularization
+        )
         enable_sparse_silu(model)
 
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
@@ -509,7 +518,7 @@ def parse_args():
         "--output_dir", type=str, default="/scr/jay/ckpt", help="Output Directory"
     )
     parser.add_argument(
-        "--num_epochs", type=int, default=7, help="Number of training epochs"
+        "--num_epochs", type=int, default=8, help="Number of training epochs"
     )
     parser.add_argument(
         "--push_to_hub",
@@ -519,7 +528,7 @@ def parse_args():
     )
     parser.add_argument("--model_save", type=bool, default=False)
     parser.add_argument(
-        "--train_batch_size", type=int, default=16, help="Training batch size"
+        "--train_batch_size", type=int, default=8, help="Training batch size"
     )
     parser.add_argument(
         "--test_batch_size", type=int, default=32, help="Testing batch size"

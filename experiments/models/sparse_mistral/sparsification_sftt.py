@@ -180,7 +180,7 @@ class MistralSparseSiluMLP(MistralMLP):
         )[0]
         self.t += time.time() - start_time
         if self.visit_counts % 30 == 0:
-            print(self.t)
+            print(f"Time taken to collect stats: {self.t}s.")
 
     def forward(self, x):
         """
