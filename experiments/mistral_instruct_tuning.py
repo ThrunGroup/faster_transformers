@@ -482,9 +482,15 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     if exp_config.print_act_stats:
         if is_debugging:
-            act_hist_path = "/tmp/post_finetune__act_hist.pt"
+            # act_hist_path = "/tmp/post_finetune__act_hist.pt"
+            act_hist_path = (
+                f"histograms/debugging/{model_name}/{dataset_type}_act_hist.pt"
+            )
         else:
-            act_hist_path = "/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
+            # act_hist_path = "/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
+            act_hist_path = (
+                f"histograms/{model_name}/{dataset_type}_act_hist.pt"
+            )
         save_act_hist(model, act_hist_path)
         plot_act(model)
 
@@ -573,7 +579,8 @@ def parse_args():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="/scr/jay/ckpt",
+        # default="/scr/jay/ckpt",
+        default="ckpt",
         help="Output Directory",
     )
     parser.add_argument(
