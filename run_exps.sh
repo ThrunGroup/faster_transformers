@@ -1,4 +1,4 @@
 #!/bin/bash
 
-python experiments/mistral_instruct_tuning.py --is_debugging True --set_sparsity_aware_threshold True \
---print_act_stats True --is_plot True
+deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --targeted_sparsity 0.9 --print_sparsity
+deepspeed experiments/mistral_instruct_tuning.py --use_wandb

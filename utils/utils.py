@@ -28,7 +28,10 @@ def is_mainprocess():
     return int(os.environ["LOCAL_RANK"]) == 0
 
 
-def get_datetime():
+def get_datetime(only_date: bool = False):
     now = datetime.now()
-    return now.strftime("%Y-%m-%d %Hh%Mm%Ss")
+    if not only_date:
+        return now.strftime("%Y-%m-%d %Hh%Mm%Ss")
+    else:
+        return now.strftime("%Y-%m-%d")
 

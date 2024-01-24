@@ -48,16 +48,33 @@ from utils.utils import (
     is_mainprocess,
     get_datetime,
 )
+from utils.constants import MISTRAL_YES_ID, MISTRAL_NO_ID
 
 
 def load_cola():
     # Load CoLA dataset
     dataset = load_dataset("glue", "cola")
+
+    # Split the training dataset into 85% train and 15% new validation
+    train_dataset = dataset["train"].train_test_split(test_size=0.15)
+
+    # Set the new splits
+    dataset["train"] = train_dataset["train"]
+    dataset["validation"] = train_dataset["test"]
+    dataset["test"] = dataset["validation"]  # Set original validation
     return dataset
 
 
 def load_boolq():
     dataset = load_dataset("super_glue", "boolq")
+
+    # Split the training dataset into 85% train and 15% new validation
+    train_dataset = dataset["train"].train_test_split(test_size=0.15)
+
+    # Set the new splits
+    dataset["train"] = train_dataset["train"]
+    dataset["validation"] = train_dataset["test"]
+    dataset["test"] = dataset["validation"]  # Set original validation
     return dataset
 
 
@@ -139,12 +156,6 @@ def formatting_func_boolq(samples):
     return formatted_prompts
 
 
-def preprocess_logits_for_metrics(logits, labels):
-    if isinstance(logits, tuple):
-        logits = logits[0]
-    return logits.argmax(dim=-1)
-
-
 def find_left_of_a(np_array, a):
     if not isinstance(np_array, np.ndarray):
         raise ValueError("Input must be a 2D NumPy array.")
@@ -191,6 +202,23 @@ def extract_response(logits, labels):
             new_labels.append(new_labels_row)
 
     return np.array(new_logits, dtype=int), np.array(new_labels, dtype=int)
+
+
+def preprocess_logits_for_metrics(logits, labels):
+    if isinstance(logits, tuple):
+        logits = logits[0]
+
+    # Extract values at these positions
+    values_at_yes = logits[..., MISTRAL_YES_ID]
+    values_at_no = logits[..., MISTRAL_NO_ID]
+
+    # Compare and get the index where the value is larger
+    # If the value at c1 is greater, return c1; otherwise, return c2
+    max_value_indices = torch.where(
+        values_at_yes > values_at_no, MISTRAL_YES_ID, MISTRAL_NO_ID
+    )
+
+    return max_value_indices
 
 
 def compute_metrics(eval_preds):
@@ -249,14 +277,14 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         formatting_func = formatting_func_boolq
         create_prompt = create_boolq_prompt
 
-    model, tokenizer = prepare_sparse_model(is_debugging, exp_config.use_sparse_model)
+    model, tokenizer = prepare_sparse_model(is_debugging, exp_config.use_sparse_model, exp_config.use_sparse_regularization)
 
     if is_debugging:
         debugging_output_dir = "debugging_output"
         os.makedirs(debugging_output_dir, exist_ok=True)
         dataset["train"] = Dataset.from_dict(dataset["train"][:300])
         dataset["validation"] = Dataset.from_dict(dataset["validation"][:300])
-        dataset["test"] = Dataset.from_dict(dataset["test"][:100])
+        dataset["test"] = Dataset.from_dict(dataset["test"][:])
 
     if not is_debugging:
         output_dir = os.path.join(exp_config.output_dir, model_name)
@@ -267,17 +295,20 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
         if is_debugging:
             run_name += "_debugging"
+        run_name += "_" + get_datetime(True)
         wandb.name = run_name
 
         if is_running_deepspeed():
             if is_mainprocess():
                 wandb_run = wandb.init(
+                    project=f"{model_name}_{dataset_type}",
                     name=run_name,
                     reinit=True,
                     config=exp_config,
                 )
         else:
             wandb_run = wandb.init(
+                project=f"{model_name}_{dataset_type}",
                 name=run_name,
                 reinit=True,
                 config=exp_config,
@@ -301,8 +332,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
-        report_to="wandb",
-        run_name=run_name,
+        # report_to="wandb" if use_wandb else None,
         gradient_accumulation_steps=2,
         deepspeed="mistral_ds_config.json" if not is_debugging else None,
         per_device_train_batch_size=train_batch_size,
@@ -333,11 +363,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         callbacks=[early_stopping],
         use_sparse_regularization=exp_config.use_sparse_regularization,
     )
-    # activate_stats(model.get_base_model())
-    # eval_result = trainer.evaluate()
-    # print(eval_result)
-    # wandb.log(eval_result)
-    # print_dead_neuron_stats(model.get_base_model())
 
     # Collect statistics and find the threshold for given sparsity
     if exp_config.set_sparsity_aware_threshold:
@@ -371,7 +396,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     # Plot activation histograms
     if is_plot:
-        plot_act(model.get_base_model())
+        if is_running_deepspeed():
+            if is_mainprocess():
+                plot_act(model.get_base_model())
+        else:
+            plot_act(model.get_base_model())
 
     # Train Model after deactivating collecting statistics
     deactivate_stats(model.get_base_model())
@@ -410,11 +439,12 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         save_act_hist(model, act_hist_path)
         plot_act(model)
 
-    if is_running_deepspeed():
-        if is_mainprocess():
+    if use_wandb:
+        if is_running_deepspeed():
+            if is_mainprocess():
+                wandb.log(log_dict)
+        else:
             wandb.log(log_dict)
-    else:
-        wandb.log(log_dict)
 
     if exp_config.model_save:
         trainer.save_model()
@@ -429,6 +459,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 def prepare_sparse_model(
     is_debugging=False,
     use_sparse_model: bool = True,
+    use_sparse_regularization: bool = False,
 ):
     if is_debugging:
         config = MistralConfig(
@@ -443,7 +474,7 @@ def prepare_sparse_model(
             "mistralai/Mistral-7B-Instruct-v0.1",
         )
     if use_sparse_model:
-        apply_mistral_sparse_silu_mlp(model, model.config)
+        apply_mistral_sparse_silu_mlp(model, model.config, use_sparse_regularization=use_sparse_regularization)
         enable_sparse_silu(model)
 
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
@@ -500,24 +531,24 @@ def parse_args():
         help="Use gradient checkpointing",
     )
     parser.add_argument("--local_rank", type=int, default=0)
-    parser.add_argument("--is_debugging", type=bool, default=False)
-    parser.add_argument("--is_plot", type=bool, default=False)
+    parser.add_argument("--is_debugging", action="store_true", default=False)
+    parser.add_argument("--is_plot", action="store_true", default=False)
     parser.add_argument(
         "--set_sparsity_aware_threshold",
-        type=bool,
+        action="store_true",
         default=False,
         help="Set sparsity aware threshold",
     )
     parser.add_argument(
         "--print_act_stats",
-        type=bool,
+        action="store_true",
         default=False,
         help="Print pre/post-activation statistics.",
     )
     parser.add_argument(
         "--print_sparsity",
-        type=bool,
-        default=True,
+        action="store_true",
+        default=False,
         help="Print Sparsity of the mlp layers for test dataset.",
     )
     parser.add_argument(
@@ -528,22 +559,27 @@ def parse_args():
     )
     parser.add_argument(
         "--use_sparse_model",
-        type=bool,
-        default=True,
+        action="store_true",
+        default=False,
         help="Whether to use sparse Mistral model",
     )
     parser.add_argument(
         "--use_sparse_regularization",
-        type=bool,
-        default=True,
+        action="store_true",
+        default=False,
         help="Whether to use sparse regularization",
     )
-
-    # Add more arguments as needed
+    parser.add_argument(
+        "--use_wandb",
+        action="store_true",
+        default=False,
+        help="Whether to log in wandb",
+    )
 
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    train(args)
+    print(args)
+    train(args, use_wandb=args.use_wandb)

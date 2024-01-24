@@ -139,7 +139,7 @@ class MistralSparseSiluMLP(MistralMLP):
 
         # Hyperparameters to tune
         self.dead_threshold = kwargs.pop("dead_threshold", 0)
-        self.use_regularization_loss = kwargs.pop("use_regularization_loss", True)
+        self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", True)
         self.regularization_type = kwargs.pop(
             "regularization_type", "L1 regularization"
         )
@@ -206,7 +206,7 @@ class MistralSparseSiluMLP(MistralMLP):
             post_act[dead_neurons] = 0
 
         out = self.down_proj(post_act * self.up_proj(x))
-        if self.use_regularization_loss:
+        if self.use_sparse_regularization:
             if self.regularization_type == "L1 regularization":
                 self.activation_norm = torch.abs(post_act)[
                     post_act < self.regularization_threshold
@@ -219,14 +219,20 @@ class MistralSparseSiluMLP(MistralMLP):
         return out
 
 
-def apply_mistral_sparse_silu_mlp(model, config):
+def apply_mistral_sparse_silu_mlp(
+    model,
+    config,
+    use_sparse_regularization: bool = False,
+):
     # counts = 0
     for layer in model.model.layers:
         # counts += 1
         # if counts < 4:
         #     continue
         original_mlp = layer.mlp
-        new_mlp = MistralSparseSiluMLP(config)
+        new_mlp = MistralSparseSiluMLP(
+            config, use_sparse_regularization=use_sparse_regularization
+        )
         new_mlp.gate_proj = original_mlp.gate_proj
         new_mlp.up_proj = original_mlp.up_proj
         new_mlp.down_proj = original_mlp.down_proj
@@ -295,6 +301,9 @@ def set_sparse_threshold(model, sparsity_level: float):
             layer.mlp.dead_threshold = get_threshold(
                 layer.mlp.histogram_bins, layer.mlp.post_act_hist_counts, sparsity_level
             )
+            layer.mlp.regularization_threshold = (
+                layer.mlp.dead_threshold * 1.2
+            )  # TODO: find better param
 
 
 def plot_histogram(
@@ -308,7 +317,8 @@ def plot_histogram(
     plt.ylabel("Frequency")
     os.makedirs("figures", exist_ok=True)
     plt.savefig(f"figures/{title}.png")
-    plt.show()
+    # plt.show()
+    plt.clf()
 
 
 def plot_act(model):
