@@ -260,7 +260,7 @@ class GradualSparsificationScheduler(TrainerCallback):
 
     def on_step_end(self, args, state, control, **kwargs):
         if not self.is_enabled:
-            if state.global_step == 0:
+            if state.global_step <= 0:
                 print("NO WARM UP")
                 for module in model.modules():
                     if isinstance(module, MistralSparseSiluMLP):
