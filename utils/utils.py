@@ -1,7 +1,7 @@
 import torch
 import os
 import socket
-
+from datetime import datetime
 
 def print_size_of_model(model):
     torch.save(model.state_dict(), "temp.p")
@@ -18,3 +18,17 @@ def find_free_port():
 def set_master_port():
     free_port = find_free_port()
     os.environ["MASTER_PORT"] = str(free_port)
+
+
+def is_running_deepspeed():
+    return "LOCAL_RANK" in os.environ
+
+
+def is_mainprocess():
+    return int(os.environ["LOCAL_RANK"]) == 0
+
+
+def get_datetime():
+    now = datetime.now()
+    return now.strftime("%Y-%m-%d %Hh%Mm%Ss")
+

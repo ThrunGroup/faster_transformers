@@ -36,11 +36,18 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     enable_sparse_silu,
     print_dead_neuron_stats,
     set_sparse_threshold,
-    plot_pre_act,
+    plot_act,
     deactivate_stats,
+    load_act_hist,
+    save_act_hist,
 )
 from utils.mistral_utils import compress_mistral
-from utils.utils import print_size_of_model
+from utils.utils import (
+    print_size_of_model,
+    is_running_deepspeed,
+    is_mainprocess,
+    get_datetime,
+)
 
 
 def load_cola():
@@ -199,16 +206,39 @@ def compute_metrics(eval_preds):
     return results
 
 
-def train(config):
-    model_name = config.model_name
-    num_epochs = config.num_epochs
-    train_batch_size = config.train_batch_size
-    test_batch_size = config.test_batch_size
-    gradient_checkpointing = config.gradient_checkpointing
-    push_to_hub = config.push_to_hub
-    is_debugging = config.is_debugging
-    dataset_type = config.dataset_type
-    is_plot = config.is_plot
+def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
+    if use_wandb:
+        if is_running_deepspeed():
+            if int(os.environ["LOCAL_RANK"]) == 0:
+                wandb_run = wandb.init()
+            if use_sweep:
+                exp_config = wandb.config
+            else:
+                wandb.config = exp_config
+        else:
+            wandb_run = wandb.init()
+            if use_sweep:
+                exp_config = wandb.config
+            else:
+                wandb.config = exp_config
+
+    model_name = exp_config.model_name
+    num_epochs = exp_config.num_epochs
+    train_batch_size = exp_config.train_batch_size
+    test_batch_size = exp_config.test_batch_size
+    gradient_checkpointing = exp_config.gradient_checkpointing
+    push_to_hub = exp_config.push_to_hub
+    is_debugging = exp_config.is_debugging
+    dataset_type = exp_config.dataset_type
+    is_plot = exp_config.is_plot
+    seed = exp_config.seed
+
+    if not exp_config.use_sparse_model:
+        exp_config.use_sparse_regularization = (
+            exp_config.print_sparsity
+        ) = exp_config.print_act_stats = exp_config.set_sparsity_aware_threshold = False
+
+    debugging_output_dir = ""
 
     if dataset_type == "cola":
         dataset = load_cola()
@@ -219,7 +249,7 @@ def train(config):
         formatting_func = formatting_func_boolq
         create_prompt = create_boolq_prompt
 
-    model, tokenizer = prepare_sparse_model(is_debugging)
+    model, tokenizer = prepare_sparse_model(is_debugging, exp_config.use_sparse_model)
 
     if is_debugging:
         debugging_output_dir = "debugging_output"
@@ -228,32 +258,38 @@ def train(config):
         dataset["validation"] = Dataset.from_dict(dataset["validation"][:300])
         dataset["test"] = Dataset.from_dict(dataset["test"][:100])
 
-    if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
-        wandb_run = wandb.init(
-            project=f"{model_name}_{dataset_type}",
-            name=model_name,
-            reinit=True,
-            config=config,
-        )
+    if not is_debugging:
+        output_dir = os.path.join(exp_config.output_dir, model_name)
     else:
+        output_dir = debugging_output_dir
+
+    if use_wandb:
+        run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
         if is_debugging:
+            run_name += "_debugging"
+        wandb.name = run_name
+
+        if is_running_deepspeed():
+            if is_mainprocess():
+                wandb_run = wandb.init(
+                    name=run_name,
+                    reinit=True,
+                    config=exp_config,
+                )
+        else:
             wandb_run = wandb.init(
-                project=f"{model_name}_{dataset_type}_debugging",
-                name=model_name,
+                name=run_name,
                 reinit=True,
-                config=config,
+                config=exp_config,
             )
 
     response_template = "Response:"
     collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
 
-    config = TrainingArguments(
-        output_dir=os.path.join("/scr/jay/ckpt", model_name)
-        if not is_debugging
-        else debugging_output_dir,
+    trainer_config = TrainingArguments(
+        output_dir=output_dir,
         evaluation_strategy="steps",
         eval_steps=50,  # early stopping counts only when eval step and save step match
-        max_steps=1,
         # save_steps=50,
         logging_steps=5,
         save_strategy="steps",
@@ -266,7 +302,7 @@ def train(config):
         metric_for_best_model="eval_loss",
         greater_is_better=False,
         report_to="wandb",
-        run_name=model_name,
+        run_name=run_name,
         gradient_accumulation_steps=2,
         deepspeed="mistral_ds_config.json" if not is_debugging else None,
         per_device_train_batch_size=train_batch_size,
@@ -276,8 +312,8 @@ def train(config):
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
         push_to_hub=push_to_hub,
-        seed=2,
-        data_seed=1,
+        seed=seed,
+        data_seed=seed,
     )
 
     max_seq_length = 1024
@@ -289,13 +325,13 @@ def train(config):
         tokenizer=tokenizer,
         data_collator=collator,
         formatting_func=formatting_func,
-        args=config,
+        args=trainer_config,
         train_dataset=Dataset.from_dict(dataset["train"][:]),
         eval_dataset=Dataset.from_dict(dataset["validation"][:]),
         compute_metrics=compute_metrics,
         preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         callbacks=[early_stopping],
-        use_sparse_regularization=True,
+        use_sparse_regularization=exp_config.use_sparse_regularization,
     )
     # activate_stats(model.get_base_model())
     # eval_result = trainer.evaluate()
@@ -304,28 +340,45 @@ def train(config):
     # print_dead_neuron_stats(model.get_base_model())
 
     # Collect statistics and find the threshold for given sparsity
-    activate_stats(model.get_base_model())
+    if exp_config.set_sparsity_aware_threshold:
+        if is_debugging:
+            act_hist_path = "/tmp/pre_finetune__act_hist.pt"
+        else:
+            act_hist_path = (
+                f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist.pt"
+            )
 
-    # To prevent ValueError: ValueErrorZeRO inference only makes sense with ZeRO Stage 3...
-    # trainer.deepspeed shouldn't be none. See this link, https://shorturl.at/AKOZ5.
-    # if trainer.is_deepspeed_enabled:
-    #     trainer.optimizer, trainer.lr_scheduler = deepspeed_init(
-    #         trainer, num_training_steps=sys.maxsize
-    #     )
-    #     trainer.model_wrapped = trainer._wrap_model(trainer.model)
-    #     trainer.deepspeed = trainer.model_wrapped
-    trainer.is_deepspeed_enabled = False
-    trainer.evaluate()
+        activate_stats(model.get_base_model())
+        if os.path.exists(act_hist_path):
+            load_act_hist(model.get_base_model(), act_hist_path)
+        else:
+            is_deepspeed_enabled = trainer.is_deepspeed_enabled
+            trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
+
+            # Use only 1000 samples of training dataset to collect statistics
+            train_dataset = trainer._prepare_non_packed_dataloader(
+                tokenizer,
+                Dataset.from_dict(dataset["train"][:1000]),
+                None,
+                max_seq_length,
+                formatting_func=formatting_func,
+            )
+            trainer.evaluate(train_dataset)
+            trainer.is_deepspeed_enabled = is_deepspeed_enabled
+            save_act_hist(model.get_base_model(), act_hist_path)
+
+        set_sparse_threshold(model.get_base_model(), exp_config.targeted_sparsity)
+
+    # Plot activation histograms
     if is_plot:
-        plot_pre_act(model.get_base_model())
-    set_sparse_threshold(model.get_base_model(), 0.9)
-    trainer.is_deepspeed_enabled = True
+        plot_act(model.get_base_model())
 
     # Train Model after deactivating collecting statistics
     deactivate_stats(model.get_base_model())
     trainer.train()
-    model = model.merge_and_unload()
 
+    # Evaluate on test dataset
+    model = model.merge_and_unload()
     test_dataset = trainer._prepare_non_packed_dataloader(
         tokenizer,
         dataset["test"],
@@ -333,11 +386,38 @@ def train(config):
         max_seq_length,
         formatting_func=formatting_func,
     )
-    activate_stats(model)
+
+    if exp_config.print_sparsity:
+        activate_stats(model, exp_config.print_act_stats)
     eval_result = trainer.evaluate(test_dataset)
+    print("===Test Result==")
     print(eval_result)
-    print_dead_neuron_stats(model)
-    wandb_run.log({"Final test accuracy": eval_result["eval_accuracy"]})
+    log_dict = {
+        "test_accuracy": eval_result["eval_accuracy"],
+    }
+
+    if exp_config.print_sparsity:
+        total_sparsity = print_dead_neuron_stats(model)
+        log_dict.update({"total_sparsity": total_sparsity})
+
+    if exp_config.print_act_stats:
+        if is_debugging:
+            act_hist_path = "/tmp/post_finetune__act_hist.pt"
+        else:
+            act_hist_path = (
+                "/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
+            )
+        save_act_hist(model, act_hist_path)
+        plot_act(model)
+
+    if is_running_deepspeed():
+        if is_mainprocess():
+            wandb.log(log_dict)
+    else:
+        wandb.log(log_dict)
+
+    if exp_config.model_save:
+        trainer.save_model()
 
     # Empty out gpu memory
     del trainer
@@ -346,7 +426,10 @@ def train(config):
     gc.collect()
 
 
-def prepare_sparse_model(is_debugging=False):
+def prepare_sparse_model(
+    is_debugging=False,
+    use_sparse_model: bool = True,
+):
     if is_debugging:
         config = MistralConfig(
             hidden_size=64,
@@ -359,8 +442,9 @@ def prepare_sparse_model(is_debugging=False):
         model = AutoModelForCausalLM.from_pretrained(
             "mistralai/Mistral-7B-Instruct-v0.1",
         )
-    apply_mistral_sparse_silu_mlp(model, model.config)
-    enable_sparse_silu(model)
+    if use_sparse_model:
+        apply_mistral_sparse_silu_mlp(model, model.config)
+        enable_sparse_silu(model)
 
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
 
@@ -381,9 +465,18 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Random Seed",
+    )
+    parser.add_argument(
         "--model_name", type=str, default="Mistral_Sparse_0.1", help="Name of the model"
     )
     parser.add_argument("--dataset_type", type=str, default="cola", help="Dataset Type")
+    parser.add_argument(
+        "--output_dir", type=str, default="/scr/jay/ckpt", help="Output Directory"
+    )
     parser.add_argument(
         "--num_epochs", type=int, default=7, help="Number of training epochs"
     )
@@ -393,11 +486,12 @@ def parse_args():
         default=False,
         help="Whether to push the model to Hugging Face Hub",
     )
+    parser.add_argument("--model_save", type=bool, default=False)
     parser.add_argument(
-        "--train_batch_size", type=int, default=4, help="Training batch size"
+        "--train_batch_size", type=int, default=16, help="Training batch size"
     )
     parser.add_argument(
-        "--test_batch_size", type=int, default=4, help="Testing batch size"
+        "--test_batch_size", type=int, default=32, help="Testing batch size"
     )
     parser.add_argument(
         "--gradient_checkpointing",
@@ -408,6 +502,43 @@ def parse_args():
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument("--is_debugging", type=bool, default=False)
     parser.add_argument("--is_plot", type=bool, default=False)
+    parser.add_argument(
+        "--set_sparsity_aware_threshold",
+        type=bool,
+        default=False,
+        help="Set sparsity aware threshold",
+    )
+    parser.add_argument(
+        "--print_act_stats",
+        type=bool,
+        default=False,
+        help="Print pre/post-activation statistics.",
+    )
+    parser.add_argument(
+        "--print_sparsity",
+        type=bool,
+        default=True,
+        help="Print Sparsity of the mlp layers for test dataset.",
+    )
+    parser.add_argument(
+        "--targeted_sparsity",
+        type=float,
+        default=0.9,
+        help="Targeted Sparsity of the sparse mlp layers in Mistral.",
+    )
+    parser.add_argument(
+        "--use_sparse_model",
+        type=bool,
+        default=True,
+        help="Whether to use sparse Mistral model",
+    )
+    parser.add_argument(
+        "--use_sparse_regularization",
+        type=bool,
+        default=True,
+        help="Whether to use sparse regularization",
+    )
+
     # Add more arguments as needed
 
     return parser.parse_args()

@@ -9,6 +9,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+import os
 from typing import (
     Any,
     Dict,
@@ -145,32 +146,41 @@ class MistralSparseSiluMLP(MistralMLP):
         self.regularization_threshold = kwargs.pop("regularization_threshold", 0.5)
         self.activation_norm = None
 
-        num_bins = 10000
+        # Activation Histograms
+        self.is_collect_histogram = False
+        num_bins = 1000
         self.histogram_bins = torch.linspace(-1, 1, num_bins - 2)
         self.histogram_bins = torch.cat(
             [torch.tensor([-torch.inf]), self.histogram_bins, torch.tensor([torch.inf])]
         )
         self.pre_act_hist_counts = torch.zeros(num_bins - 1)
         self.post_act_hist_counts = torch.zeros(num_bins - 1)
+        self.t = 0
 
-    def activate_stats(self):
+    def activate_stats(self, is_collect_histogram: bool = True):
         self.is_stats = True
         self.dead_percentage = 0
         self.visit_counts = 0
-        # self.histogram_counts = torch.zeros(2000).to(self.down_proj.weight.device)
+        self.is_collect_histogram = is_collect_histogram
+        self.histogram_counts = torch.zeros(2000)  # .to(self.down_proj.weight.device)
 
     def deactivate_stats(self):
         self.is_stats = False
 
     def collect_stats(self, pre_activation, post_activation):
-        pre_activation = pre_activation.cpu().detach()
-        post_activation = post_activation.cpu().detach()
+        start_time = time.time()
+        pre_activation = pre_activation.float().cpu().detach()
+        post_activation = post_activation.float().cpu().detach()
+        # self.histogram_bins=self.histogram_bins.to(pre_activation.device).type(pre_activation.dtype)
         self.pre_act_hist_counts += torch.histogram(
             pre_activation, bins=self.histogram_bins
         )[0]
         self.post_act_hist_counts += torch.histogram(
             torch.abs(post_activation), bins=self.histogram_bins
         )[0]
+        self.t += time.time() - start_time
+        if self.visit_counts % 30 == 0:
+            print(self.t)
 
     def forward(self, x):
         """
@@ -190,7 +200,8 @@ class MistralSparseSiluMLP(MistralMLP):
                 self.visit_counts += 1
 
                 # Collect histogram stats
-                self.collect_stats(pre_act, post_act)
+                if self.is_collect_histogram:
+                    self.collect_stats(pre_act, post_act)
 
             post_act[dead_neurons] = 0
 
@@ -222,10 +233,10 @@ def apply_mistral_sparse_silu_mlp(model, config):
         layer.mlp = new_mlp
 
 
-def activate_stats(model):
+def activate_stats(model, is_collect_histogram: bool = True):
     for layer in model.model.layers:
         if isinstance(layer.mlp, MistralSparseSiluMLP):
-            layer.mlp.activate_stats()
+            layer.mlp.activate_stats(is_collect_histogram=is_collect_histogram)
 
 
 def deactivate_stats(model):
@@ -251,7 +262,8 @@ def print_dead_neuron_stats(model):
             total_sparsity += dead_percentage
             counts += 1
 
-    print(f"Total sparsity: {total_sparsity/counts}")
+    print(f"Total sparsity: {total_sparsity/counts: .3f}%")
+    return total_sparsity / counts
 
 
 def get_sparse_layers(model: MistralModel):
@@ -294,15 +306,60 @@ def plot_histogram(
     plt.title(title)
     plt.xlabel("Activation Value")
     plt.ylabel("Frequency")
+    os.makedirs("figures", exist_ok=True)
+    plt.savefig(f"figures/{title}.png")
     plt.show()
 
 
-def plot_pre_act(model):
+def plot_act(model):
     for i, layer in enumerate(model.model.layers):
         if (
             isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
         ):  # Can set the threshold only the relevant statistics is collected.
-            plot_title = f"Layer: {i} Activation Distribution"
+            plot_title = f"Layer: {i} Pre-Activation Distribution"
             plot_histogram(
                 layer.mlp.histogram_bins, layer.mlp.pre_act_hist_counts, plot_title
             )
+
+            plot_title = f"Layer: {i} Post-Activation Absolute Distribution"
+            plot_histogram(
+                layer.mlp.histogram_bins, layer.mlp.post_act_hist_counts, plot_title
+            )
+
+
+def save_act_hist(
+    model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"
+):
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    act_dict = {}
+    for i, layer in enumerate(model.model.layers):
+        if (
+            isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
+            act_dict[i] = (
+                layer.mlp.histogram_bins,
+                layer.mlp.pre_act_hist_counts,
+                layer.mlp.post_act_hist_counts,
+            )
+    print("Saving activation histograms...\n\n\n")
+    torch.save(act_dict, filename)
+
+
+def load_act_hist(
+    model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"
+):
+    assert os.path.exists(
+        filename
+    ), f"{filename} does not exist when loading pre/post-activation histogram of SparseMistralSiluMLP."
+    print("Loading activation histograms...\n\n\n")
+
+    act_dict = torch.load(filename)
+    for i, layer in enumerate(model.model.layers):
+        if (
+            isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
+            (
+                layer.mlp.histogram_bins,
+                layer.mlp.pre_act_hist_counts,
+                layer.mlp.post_act_hist_counts,
+            ) = act_dict[i]
