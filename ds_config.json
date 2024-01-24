@@ -30,11 +30,5 @@
     "gradient_accumulation_steps": "auto",
     "gradient_clipping": "auto",
     "train_batch_size": "auto",
-    "train_micro_batch_size_per_gpu": "auto",
-    "comms_logger": {
-        "enabled": false,
-        "verbose": false,
-        "prof_all": false,
-        "debug": false
-    }
+    "train_micro_batch_size_per_gpu": "auto"
 }

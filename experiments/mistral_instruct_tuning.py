@@ -21,9 +21,6 @@ from evaluate import load
 from transformers.utils import is_sagemaker_mp_enabled, is_sagemaker_dp_enabled
 import logging
 
-deepspeed_logger = logging.getLogger("deepspeed")
-deepspeed_logger.setLevel(logging.ERROR)
-
 
 import torch
 import os
