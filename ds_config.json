@@ -32,9 +32,9 @@
     "train_batch_size": "auto",
     "train_micro_batch_size_per_gpu": "auto",
     "comms_logger": {
-        "enabled": true,
+        "enabled": false,
         "verbose": false,
-        "prof_all": true,
+        "prof_all": false,
         "debug": false
     }
 }
