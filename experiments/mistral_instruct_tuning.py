@@ -1,3 +1,6 @@
+import os
+
+os.environ["MASTER_PORT"] = "29501"
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
@@ -428,7 +431,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             )
 
         activate_stats(model.get_base_model())
-        if os.path.exists(act_hist_path):
+        if False and os.path.exists(act_hist_path):  # @luke TODO: remove False
             load_act_hist(model.get_base_model(), act_hist_path)
         else:
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
