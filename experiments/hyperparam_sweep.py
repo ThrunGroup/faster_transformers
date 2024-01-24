@@ -62,7 +62,7 @@ if __name__ == "__main__":
     project_name += f"_{now}"
 
     wandb.login()
-    sweep_config = get_sweep_config()
+    sweep_config = get_sweep_config(config)
     sweep_id = wandb.sweep(sweep_config, project=project_name)
 
     def wrapper_for_train(exp_config=None):
