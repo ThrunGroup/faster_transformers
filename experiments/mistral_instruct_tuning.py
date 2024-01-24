@@ -615,13 +615,13 @@ def parse_args():
     )
     parser.add_argument(
         "--num_warmup_steps",
-        action="store_true",
+        type=float,
         default=40,
         help="Number of training steps required to reach the dead threshold",
     )
     parser.add_argument(
         "--increment_ratio",
-        action="store_true",
+        type=float,
         default=0.5,
         help="By how much to increase the dead threshold",
     )
