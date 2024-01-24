@@ -413,6 +413,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     # Collect statistics and find the threshold for given sparsity
     if exp_config.set_sparsity_aware_threshold:
+        print("Setting Sparsity-Aware Threshold...")
         if is_debugging:
             # act_hist_path = "/tmp/pre_finetune__act_hist.pt"
             act_hist_path = (
@@ -448,6 +449,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     # Train Model after deactivating collecting statistics
     deactivate_stats(model.get_base_model())
+    print("Training...")
     trainer.train()
 
     # Evaluate on test dataset
@@ -496,6 +498,7 @@ def prepare_sparse_model(
     use_sparse_model: bool = True,
     use_sparse_regularization: bool = False,
 ):
+    print("Loading a model...")
     if is_debugging:
         config = MistralConfig(
             hidden_size=64,
@@ -508,7 +511,9 @@ def prepare_sparse_model(
         model = AutoModelForCausalLM.from_pretrained(
             "mistralai/Mistral-7B-Instruct-v0.1",
         )
+
     if use_sparse_model:
+        print("Enabling Sparse SiLU...")
         apply_mistral_sparse_silu_mlp(
             model,
             model.config,
@@ -517,10 +522,10 @@ def prepare_sparse_model(
         enable_sparse_silu(model)
 
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
-
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
+    print("Applying LoRA...")
     peft_config = LoraConfig(
         lora_alpha=16,
         lora_dropout=0.1,
