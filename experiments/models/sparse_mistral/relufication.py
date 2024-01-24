@@ -11,7 +11,10 @@ from typing import (
     Union,
 )
 
-from transformers.models.mistral.modeling_mistral import MistralMLP, MistralAttention
+from transformers.models.mistral.modeling_mistral import (
+    MistralMLP,
+    MistralAttention,
+)
 
 
 class SparseShared:
@@ -58,19 +61,24 @@ class SparseShared:
             loss = self.compute_loss(model, inputs)
 
         if self.args.n_gpu > 1:
-            loss = loss.mean()  # mean() to average on multi-gpu parallel training
+            loss = (
+                loss.mean()
+            )  # mean() to average on multi-gpu parallel training
 
         # important for a regularization loss
-        self.accelerator.backward(loss, retain_graph=self.use_sparse_regularization)
+        self.accelerator.backward(
+            loss, retain_graph=self.use_sparse_regularization
+        )
 
         return loss.detach() / self.args.gradient_accumulation_steps
-
 
 
 class SparseSiLUTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         self.regularization_coefficient = 1
-        self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", False)
+        self.use_sparse_regularization = kwargs.pop(
+            "use_sparse_regularization", False
+        )
         super(SparseSiLUTrainer, self).__init__(*args, **kwargs)
 
     def training_step(
@@ -88,10 +96,14 @@ class SparseSiLUTrainer(Trainer):
             loss = self.compute_loss(model, inputs)
 
         if self.args.n_gpu > 1:
-            loss = loss.mean()  # mean() to average on multi-gpu parallel training
+            loss = (
+                loss.mean()
+            )  # mean() to average on multi-gpu parallel training
 
         # important for a regularization loss
-        self.accelerator.backward(loss, retain_graph=self.use_sparse_regularization)
+        self.accelerator.backward(
+            loss, retain_graph=self.use_sparse_regularization
+        )
 
         return loss.detach() / self.args.gradient_accumulation_steps
 

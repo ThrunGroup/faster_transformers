@@ -40,6 +40,7 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     deactivate_stats,
     load_act_hist,
     save_act_hist,
+    GradualSparsificationScheduler,
 )
 from utils.mistral_utils import compress_mistral
 from utils.utils import (
@@ -61,7 +62,9 @@ def load_glue(data_type: str, seed: int = 0):
         raise NotImplementedError(f"{data_type} is not implemented.")
 
     # Split the training dataset into 85% train and 15% new validation
-    train_dataset = dataset["train"].train_test_split(test_size=0.15, seed=seed)
+    train_dataset = dataset["train"].train_test_split(
+        test_size=0.15, seed=seed
+    )
 
     # Set the new splits
     dataset["train"] = train_dataset["train"]
@@ -157,12 +160,16 @@ def find_left_of_a(np_array, a):
         if row.size <= 1:
             raise ValueError("Sublist length must be greater than 1.")
         try:
-            index = np.where(row == a)[0][0]  # Find the first occurrence of 'a'
+            index = np.where(row == a)[0][
+                0
+            ]  # Find the first occurrence of 'a'
             if index > 0:
                 result.append(row[index - 1])
         except IndexError:
             # This occurs if 'a' is not found in the row
-            print("ERROR: No EOS Token is found in the prompt when evaluating.")
+            print(
+                "ERROR: No EOS Token is found in the prompt when evaluating."
+            )
             pass
     return np.array(result)
 
@@ -256,7 +263,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if not exp_config.use_sparse_model:
         exp_config.use_sparse_regularization = (
             exp_config.print_sparsity
-        ) = exp_config.print_act_stats = exp_config.set_sparsity_aware_threshold = False
+        ) = (
+            exp_config.print_act_stats
+        ) = exp_config.set_sparsity_aware_threshold = False
 
     debugging_output_dir = ""
 
@@ -270,7 +279,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         create_prompt = create_boolq_prompt
 
     model, tokenizer = prepare_sparse_model(
-        is_debugging, exp_config.use_sparse_model, exp_config.use_sparse_regularization
+        is_debugging,
+        exp_config.use_sparse_model,
+        exp_config.use_sparse_regularization,
     )
     max_seq_length = 1024
 
@@ -322,7 +333,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         output_dir = debugging_output_dir
 
     if use_wandb:
-        run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
+        run_name = (
+            f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
+        )
         if is_debugging:
             run_name += "_debugging"
         run_name += "_" + get_datetime(True)
@@ -345,13 +358,15 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             )
 
     response_template = "Response:"
-    collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
+    collator = DataCollatorForCompletionOnlyLM(
+        response_template, tokenizer=tokenizer
+    )
 
     trainer_config = TrainingArguments(
         output_dir=output_dir,
         evaluation_strategy="steps",
         eval_steps=50,  # early stopping counts only when eval step and save step match
-        # save_steps=50,
+        save_steps=50,
         logging_steps=5,
         save_strategy="steps",
         learning_rate=1e-5,
@@ -377,6 +392,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     )
 
     early_stopping = EarlyStoppingCallback(early_stopping_patience=3)
+    sparsification_scheduler = GradualSparsificationScheduler(
+        num_warmup_steps=40, increment_ratio=0.5
+    )
     trainer = SparseSFTTTrainer(
         model=model,
         # peft_config=peft_config,
@@ -389,7 +407,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         eval_dataset=Dataset.from_dict(dataset["validation"][:]),
         compute_metrics=compute_metrics,
         preprocess_logits_for_metrics=preprocess_logits_for_metrics,
-        callbacks=[early_stopping],
+        callbacks=[early_stopping, sparsification_scheduler],
         use_sparse_regularization=exp_config.use_sparse_regularization,
     )
 
@@ -398,9 +416,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         if is_debugging:
             act_hist_path = "/tmp/pre_finetune__act_hist.pt"
         else:
-            act_hist_path = (
-                f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist.pt"
-            )
+            act_hist_path = f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist.pt"
 
         activate_stats(model.get_base_model())
         if os.path.exists(act_hist_path):
@@ -412,7 +428,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(model.get_base_model(), act_hist_path)
 
-        set_sparse_threshold(model.get_base_model(), exp_config.targeted_sparsity)
+        set_sparse_threshold(
+            model.get_base_model(), exp_config.targeted_sparsity
+        )
 
     # Plot activation histograms
     if is_plot:
@@ -446,9 +464,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         if is_debugging:
             act_hist_path = "/tmp/post_finetune__act_hist.pt"
         else:
-            act_hist_path = (
-                "/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
-            )
+            act_hist_path = "/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
         save_act_hist(model, act_hist_path)
         plot_act(model)
 
@@ -488,7 +504,9 @@ def prepare_sparse_model(
         )
     if use_sparse_model:
         apply_mistral_sparse_silu_mlp(
-            model, model.config, use_sparse_regularization=use_sparse_regularization
+            model,
+            model.config,
+            use_sparse_regularization=use_sparse_regularization,
         )
         enable_sparse_silu(model)
 
@@ -498,7 +516,11 @@ def prepare_sparse_model(
     tokenizer.padding_side = "right"
 
     peft_config = LoraConfig(
-        lora_alpha=16, lora_dropout=0.1, r=64, bias="none", task_type="CAUSAL_LM"
+        lora_alpha=16,
+        lora_dropout=0.1,
+        r=64,
+        bias="none",
+        task_type="CAUSAL_LM",
     )
     model = get_peft_model(model, peft_config)
 
@@ -517,11 +539,19 @@ def parse_args():
         help="Random Seed",
     )
     parser.add_argument(
-        "--model_name", type=str, default="Mistral_Sparse_0.1", help="Name of the model"
+        "--model_name",
+        type=str,
+        default="Mistral_Sparse_0.1",
+        help="Name of the model",
     )
-    parser.add_argument("--dataset_type", type=str, default="cola", help="Dataset Type")
     parser.add_argument(
-        "--output_dir", type=str, default="/scr/jay/ckpt", help="Output Directory"
+        "--dataset_type", type=str, default="cola", help="Dataset Type"
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="/scr/jay/ckpt",
+        help="Output Directory",
     )
     parser.add_argument(
         "--num_epochs", type=int, default=8, help="Number of training epochs"
@@ -553,6 +583,12 @@ def parse_args():
         action="store_true",
         default=False,
         help="Set sparsity aware threshold",
+    )
+    parser.add_argument(
+        "--gradual_sparsification",
+        action="store_true",
+        default=False,
+        help="Whether to do gradually increase the threshold for killing neurons",
     )
     parser.add_argument(
         "--print_act_stats",

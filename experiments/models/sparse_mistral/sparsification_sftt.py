@@ -25,8 +25,12 @@ from transformers.models.mistral.modeling_mistral import (
 
 class SparseSFTTTrainer(SFTTrainer):
     def __init__(self, *args, **kwargs):
-        self.regularization_coefficient = kwargs.pop("regularization_coefficient", 10)
-        self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", False)
+        self.regularization_coefficient = kwargs.pop(
+            "regularization_coefficient", 10
+        )
+        self.use_sparse_regularization = kwargs.pop(
+            "use_sparse_regularization", False
+        )
         self.regularization_type = kwargs.pop(
             "regularization_type", "L1 positive activation"
         )
@@ -57,9 +61,13 @@ class SparseSFTTTrainer(SFTTrainer):
             loss = self.compute_loss(model, inputs)
 
         if self.args.n_gpu > 1:
-            loss = loss.mean()  # mean() to average on multi-gpu parallel training
+            loss = (
+                loss.mean()
+            )  # mean() to average on multi-gpu parallel training
 
-        self.accelerator.backward(loss, retain_graph=self.use_sparse_regularization)
+        self.accelerator.backward(
+            loss, retain_graph=self.use_sparse_regularization
+        )
 
         if self.use_sparse_regularization:
             regularization_loss = self.compute_regularization(model)
@@ -139,11 +147,16 @@ class MistralSparseSiluMLP(MistralMLP):
 
         # Hyperparameters to tune
         self.dead_threshold = kwargs.pop("dead_threshold", 0)
-        self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", True)
+        self.current_dead_threshold = 0.0
+        self.use_sparse_regularization = kwargs.pop(
+            "use_sparse_regularization", True
+        )
         self.regularization_type = kwargs.pop(
             "regularization_type", "L1 regularization"
         )
-        self.regularization_threshold = kwargs.pop("regularization_threshold", 0.5)
+        self.regularization_threshold = kwargs.pop(
+            "regularization_threshold", 0.5
+        )
         self.activation_norm = None
 
         # Activation Histograms
@@ -151,7 +164,11 @@ class MistralSparseSiluMLP(MistralMLP):
         num_bins = 1000
         self.histogram_bins = torch.linspace(-1, 1, num_bins - 2)
         self.histogram_bins = torch.cat(
-            [torch.tensor([-torch.inf]), self.histogram_bins, torch.tensor([torch.inf])]
+            [
+                torch.tensor([-torch.inf]),
+                self.histogram_bins,
+                torch.tensor([torch.inf]),
+            ]
         )
         self.pre_act_hist_counts = torch.zeros(num_bins - 1)
         self.post_act_hist_counts = torch.zeros(num_bins - 1)
@@ -162,7 +179,9 @@ class MistralSparseSiluMLP(MistralMLP):
         self.dead_percentage = 0
         self.visit_counts = 0
         self.is_collect_histogram = is_collect_histogram
-        self.histogram_counts = torch.zeros(2000)  # .to(self.down_proj.weight.device)
+        self.histogram_counts = torch.zeros(
+            2000
+        )  # .to(self.down_proj.weight.device)
 
     def deactivate_stats(self):
         self.is_stats = False
@@ -190,7 +209,7 @@ class MistralSparseSiluMLP(MistralMLP):
         post_act = self.act_fn(pre_act)
 
         if self.kill_sparse_swish_outputs:
-            dead_neurons = post_act.abs() <= self.dead_threshold
+            dead_neurons = post_act.abs() <= self.current_dead_threshold
             dead_percentage = dead_neurons.float().mean()
 
             if self.is_stats:
@@ -213,10 +232,50 @@ class MistralSparseSiluMLP(MistralMLP):
                 ].mean()
             elif self.regularization_type == "L2 regularization":
                 self.activation_norm = torch.sqrt(
-                    torch.square(post_act)[post_act < self.regularization_threshold]
+                    torch.square(post_act)[
+                        post_act < self.regularization_threshold
+                    ]
                 ).mean()
 
         return out
+
+
+class GradualSparsificationScheduler(TrainerCallback):
+    def __init__(
+        self,
+        num_warmup_steps=40,
+        increment_ratio=0.5,
+    ):
+        """Scheduler for gradually increasing a dead threshold until it reaches the desired threshold.
+
+        :param num_warmup_steps: number of training steps required to reach the dead threshold, defaults to 40
+        :param increment_ratio: by how much to increase the dead threshold.
+            For example, 0.5 means "increase the threshold by 0.5 * desired threshold
+        """
+        self.num_warmup_steps = num_warmup_steps
+        self.increment_ratio = increment_ratio
+        self.step_size = int(num_warmup_steps * increment_ratio)
+
+    def on_step_end(self, args, state, control, **kwargs):
+        model = kwargs["model"]
+        current_dead_threshold = 0
+
+        if state.global_step % self.step_size == 0:
+            for i, layer in enumerate(model.model.layers):
+                if (
+                    isinstance(layer.mlp, MistralSparseSiluMLP)
+                    and layer.mlp.is_stats
+                ):
+                    desired_dead_threshold = layer.mlp.dead_threshold
+                    current_dead_threshold = layer.mlp.current_dead_threshold
+                    current_dead_threshold += (
+                        self.increment_ratio * current_dead_threshold
+                    )
+                    layer.mlp.current_dead_threshold = min(
+                        desired_dead_threshold, current_dead_threshold
+                    )
+
+            print(state.global_step, current_dead_threshold)
 
 
 def apply_mistral_sparse_silu_mlp(
@@ -274,13 +333,17 @@ def print_dead_neuron_stats(model):
 
 def get_sparse_layers(model: MistralModel):
     sparse_layers = [
-        m.mlp for m in model.layers() if isinstance(m.mlp, MistralSparseSiluMLP)
+        m.mlp
+        for m in model.layers()
+        if isinstance(m.mlp, MistralSparseSiluMLP)
     ]
     return sparse_layers
 
 
 def get_threshold(
-    bin_edges: torch.tensor, histogram_counts: torch.tensor, sparsity_level: float
+    bin_edges: torch.tensor,
+    histogram_counts: torch.tensor,
+    sparsity_level: float,
 ):  # Only for L1 Regularization
     assert (
         len(bin_edges.shape) == len(histogram_counts.shape) == 1
@@ -299,7 +362,9 @@ def set_sparse_threshold(model, sparsity_level: float):
             isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
         ):  # Can set the threshold only the relevant statistics is collected.
             layer.mlp.dead_threshold = get_threshold(
-                layer.mlp.histogram_bins, layer.mlp.post_act_hist_counts, sparsity_level
+                layer.mlp.histogram_bins,
+                layer.mlp.post_act_hist_counts,
+                sparsity_level,
             )
             layer.mlp.regularization_threshold = (
                 layer.mlp.dead_threshold * 1.2
@@ -307,10 +372,15 @@ def set_sparse_threshold(model, sparsity_level: float):
 
 
 def plot_histogram(
-    bin_edges, histogram_counts: torch.tensor, title: str = "Activation Distribution"
+    bin_edges,
+    histogram_counts: torch.tensor,
+    title: str = "Activation Distribution",
 ):
     plt.bar(
-        bin_edges[:-1], histogram_counts, width=np.diff(bin_edges), edgecolor="black"
+        bin_edges[:-1],
+        histogram_counts,
+        width=np.diff(bin_edges),
+        edgecolor="black",
     )
     plt.title(title)
     plt.xlabel("Activation Value")
@@ -328,12 +398,16 @@ def plot_act(model):
         ):  # Can set the threshold only the relevant statistics is collected.
             plot_title = f"Layer: {i} Pre-Activation Distribution"
             plot_histogram(
-                layer.mlp.histogram_bins, layer.mlp.pre_act_hist_counts, plot_title
+                layer.mlp.histogram_bins,
+                layer.mlp.pre_act_hist_counts,
+                plot_title,
             )
 
             plot_title = f"Layer: {i} Post-Activation Absolute Distribution"
             plot_histogram(
-                layer.mlp.histogram_bins, layer.mlp.post_act_hist_counts, plot_title
+                layer.mlp.histogram_bins,
+                layer.mlp.post_act_hist_counts,
+                plot_title,
             )
 
 
