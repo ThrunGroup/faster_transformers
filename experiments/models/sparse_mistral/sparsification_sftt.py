@@ -259,6 +259,8 @@ class GradualSparsificationScheduler(TrainerCallback):
         self.is_enabled = is_enabled
 
     def on_step_end(self, args, state, control, **kwargs):
+        model = kwargs["model"]
+
         if not self.is_enabled:
             if state.global_step <= 10:
                 print("NO WARM UP")
@@ -267,7 +269,6 @@ class GradualSparsificationScheduler(TrainerCallback):
                         module.current_dead_threshold = module.dead_threshold
             return
 
-        model = kwargs["model"]
         current_dead_threshold = 0
 
         if state.global_step % self.step_size == 0:
