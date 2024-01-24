@@ -398,7 +398,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     early_stopping = EarlyStoppingCallback(early_stopping_patience=3)
     sparsification_scheduler = GradualSparsificationScheduler(
-        num_warmup_steps=40, increment_ratio=0.5
+        num_warmup_steps=1, increment_ratio=0.5
     )
     trainer = SparseSFTTTrainer(
         model=model,
