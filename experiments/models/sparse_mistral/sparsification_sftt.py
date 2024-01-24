@@ -261,17 +261,14 @@ class GradualSparsificationScheduler(TrainerCallback):
         current_dead_threshold = 0
 
         if state.global_step % self.step_size == 0:
-            for i, layer in enumerate(model.model.layers):
-                if (
-                    isinstance(layer.mlp, MistralSparseSiluMLP)
-                    and layer.mlp.is_stats
-                ):
-                    desired_dead_threshold = layer.mlp.dead_threshold
-                    current_dead_threshold = layer.mlp.current_dead_threshold
+            for module in model.modules():
+                if isinstance(module, MistralSparseSiluMLP):
+                    desired_dead_threshold = module.dead_threshold
+                    current_dead_threshold = module.current_dead_threshold
                     current_dead_threshold += (
-                        self.increment_ratio * current_dead_threshold
+                        self.increment_ratio * desired_dead_threshold
                     )
-                    layer.mlp.current_dead_threshold = min(
+                    module.current_dead_threshold = min(
                         desired_dead_threshold, current_dead_threshold
                     )
 
