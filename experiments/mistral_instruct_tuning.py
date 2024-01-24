@@ -266,8 +266,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     dataset_type = exp_config.dataset_type
     is_plot = exp_config.is_plot
     seed = exp_config.seed
+    use_sparse_model = exp_config.use_sparse_model
 
-    if not exp_config.use_sparse_model:
+    if not use_sparse_model:
         exp_config.use_sparse_regularization = (
             exp_config.print_sparsity
         ) = (
@@ -341,9 +342,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         output_dir = debugging_output_dir
 
     if use_wandb:
-        run_name = (
-            f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
-        )
+        run_name = f"{model_name}_{dataset_type}"
+        if use_sparse_model:
+            run_name += f"_{exp_config.targeted_sparsity}"
         if is_debugging:
             run_name += "_debugging"
         if use_gradual_sparsification:
