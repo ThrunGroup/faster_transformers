@@ -38,6 +38,7 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     apply_mistral_sparse_silu_mlp,
     activate_stats,
     enable_sparse_silu,
+    enable_relu,
     print_dead_neuron_stats,
     set_sparse_threshold,
     plot_act,
@@ -258,7 +259,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     train_batch_size = exp_config.train_batch_size
     test_batch_size = exp_config.test_batch_size
     gradient_checkpointing = exp_config.gradient_checkpointing
-    use_gradual_sparsification = exp_config.gradual_sparsification
+    use_gradual_sparsification = exp_config.use_gradual_sparsification
     num_warmup_steps = exp_config.num_warmup_steps
     increment_ratio = exp_config.increment_ratio
     push_to_hub = exp_config.push_to_hub
@@ -267,6 +268,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     is_plot = exp_config.is_plot
     seed = exp_config.seed
     use_sparse_model = exp_config.use_sparse_model
+    use_relu = exp_config.use_relu
 
     if not use_sparse_model:
         exp_config.use_sparse_regularization = (
@@ -289,8 +291,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     model, tokenizer = prepare_sparse_model(
         is_debugging,
-        exp_config.use_sparse_model,
+        use_sparse_model,
         exp_config.use_sparse_regularization,
+        use_relu,
     )
     max_seq_length = 1024
 
@@ -349,6 +352,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             run_name += "_debugging"
         if use_gradual_sparsification:
             run_name += "_warmup"
+        if use_relu:
+            run_name += "_relu"
         run_name += "_" + get_datetime(True)
         wandb.name = run_name
 
@@ -516,6 +521,7 @@ def prepare_sparse_model(
     is_debugging=False,
     use_sparse_model: bool = True,
     use_sparse_regularization: bool = False,
+    use_relu: bool = False,
 ):
     print("Loading a model...")
     if is_debugging:
@@ -538,7 +544,10 @@ def prepare_sparse_model(
             model.config,
             use_sparse_regularization=use_sparse_regularization,
         )
-        enable_sparse_silu(model)
+        if use_relu:
+            enable_relu(model)
+        else:
+            enable_sparse_silu(model)
 
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
     tokenizer.pad_token = tokenizer.eos_token
@@ -616,7 +625,7 @@ def parse_args():
         help="Set sparsity aware threshold",
     )
     parser.add_argument(
-        "--gradual_sparsification",
+        "--use_gradual_sparsification",
         action="store_true",
         default=False,
         help="Whether to do gradually increase the threshold for killing neurons",
@@ -668,6 +677,12 @@ def parse_args():
         action="store_true",
         default=False,
         help="Whether to log in wandb",
+    )
+    parser.add_argument(
+        "--use_relu",
+        action="store_true",
+        default=False,
+        help="Whether to replace SiLU with ReLU",
     )
 
     return parser.parse_args()

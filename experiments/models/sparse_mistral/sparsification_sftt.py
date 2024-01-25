@@ -138,7 +138,7 @@ class MistralSparseSiluMLP(MistralMLP):
     def __init__(self, config, *args, **kwargs):
         super().__init__(config)
         self.swish_outputs = None
-        self.relu = nn.ReLU()
+        # self.relu = nn.ReLU()
 
         self.kill_sparse_swish_outputs = False
         self.dead_percentage = 0
@@ -155,7 +155,7 @@ class MistralSparseSiluMLP(MistralMLP):
             "regularization_type", "L1 regularization"
         )
         self.regularization_threshold = kwargs.pop(
-            "regularization_threshold", 0.5
+            "regularization_threshold", 0.0
         )
         self.activation_norm = None
 
@@ -323,6 +323,13 @@ def enable_sparse_silu(model):
     for i, layer in enumerate(model.model.layers):
         if isinstance(layer.mlp, MistralSparseSiluMLP):
             layer.mlp.kill_sparse_swish_outputs = True
+
+
+def enable_relu(model):
+    print("Enabling ReLU")
+    for i, layer in enumerate(model.model.layers):
+        if isinstance(layer.mlp, MistralSparseSiluMLP):
+            layer.mlp.act_fn = nn.ReLU()
 
 
 def print_dead_neuron_stats(model):
