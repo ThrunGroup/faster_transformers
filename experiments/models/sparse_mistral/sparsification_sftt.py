@@ -156,6 +156,7 @@ class MistralSparseSiluMLP(MistralMLP):
         self.pre_act_hist_counts = torch.zeros(num_bins - 1)
         self.post_act_hist_counts = torch.zeros(num_bins - 1)
         self.t = 0
+        self.agg_sparsity = 0
 
     def activate_stats(self, is_collect_histogram: bool = True):
         self.is_stats = True
@@ -182,6 +183,7 @@ class MistralSparseSiluMLP(MistralMLP):
         if self.visit_counts % 30 == 0:
             print(f"Time taken to collect stats: {self.t}s.")
 
+
     def forward(self, x):
         """
         If kill_sparse_swish_outputs is set to False, this layer functions exactly like a normal MLP layer.
@@ -192,12 +194,18 @@ class MistralSparseSiluMLP(MistralMLP):
         if self.kill_sparse_swish_outputs:
             dead_neurons = post_act.abs() <= self.dead_threshold
             dead_percentage = dead_neurons.float().mean()
+            agg_sparsity = dead_neurons.all(dim=0).float().mean()
 
             if self.is_stats:
                 self.dead_percentage = (
                     self.dead_percentage * self.visit_counts + dead_percentage
                 ) / (self.visit_counts + 1)
+                self.agg_sparsity =(
+                    self.agg_sparsity * self.visit_counts + agg_sparsity
+                ) / (self.visit_counts + 1)
                 self.visit_counts += 1
+
+                print(self.agg_sparsity)
 
                 # Collect histogram stats
                 if self.is_collect_histogram:
@@ -264,7 +272,9 @@ def print_dead_neuron_stats(model):
     for i, layer in enumerate(model.model.layers):
         if isinstance(layer.mlp, MistralSparseSiluMLP):
             dead_percentage = layer.mlp.dead_percentage * 100
-            print(f"{i} : {dead_percentage:.3f}%")
+            agg_sparsity = layer.mlp.agg_sparsity * 100
+            print(f"layer {i} sparsity: {dead_percentage:.3f}%")
+            print(f"layer {i} agg sparsity: {agg_sparsity:.3f}%")
             total_sparsity += dead_percentage
             counts += 1
 

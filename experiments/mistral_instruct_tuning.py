@@ -523,7 +523,7 @@ def parse_args():
         help="Random Seed",
     )
     parser.add_argument(
-        "--model_name", type=str, default="Mistral_Sparse_0.1", help="Name of the model"
+        "--model_name", type=str, default="Mistral_Sparse", help="Name of the model"
     )
     parser.add_argument("--dataset_type", type=str, default="cola", help="Dataset Type")
     parser.add_argument(
@@ -601,6 +601,8 @@ def parse_args():
 
 
 if __name__ == "__main__":
+    # torch.cuda.memory._record_memory_history(max_entries=100000)
     args = parse_args()
     print(args)
     train(args, use_wandb=args.use_wandb)
+    # torch.cuda.memory._dump_snapshot("snapshot_new.pickle")
