@@ -255,13 +255,12 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     dataset_type = exp_config.dataset_type
     is_plot = exp_config.is_plot
     seed = exp_config.seed
+    run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
 
     if not exp_config.use_sparse_model:
         exp_config.use_sparse_regularization = (
             exp_config.print_sparsity
         ) = exp_config.print_act_stats = exp_config.set_sparsity_aware_threshold = False
-
-    debugging_output_dir = ""
 
     if dataset_type == "cola":
         dataset = load_glue(dataset_type, seed=seed)
@@ -313,19 +312,14 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         )
 
     if is_debugging:
-        debugging_output_dir = "debugging_output"
-        os.makedirs(debugging_output_dir, exist_ok=True)
+        output_dir = "debugging_output"
         dataset["train"] = Dataset.from_dict(dataset["train"][:300])
         dataset["validation"] = Dataset.from_dict(dataset["validation"][:300])
         dataset["test"] = Dataset.from_dict(dataset["test"][:])
-
-    if not is_debugging:
-        output_dir = os.path.join(exp_config.output_dir, model_name)
     else:
-        output_dir = debugging_output_dir
+        output_dir = os.path.join(exp_config.output_dir, run_name)
 
     if use_wandb:
-        run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
         if is_debugging:
             run_name += "_debugging"
         run_name += "_" + get_datetime(True)
@@ -538,7 +532,7 @@ def parse_args():
         default=False,
         help="Whether to push the model to Hugging Face Hub",
     )
-    parser.add_argument("--model_save", type=bool, default=False)
+    parser.add_argument("--model_save", action='store_true', default=False)
     parser.add_argument(
         "--train_batch_size", type=int, default=8, help="Training batch size"
     )
