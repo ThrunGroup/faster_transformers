@@ -3,7 +3,7 @@ import argparse
 import time
 from utils import benchmark, ACT2FN, benchmark_pred, Config, MistralSparseMLP, degrad_tensor
 from dejavu import mistral_mlp_sparse, mistral_mlp_sparse_fuse
-from kernels import matmul_triton, matmul_triton_bias, matmul_triton_bias_where
+from kernels import matmul_triton, matmul_triton_bias, matmul_triton_bias_where, mistral_mlp_sparse_flag
 # @torch.compile
 # def svd_where(x, Wu, Wsv, Bsv, svd_activation, threshold, K):
 #     svd_act_fn = torch.nn.SiLU()
@@ -20,7 +20,7 @@ def mistral_mlp_pred_where(x, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdownt, 
     Wdownt: (3.5d, d)
     idx: (M)
     """
-    eps = 1e-5
+    eps = 7e-5
     threshold = -0.1 + eps
     # svd_act_fn = ACT2FN[svd_activation]
     x_1 = matmul_triton(x, Wu)
@@ -30,9 +30,12 @@ def mistral_mlp_pred_where(x, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdownt, 
     # x_2 = matmul_triton_bias(x_1, Wsv, Bsv, svd_activation) > threshold
     # idx = (x_2.squeeze(0) >= threshold).nonzero() # The output of torch.where is a tuple
     # print(x_2)
-    (_, idx) = torch.nonzero(x_2, as_tuple=True)
+    # (_, idx) = torch.nonzero(x_2, as_tuple=True)
     # print(idx.shape)
-    return mistral_mlp_sparse(x, Wgate, Wup, Wdownt, idx[:K], activation) 
+    # return mistral_mlp_sparse(x, Wgate, Wup, Wdownt, idx[:K], activation) 
+    output = mistral_mlp_sparse_flag(x, Wgate, Wup, Wdownt, x_2, activation)
+    # print(output)
+    return output
 
 def mistral_mlp_pred_where_torch(x, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdownt, activation, K):
     """
@@ -49,8 +52,10 @@ def mistral_mlp_pred_where_torch(x, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wd
     svd_act_fn = ACT2FN[svd_activation]
     x_1 = svd_act_fn(torch.matmul(torch.matmul(x, Wu),Wsv) + Bsv) > threshold
     (_, idx) = torch.nonzero(x_1, as_tuple=True)
-    print(idx.shape)
-    return mistral_mlp_sparse(x, Wgate, Wup, Wdownt, idx[:K], activation) 
+    # print(idx.shape)
+    output = mistral_mlp_sparse(x, Wgate, Wup, Wdownt, idx[:K], activation) 
+    # print(output)
+    return output
 
 def mistral_mlp_pred_sparse(x, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdownt, activation, K):
     """
