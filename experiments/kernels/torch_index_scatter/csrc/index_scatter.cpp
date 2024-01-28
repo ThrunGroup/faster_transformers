@@ -37,11 +37,11 @@ at::Tensor index_scatter_cuda_impl(const int64_t dim, at::Tensor index,
   return output;
 }
 
-int64_t fast_nonzero_cuda_impl(const at::Tensor &input, at::Tensor &output, const at::Tensor &threshold) {
+int64_t fast_nonzero_cuda_impl(const at::Tensor &input, const at::Tensor &orange, at::Tensor &output, const at::Tensor &threshold) {
   // call the cuda kernel if the input tensor is on cuda
   // printf("fast_nonzero_cuda_impl\n");
   TORCH_CHECK(input.dim() == 1, "index must be 1 dimensional");
-  return fast_nonzero_dispatch(input, output, threshold);
+  return fast_nonzero_dispatch(input, orange, output, threshold);
 }
 
 // set the registeration via TORCH_LIBRARY_IMPL
@@ -50,7 +50,7 @@ TORCH_LIBRARY(torch_index_scatter, m) {
   m.def("index_scatter(int dim, Tensor index, Tensor "
         "src, str reduce, bool sorted)"
         "->Tensor ");
-  m.def("fast_nonzero(Tensor input, Tensor output, Tensor threshold) -> int");
+  m.def("fast_nonzero(Tensor input, Tensor orange, Tensor output, Tensor threshold) -> int");
 }
 
 TORCH_LIBRARY_IMPL(torch_index_scatter, CPU, m) {

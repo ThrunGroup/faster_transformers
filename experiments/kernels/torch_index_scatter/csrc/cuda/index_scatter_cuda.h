@@ -5,4 +5,4 @@ at::Tensor index_scatter_cuda(const int64_t dim, const at::Tensor &index,
                               const at::Tensor &src, const at::Tensor &dst,
                               const c10::string_view reduce, const bool sorted);
 
-int64_t fast_nonzero_dispatch(const at::Tensor &input, at::Tensor &output, const at::Tensor &threshold);
+int64_t fast_nonzero_dispatch(const at::Tensor &input, const at::Tensor &orange, at::Tensor &output, const at::Tensor &threshold);

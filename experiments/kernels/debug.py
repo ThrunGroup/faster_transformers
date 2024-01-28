@@ -2,7 +2,8 @@ import argparse
 import torch
 from utils import MistralSparseMLP, ACT2FN, Config, degrad_tensor
 from dejavu import mistral_mlp_sparse, gather_gemv, gather_transposed_gemv
-from kernels import matmul_triton, matmul_triton_bias_where, mistral_mlp_sparse_flag, gather_gemv2_flag, gather_transposed_gemv_flag
+from kernels import matmul_triton, matmul_triton_bias_where, mistral_mlp_sparse_flag, gather_gemv2_flag, gather_transposed_gemv_flag, matmul_triton_bias_fp32
+import torch_index_scatter
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Profile mare upperbound')
@@ -49,8 +50,17 @@ if __name__ == "__main__":
     perm = torch.randperm(intermediate_size)[:K]
     idx, _ = torch.sort(perm)
     idx = idx.cuda()
-
     threshold = -0.1
+
+    feature = matmul_triton_bias_fp32(matmul_triton(input, u_proj), sv_proj, svd_act, sv_bias).squeeze(0)
+    threshold_tensor = torch.Tensor([threshold]).to(torch.float32)
+    flags = torch.zeros(feature.shape, dtype=torch.int64).cuda()
+    print(feature.shape)
+    print(feature.dtype)
+    nzid = torch_index_scatter.fast_nonzero(feature, flags, threshold_tensor)
+    print(flags.shape)
+    
+    
     svd_act_fn = ACT2FN[svd_act]
     x_1 = svd_act_fn(torch.matmul(torch.matmul(input, u_proj),sv_proj) + sv_bias) > threshold
     (_, idx) = torch.nonzero(x_1, as_tuple=True)
@@ -60,16 +70,21 @@ if __name__ == "__main__":
     x = x1 * x2
     print(x)
     output_1 = gather_transposed_gemv(x, down_full, idx)
-    print(output_1)
+    # print(output_1)
+    assert torch.allclose(idx, flags[:nzid])
 
 
-    eps = 7e-5
-    threshold = -0.1 + eps
-    flags = x_1
-    x_fuse = gather_gemv2_flag(input, gate_t, up_t, flags, hidden_act)
-    print(x_fuse)
-    print(x_fuse.shape)
-    output_2 = gather_transposed_gemv_flag(x_fuse, down_full, flags)
-    print(output_2)
+    # eps = 7e-5
+    # threshold = -0.1 + eps
+    # flags = x_1
+    # x_fuse = gather_gemv2_flag(input, gate_t, up_t, flags, hidden_act)
+    # print(x_fuse)
+    # print(x_fuse.shape)
+    # output_2 = gather_transposed_gemv_flag(x_fuse, down_full, flags)
+    # print(output_2)
     # Assert flags and x_1 are equal, which are two Bool tensors
-    print(torch.nonzero(torch.abs(output_1 - output_2) > 0.0005))
+    # print(torch.nonzero(torch.abs(output_1 - output_2) > 0.0005))
+
+
+
+

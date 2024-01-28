@@ -826,6 +826,7 @@ def mistral_mlp_sparse(x, Wgate, Wup, Wdownt, idx, activation="relu"):
     x1 = gather_gemv(x, Wgate, idx, activation=activation)
     x2 = gather_gemv(x, Wup, idx)
     x = x1 * x2
+    # print(x)
     x = gather_transposed_gemv(x, Wdownt, idx)
     return x
 

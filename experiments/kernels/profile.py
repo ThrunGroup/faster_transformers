@@ -3,11 +3,48 @@ import argparse
 import time
 from utils import benchmark, ACT2FN, benchmark_pred, Config, MistralSparseMLP, degrad_tensor
 from dejavu import mistral_mlp_sparse, mistral_mlp_sparse_fuse
-from kernels import matmul_triton, matmul_triton_bias, matmul_triton_bias_where, mistral_mlp_sparse_flag
+from kernels import matmul_triton, matmul_triton_bias, matmul_triton_bias_where, mistral_mlp_sparse_flag, matmul_triton_bias_fp32
+import torch_index_scatter
 # @torch.compile
 # def svd_where(x, Wu, Wsv, Bsv, svd_activation, threshold, K):
 #     svd_act_fn = torch.nn.SiLU()
 #     return (svd_act_fn(torch.matmul(torch.matmul(x, Wu),Wsv) + Bsv)[0] >= threshold).nonzero().squeeze(1)[:K]
+THS = -0.1
+
+def mistral_mlp_pred_where_idx(x, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdownt, activation, idx):
+    """
+    x: (batch, d)
+    Wu: (d, r)
+    Wsv: (r, 3.5d)
+    Bsv: (3.5d)
+    Wgate: (3.5d, d)
+    Wup: (3.5d, d)
+    Wdownt: (3.5d, d)
+    idx: (M)
+    """
+    eps = 7e-5
+    threshold = THS + eps
+    x_1 = matmul_triton(x, Wu)
+    x_2 = matmul_triton_bias_where(x_1, Wsv, Bsv, threshold, svd_activation)
+    output = mistral_mlp_sparse(x, Wgate, Wup, Wdownt, idx, activation) 
+    return output
+
+def mistral_mlp_pred_where_idx_torch(x, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdownt, activation, idx):
+    """
+    x: (batch, d)
+    Wu: (d, r)
+    Wsv: (r, 3.5d)
+    Bsv: (3.5d)
+    Wgate: (3.5d, d)
+    Wup: (3.5d, d)
+    Wdownt: (3.5d, d)
+    idx: (M)
+    """
+    threshold = THS
+    svd_act_fn = ACT2FN[svd_activation]
+    x_1 = svd_act_fn(torch.matmul(torch.matmul(x, Wu),Wsv) + Bsv) > threshold
+    output = mistral_mlp_sparse(x, Wgate, Wup, Wdownt, idx, activation) 
+    return output
 
 def mistral_mlp_pred_where(x, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdownt, activation, K):
     """
@@ -21,7 +58,7 @@ def mistral_mlp_pred_where(x, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdownt, 
     idx: (M)
     """
     eps = 7e-5
-    threshold = -0.1 + eps
+    threshold = THS + eps
     # svd_act_fn = ACT2FN[svd_activation]
     x_1 = matmul_triton(x, Wu)
     # print(x_1.shape)
@@ -34,6 +71,7 @@ def mistral_mlp_pred_where(x, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdownt, 
     # print(idx.shape)
     # return mistral_mlp_sparse(x, Wgate, Wup, Wdownt, idx[:K], activation) 
     output = mistral_mlp_sparse_flag(x, Wgate, Wup, Wdownt, x_2, activation)
+    # output = mistral_mlp_sparse(x, Wgate, Wup, Wdownt, idx[:K], activation) 
     # print(output)
     return output
 
@@ -48,12 +86,12 @@ def mistral_mlp_pred_where_torch(x, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wd
     Wdownt: (3.5d, d)
     idx: (M)
     """
-    threshold = -0.1
+    threshold = THS
     svd_act_fn = ACT2FN[svd_activation]
     x_1 = svd_act_fn(torch.matmul(torch.matmul(x, Wu),Wsv) + Bsv) > threshold
+    # x_1 = x > threshold
     (_, idx) = torch.nonzero(x_1, as_tuple=True)
-    # print(idx.shape)
-    output = mistral_mlp_sparse(x, Wgate, Wup, Wdownt, idx[:K], activation) 
+    output = mistral_mlp_sparse(x, Wgate, Wup, Wdownt, idx, activation) 
     # print(output)
     return output
 
@@ -84,11 +122,22 @@ def mistral_mlp_torch(x, Wgate, Wup, Wdown, idx, activation="relu"):
     act_fn = ACT2FN[activation]
     return torch.matmul(act_fn(torch.matmul(x, Wgate)) * torch.matmul(x, Wup), Wdown)
 
+def mistral_mlp_thrust(x, Wu, Wsv, Bsv, orange, Wgate, Wup, Wdownt, idx, K):
+    svd_activation = "swish"
+    threshold = 0.1
+    feature = matmul_triton_bias_fp32(matmul_triton(input, Wu), Wsv, svd_activation, Bsv).squeeze(0)
+    threshold_tensor = torch.Tensor([threshold]).to(torch.float32)
+    nzid = torch_index_scatter.fast_nonzero(feature, orange, idx, threshold_tensor)
+    output = mistral_mlp_sparse(x, Wgate, Wup, Wdownt, idx[:K], svd_activation) 
+    return output
+
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Profile mare upperbound')
     parser.add_argument('--rank', type=int, default=128)
     parser.add_argument('--compress', type=float, default=4)
-    parser.add_argument('--filename', type=str, default="./perfs/dejavu.csv")
+    parser.add_argument('--filename', type=str, default="./perfs/where-nonzero.csv")
     parser.add_argument('--record', type=bool)
     args = parser.parse_args()
 
@@ -97,6 +146,7 @@ if __name__ == "__main__":
     intermediate_size = 14336
     rank = args.rank
     K = int(intermediate_size / args.compress)
+    # K = 10209 # Cannot control the actual nonzero in the real svd-mlp
     B = 1
     hidden_act = "swish"
     svd_act = "swish"
@@ -113,7 +163,7 @@ if __name__ == "__main__":
 
     config = Config(hidden_size, intermediate_size, rank, K, torch.float16, 'swish', 'swish')
     mlp = MistralSparseMLP(config).to(torch.float16).cuda()
-    mlp(input)
+    # mlp(input)
     input = degrad_tensor(input)
     gate_t = degrad_tensor(mlp.gate_proj.weight)
     up_t = degrad_tensor(mlp.up_proj.weight)
@@ -123,12 +173,21 @@ if __name__ == "__main__":
     sv_proj = degrad_tensor(mlp.sv_proj.weight).T.contiguous()
     sv_bias = degrad_tensor(mlp.sv_proj.bias)
 
+    svd_act_fn = ACT2FN[svd_act]
+    flag = svd_act_fn(torch.matmul(torch.matmul(input, u_proj),sv_proj) + sv_bias) > THS
+    (_, idx) = torch.nonzero(flag, as_tuple=True)
+    print(idx.shape)
+    K = idx.shape[0]
     gate = torch.randn((hidden_size, K), dtype=torch.float16).cuda()
     up = torch.randn((hidden_size, K), dtype=torch.float16).cuda()
-    down = torch.randn((K, hidden_size), dtype=torch.float16).cuda()    
-    perm = torch.randperm(intermediate_size)[:K]
-    idx, _ = torch.sort(perm)
-    idx = idx.cuda()
+    down = torch.randn((K, hidden_size), dtype=torch.float16).cuda()
+    gate_full = torch.randn((hidden_size, intermediate_size), dtype=torch.float16).cuda()
+    up_full = torch.randn((hidden_size, intermediate_size), dtype=torch.float16).cuda()
+
+    # perm = torch.randperm(intermediate_size)[:K]
+    # idx, _ = torch.sort(perm)
+    # idx = idx.cuda()
+
 
     # output = mistral_mlp_pred_where_torch(input, u_proj, sv_proj, sv_bias, svd_act, gate_t, up_t, down_full, hidden_act, K)
     # triton_output = mistral_mlp_pred_where(input, u_proj, sv_proj, sv_bias, svd_act, gate_t, up_t, down_full, hidden_act, K)
@@ -136,11 +195,18 @@ if __name__ == "__main__":
 
     time.sleep(2)
 
-    time_dense_torch = benchmark(mistral_mlp_torch, input, gate, up, down, idx, hidden_act)
+    time_dense_torch = benchmark(mistral_mlp_torch, input, gate_full, up_full, down_full, idx, hidden_act)
+    time_torch = benchmark(mistral_mlp_torch, input, gate, up, down, idx, hidden_act)
     time_dejavu = benchmark(mistral_mlp_sparse_fuse, input, gate_t, up_t, down_full, idx, hidden_act)
     time_pred_dejavu = benchmark_pred(mistral_mlp_pred_sparse, input, u_proj, sv_proj, sv_bias, svd_act, gate_t, up_t, down_full, hidden_act, K)
+    time_pred_where_torch = benchmark_pred(mistral_mlp_pred_where_torch, input, u_proj, sv_proj, sv_bias, svd_act, gate_t, up_t, down_full, hidden_act, K)
     time_pred_where = benchmark_pred(mistral_mlp_pred_where, input, u_proj, sv_proj, sv_bias, svd_act, gate_t, up_t, down_full, hidden_act, K)
+    time_pred_where_idx_torch = benchmark_pred(mistral_mlp_pred_where_idx_torch, input, u_proj, sv_proj, sv_bias, svd_act, gate_t, up_t, down_full, hidden_act, idx)
+    time_pred_where_idx = benchmark_pred(mistral_mlp_pred_where_idx, input, u_proj, sv_proj, sv_bias, svd_act, gate_t, up_t, down_full, hidden_act, idx)
+    idx = torch.zeros(intermediate_size, dtype=torch.int64).cuda()
+    orange = torch.arange(intermediate_size, dtype=torch.int64).cuda()
+    time_thrust = benchmark_pred(mistral_mlp_thrust, input, u_proj, sv_proj, sv_bias, orange, gate_t, up_t, down_full, idx, K)
     with open(args.filename, "a") as f:
         if args.record:
-            f.write("{},{:.2f},{:.2f},{:.2f},{:.2f}\n".format(K, time_dense_torch, time_dejavu, time_pred_dejavu, time_pred_where))
-        print("{},{:.2f},{:.2f},{:.2f},{:.2f}".format(K, time_dense_torch, time_dejavu, time_pred_dejavu, time_pred_where))
+            f.write("{},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f}\n".format(K, time_dense_torch, time_torch, time_dejavu, time_pred_dejavu, time_pred_where_torch, time_pred_where, time_pred_where_idx_torch, time_pred_where_idx, time_thrust))
+        print("{},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f}".format(K, time_dense_torch, time_torch, time_dejavu, time_pred_dejavu, time_pred_where_torch, time_pred_where, time_pred_where_idx_torch, time_pred_where_idx, time_thrust))

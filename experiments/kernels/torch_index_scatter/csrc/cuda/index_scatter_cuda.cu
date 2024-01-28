@@ -8,7 +8,6 @@
 #include <thrust/device_vector.h>
 #include <thrust/count.h>
 #include <thrust/copy.h>
-#include <thrust/sequence.h>
 #include <thrust/execution_policy.h>
 
 using namespace at::native;
@@ -139,7 +138,7 @@ at::Tensor index_scatter_cuda(const int64_t dim, const at::Tensor &index,
 
 
 template <typename scalar_t>
-int64_t fast_nonzero_cuda_kernel(const at::Tensor &value, at::Tensor &result, const at::Tensor &threshold) {
+int64_t fast_nonzero_cuda_kernel(const at::Tensor &value, const at::Tensor &orange, at::Tensor &result, const at::Tensor &threshold) {
     // printf("fast_nonzero_cuda_kernel\n");
     const auto nnz = value.numel();
     auto threshold_data = threshold.data_ptr<scalar_t>();
@@ -147,22 +146,22 @@ int64_t fast_nonzero_cuda_kernel(const at::Tensor &value, at::Tensor &result, co
     // printf("ths = %f\n", ths);
     auto value_data = value.data_ptr<scalar_t>();
     auto result_data = result.data_ptr<int64_t>();
-   
-    thrust::device_vector<int64_t> indices(nnz);
-    thrust::sequence(indices.begin(), indices.end(), 0);
+    auto indices_data = orange.data_ptr<int64_t>();
+    
     int64_t N = thrust::count_if(thrust::device, value_data, value_data + nnz, [=] __device__ (const scalar_t& x){
         return x > ths;
     });
-    thrust::copy_if(thrust::device, indices.data(), indices.data() + nnz, value_data, result_data, [=] __device__ (const scalar_t& x){
+
+    thrust::copy_if(thrust::device, indices_data, indices_data + nnz, value_data, result_data, [=] __device__ (const scalar_t& x){
         return x > ths;
     });
     return N;
 }
 
-int64_t fast_nonzero_dispatch(const at::Tensor &value, at::Tensor &result, const at::Tensor &threshold) {
+int64_t fast_nonzero_dispatch(const at::Tensor &value, const at::Tensor &orange, at::Tensor &result, const at::Tensor &threshold) {
     int64_t N;
     AT_DISPATCH_FLOATING_TYPES(value.scalar_type(), "fast_nonzero", [&] {
-        N = fast_nonzero_cuda_kernel<scalar_t>(value, result, threshold);
+        N = fast_nonzero_cuda_kernel<scalar_t>(value, orange, result, threshold);
     });
     return N;
 }
