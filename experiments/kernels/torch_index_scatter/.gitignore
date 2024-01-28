@@ -1,0 +1,8 @@
+.vscode
+dist
+*egg-info
+build
+*.so
+__pycache__
+*.o
+.DS_Store
