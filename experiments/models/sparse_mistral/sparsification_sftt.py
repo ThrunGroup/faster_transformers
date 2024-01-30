@@ -208,6 +208,18 @@ class MistralSparseSiluMLP(MistralMLP):
         pre_act = self.gate_proj(x)
         post_act = self.act_fn(pre_act)
 
+        if self.use_sparse_regularization:
+            if self.regularization_type == "L1 regularization":
+                self.activation_norm = torch.abs(post_act)[
+                    post_act < self.regularization_threshold
+                ].mean()
+            elif self.regularization_type == "L2 regularization":
+                self.activation_norm = torch.sqrt(
+                    torch.square(post_act)[
+                        post_act < self.regularization_threshold
+                    ]
+                ).mean()
+
         if self.kill_sparse_swish_outputs:
             dead_neurons = post_act.abs() <= self.current_dead_threshold
             dead_percentage = dead_neurons.float().mean()
@@ -225,17 +237,6 @@ class MistralSparseSiluMLP(MistralMLP):
             post_act[dead_neurons] = 0
 
         out = self.down_proj(post_act * self.up_proj(x))
-        if self.use_sparse_regularization:
-            if self.regularization_type == "L1 regularization":
-                self.activation_norm = torch.abs(post_act)[
-                    post_act < self.regularization_threshold
-                ].mean()
-            elif self.regularization_type == "L2 regularization":
-                self.activation_norm = torch.sqrt(
-                    torch.square(post_act)[
-                        post_act < self.regularization_threshold
-                    ]
-                ).mean()
 
         return out
 

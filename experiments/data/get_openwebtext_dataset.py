@@ -1,5 +1,7 @@
 from transformers import DataCollatorForLanguageModeling
 from datasets import load_dataset
+import pickle
+import torch
 
 from .dataset import Dataset
 
@@ -21,25 +23,65 @@ class OpenWebText(Dataset):
         Load and build the openwebtext dataset which is already preprocessed.
         :return: dataset
         """
-        dataset = load_dataset("stas/openwebtext-10k", split="train[:10]")
-        dataset = dataset.train_test_split(test_size=0.2)
-        tokenized_dataset = dataset.map(self.preprocess, batched=True)
-        print(tokenized_dataset)
-
-        # train_dataset = TextDataset(tokenizer=self.tokenizer, file_path=train_dataset['text'], block_size=128)
-        # test_dataset = TextDataset(tokenizer=self.tokenizer, file_path=test_dataset['text'], block_size=128)
-
-        return tokenized_dataset["train"], tokenized_dataset["test"]
-
-    def preprocess(self, examples):
-        inputs = self.tokenizer(
-            examples["text"], max_length=1024, truncation=True
+        train_path = (
+            f"datasets/{self.model_type}_{self.dataset_type}_train.pkl"
+        )
+        test_path = f"datasets/{self.model_type}_{self.dataset_type}_test.pkl"
+        validation_path = (
+            f"datasets/{self.model_type}_{self.dataset_type}_validation.pkl"
         )
 
-        return {
-            "input_ids": inputs["input_ids"],
-            "attention_mask": inputs["attention_mask"],
-        }
+        try:
+            # Try to load preprocessed data
+            with open(train_path, "rb") as f:
+                train_dataset = pickle.load(f)
+            with open(test_path, "rb") as f:
+                test_dataset = pickle.load(f)
+            with open(validation_path, "rb") as f:
+                val_dataset = pickle.load(f)
+            print("Loaded preprocessed data from disk.")
+
+        except FileNotFoundError:
+            print("No dataset found.")
+            dataset = load_dataset("Skylion007/openwebtext")
+
+            tokenized_dataset = dataset.map(
+                self.preprocess,
+                batched=True,
+                batch_size=128,
+                remove_columns=dataset.column_names["train"],
+            )
+
+            print("Tokenization completed.")
+
+            # GLUE doesn't provide answers for TEST, so we have to manually make them
+            train_test_dataset = tokenized_dataset["train"].train_test_split(
+                test_size=0.1
+            )
+
+            train_dataset = train_test_dataset["train"]
+            test_dataset = train_test_dataset["test"]
+            val_dataset = tokenized_dataset["validation"]
+
+            # Save the preprocessed data
+            with open(train_path, "wb") as f:
+                pickle.dump(train_dataset, f)
+            with open(test_path, "wb") as f:
+                pickle.dump(test_dataset, f)
+            with open(validation_path, "wb") as f:
+                pickle.dump(val_dataset, f)
+            print("Preprocessed and saved data to disk.")
+
+        return train_dataset, val_dataset, test_dataset
+
+    def preprocess(self, examples):
+        tokenized_inputs = self.tokenizer(
+            [" ".join(x) for x in examples["text"]],
+            max_length=512,
+            truncation=True,
+        )
+
+        return tokenized_inputs
 
     def get_data_collator(self):
         """
@@ -51,13 +93,21 @@ class OpenWebText(Dataset):
         )
         return data_collator
 
-    def get_compute_metrics(self):
-        """
-        Load the compute_metrics function that is used by the HuggingFace Trainer to
-        evaluate the model.
-        :return:
-        """
-        return self.compute_metrics()
+    def compute_metrics(self, preds):
+        logits, labels = preds
 
-    def compute_metrics(self):
-        return None
+        # Shift the labels to the right to align with the output of the model
+        shifted_logits = logits[..., :-1, :].contiguous()
+        shifted_labels = labels[..., 1:].contiguous()
+
+        # Flatten the logits and labels to calculate loss
+        loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
+        loss = loss_fct(
+            shifted_logits.view(-1, shifted_logits.size(-1)),
+            shifted_labels.view(-1),
+        )
+
+        # Calculate perplexity
+        perplexity = torch.exp(torch.mean(loss))
+
+        return {"perplexity": perplexity.item()}

@@ -13,7 +13,9 @@ import argparse
 
 from experiments.data.get_dataset import get_dataset
 from experiments.models.build_model import build_model
-from experiments.models.sparse_mistral.relufication import print_dead_neuron_stats
+from experiments.models.sparse_mistral.relufication import (
+    print_dead_neuron_stats,
+)
 from experiments.models.sparse_mistral.relufication import (
     SparseSiLUTrainer,
     enable_sparse_silu,
@@ -276,23 +278,33 @@ if __name__ == "__main__":
                     "use_lora": True,
                 }
 
-                # "pretrained_model_name" here means a model finetuned on a downstream task that you want to build upon
-                # If you omit the parameter, it will automatically download a pretrained model (not finetuned)
+                # Original model
                 create_model(
                     **common_args,
-                    push_to_hub=True,  # whether to save the model both in local and remote repositories
-                    use_sparse_silu=True,  # when turned on, it kills negligible swish outputs < 0.1
-                    use_sparse_regularization=True,  # for sparse silu regularization
-                    # run_name="Mistral-7B-v0.1_cola_swiglu"
-                    run_name="_sparse_swiglu_ignore_0_1",
-                    pretrained_model_name="Mistral-7B-v0.1_cola_sparse_swiglu_scratch",
-                )
-                create_model(
-                    **common_args,
-                    push_to_hub=True,  # whether to save the model both in local and remote repositories
+                    push_to_hub=False,  # whether to save the model both in local and remote repositories
                     use_sparse_silu=False,  # when turned on, it kills negligible swish outputs < 0.1
-                    use_sparse_regularization=True,  # for sparse silu regularization
-                    # run_name="Mistral-7B-v0.1_cola_swiglu"
-                    run_name="Mistral_scratch_cola",
-                    pretrained_model_name="Mistral-7B-v0.1_cola_sparse_swiglu_scratch",
+                    use_sparse_regularization=False,  # for sparse silu regularization
+                    run_name="_original_pretraining",
                 )
+
+                # # "pretrained_model_name" here means a model finetuned on a downstream task that you want to build upon
+                # # If you omit the parameter, it will automatically download a pretrained model (not finetuned)
+                # create_model(
+                #     **common_args,
+                #     push_to_hub=True,  # whether to save the model both in local and remote repositories
+                #     use_sparse_silu=True,  # when turned on, it kills negligible swish outputs < 0.1
+                #     use_sparse_regularization=True,  # for sparse silu regularization
+                #     # run_name="Mistral-7B-v0.1_cola_swiglu"
+                #     run_name="_sparse_swiglu_ignore_0_1",
+                #     pretrained_model_name="Mistral-7B-v0.1_cola_sparse_swiglu_scratch",
+                # )
+
+                # create_model(
+                #     **common_args,
+                #     push_to_hub=True,  # whether to save the model both in local and remote repositories
+                #     use_sparse_silu=False,  # when turned on, it kills negligible swish outputs < 0.1
+                #     use_sparse_regularization=True,  # for sparse silu regularization
+                #     # run_name="Mistral-7B-v0.1_cola_swiglu"
+                #     run_name="Mistral_scratch_cola",
+                #     pretrained_model_name="Mistral-7B-v0.1_cola_sparse_swiglu_scratch",
+                # )
