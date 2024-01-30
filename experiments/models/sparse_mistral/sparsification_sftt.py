@@ -382,6 +382,7 @@ def set_sparse_threshold(model, sparsity_level: float):
                 layer.mlp.post_act_hist_counts,
                 sparsity_level,
             )
+            print(i, get_threshold)
             layer.mlp.regularization_threshold = (
                 layer.mlp.dead_threshold * 1.2
             )  # TODO: find better param
