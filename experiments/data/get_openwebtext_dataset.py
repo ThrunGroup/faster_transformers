@@ -43,19 +43,25 @@ class OpenWebText(Dataset):
 
         except FileNotFoundError:
             print("No dataset found.")
-            dataset = load_dataset("Skylion007/openwebtext")
+            dataset = load_dataset(
+                "Skylion007/openwebtext", split="train[:100]"
+            )
+
+            print("dataset: ", dataset)
 
             tokenized_dataset = dataset.map(
                 self.preprocess,
                 batched=True,
                 batch_size=128,
-                remove_columns=dataset.column_names["train"],
+                # remove_columns=dataset.column_names["train"],
             )
+
+            print("tokenized: ", tokenized_dataset)
 
             print("Tokenization completed.")
 
             # GLUE doesn't provide answers for TEST, so we have to manually make them
-            train_test_dataset = tokenized_dataset["train"].train_test_split(
+            train_test_dataset = tokenized_dataset.train_test_split(
                 test_size=0.1
             )
 
