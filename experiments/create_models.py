@@ -29,6 +29,7 @@ from utils.constants import (
     MISTRAL_7B,
     # Datasets
     COLA,
+    OPENWEBTEXT,
 )
 
 
@@ -83,7 +84,7 @@ def finetune(
     # @TODO: Unification of output dir
 
     training_args = TrainingArguments(
-        output_dir=os.path.join("/scr/jay/ckpt", model_name),
+        output_dir=os.path.join("ckpt", model_name),
         evaluation_strategy="steps",
         eval_steps=20,  # early stopping counts only when eval step and save step match
         save_steps=20,
@@ -254,7 +255,8 @@ def create_model(
 if __name__ == "__main__":
     dataset_types = [
         # SST2,
-        COLA,
+        # COLA,
+        OPENWEBTEXT,
         # RTE,
         # MRPC,
         # QNLI,
