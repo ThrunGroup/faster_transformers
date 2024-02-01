@@ -96,15 +96,13 @@ class AsyncSparseMistralDecoderLayer(MistralDecoderLayer):
         use_cache: Optional[bool] = False,
         **kwargs,
     ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
-        curr_stream = torch.cuda.current_stream()
+        
 
         residual = hidden_states
 
         with torch.cuda.stream(self.pred_stream):
             flags = self.pred_mlp(residual)
             self.pred_stream.record_event(self.event_mlp_sp)
-
-        flags = self.pred_mlp(residual)
 
         hidden_states = self.input_layernorm(hidden_states)
 
@@ -122,7 +120,8 @@ class AsyncSparseMistralDecoderLayer(MistralDecoderLayer):
         # Fully Connected
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
-
+        
+        curr_stream = torch.cuda.current_stream()
         curr_stream.wait_event(self.event_mlp_sp)
         hidden_states = self.mlp(hidden_states, flags)
             
@@ -298,6 +297,8 @@ def benchmark_generation(context_length, generation_length, prompt_path="text.tx
         load_svd_weights(model, svd_path)
         model = model.to(torch.float16).to("cuda").eval()  
         
+
+
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
