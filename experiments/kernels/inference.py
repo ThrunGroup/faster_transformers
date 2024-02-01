@@ -5,12 +5,19 @@
 # 5. Test the token generation speed
 
 import torch
+import torch.nn as nn
+from typing import Optional, Tuple
 
+from transformers.activations import ACT2FN
+
+import os
 import json
 import argparse
-from kernels import mistral_mlp_sparse_direct_flag
+from kernels import mistral_mlp_sparse_direct_flag, gather_gemv2_flag, gather_transposed_gemv_flag
 from transformers.models.mistral.modeling_mistral import (
     MistralMLP,
+    MistralDecoderLayer,
+    MistralConfig,
 )
 
 from transformers import (
@@ -30,7 +37,7 @@ class PrunedMistralMLP(MistralMLP):
     
     def forward(self, x):
         if (x.shape[1] != 1): # batch size > 1
-            return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
+            return super().forward(x)# self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
         x = x.squeeze(0)
         x_1 = self.act_fn(self.gate_proj(x))
         if self.fc2_weight_t is None:
@@ -44,9 +51,106 @@ class PrunedMistralMLP(MistralMLP):
         )
         return x_2.unsqueeze(0)
 
+class PredictorMLP(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.hidden_size = config.hidden_size
+        self.intermediate_size = config.intermediate_size
+        self.sp_rank = config.sp_rank
+        self.pred_down = nn.Linear(self.hidden_size, self.sp_rank, bias=False)
+        self.pred_up = nn.Linear(self.sp_rank, self.intermediate_size, bias=True)
+        self.act_fn = ACT2FN[config.hidden_act]
+    
+    def forward(self, x):
+        return  torch.abs(self.act_fn(self.pred_up(self.pred_down(x)))) > self.threshold
+
+class FlagMistralMLP(MistralMLP):
+    def __init__(self, config):
+        super().__init__(config)
+        self.fc2_weight_t = self.register_buffer("fc2_weigth_t", None)
+    
+    def forward(self, x: torch.Tensor, flags: torch.Tensor):
+        if (x.shape[1] != 1):
+            return super().forward(x)
+        x = x.squeeze(0)
+        if self.fc2_weight_t is None:
+            self.fc2_weight_t = self.down_proj.weight.t().contiguous()
+        x = gather_gemv2_flag(x, self.gate_proj.weight, self.up_proj.weight, flags, self.config.hidden_act)
+        return gather_transposed_gemv_flag(x, self.fc2_weight_t, flags).unsqueeze(0)
+
+class SparseMistralDecoderLayer(MistralDecoderLayer):
+    def __init__(self, config: MistralConfig, layer_id: int):
+        super().__init__(config, layer_id)
+        self.pred_mlp = PredictorMLP(config)
+        self.mlp = FlagMistralMLP(config)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_value: Optional[Tuple[torch.Tensor]] = None,
+        output_attentions: Optional[bool] = False,
+        use_cache: Optional[bool] = False,
+        **kwargs,
+    ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
+        
+        residual = hidden_states
+        
+        flags = self.pred_mlp(hidden_states)
+
+        hidden_states = self.input_layernorm(hidden_states)
+
+        # Self Attention
+        hidden_states, self_attn_weights, present_key_value = self.self_attn(
+            hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_value=past_key_value,
+            output_attentions=output_attentions,
+            use_cache=use_cache,
+        )
+        hidden_states = residual + hidden_states
+
+        # Fully Connected
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
+
+
+        hidden_states = self.mlp(hidden_states, flags)
+            
+        hidden_states = residual + hidden_states
+
+        outputs = (hidden_states,)
+
+        if output_attentions:
+            outputs += (self_attn_weights,)
+
+        if use_cache:
+            outputs += (present_key_value,)
+
+        return outputs
+
+
+def store_fake_svd_weights(model, config, path):
+    svd_weights = {}
+    torch.manual_seed(0)
+    for i in range(len(model.model.layers)):
+        svd_weights[f"layer{i}.pred_mlp.w1"] = torch.randn(config.sp_rank, config.hidden_size).to(torch.float16)
+        svd_weights[f"layer{i}.pred_mlp.w2"] = torch.randn(config.intermediate_size, config.sp_rank).to(torch.float16)
+        svd_weights[f"layer{i}.pred_mlp.b2"] = torch.randn(config.intermediate_size).to(torch.float16)
+    torch.save(svd_weights, path)
+
+def load_svd_weights(model, path):
+    svd_weights = torch.load(path)
+    for i, layer in enumerate(model.model.layers):
+        layer.pred_mlp.pred_down.weight = torch.nn.Parameter(svd_weights[f"layer{i}.pred_mlp.w1"].to(torch.float16).to("cuda"))
+        layer.pred_mlp.pred_up.weight = torch.nn.Parameter(svd_weights[f"layer{i}.pred_mlp.w2"].to(torch.float16).to("cuda"))
+        layer.pred_mlp.pred_up.bias = torch.nn.Parameter(svd_weights[f"layer{i}.pred_mlp.b2"].to(torch.float16).to("cuda"))
+
 def transpose_weights(model):
     for layer in model.model.layers:
-        assert isinstance(layer.mlp, PrunedMistralMLP)
+        assert isinstance(layer.mlp, PrunedMistralMLP) or isinstance(layer.mlp, FlagMistralMLP)
         layer.mlp.fc2_weight_t = layer.mlp.down_proj.weight.t().contiguous()
 
 def load_thresholds(model, path):
@@ -59,6 +163,20 @@ def load_thresholds(model, path):
 def replace_mlp(model, config):
     for layer in model.model.layers:
         layer.mlp = PrunedMistralMLP(config).to(torch.float16).to("cuda").eval()
+
+def set_rank_load_threshold(config, model, sp_rank, ths_path):
+    config.sp_rank = sp_rank
+    with open(ths_path, "r") as f:
+        thresholds = json.load(f)
+    for i, layer in enumerate(model.model.layers):
+        assert isinstance(layer.pred_mlp, PredictorMLP)
+        layer.pred_mlp.threshold = thresholds[str(i)]
+
+def replace_decoder_layer(model, config):
+    new_layers = []
+    for layer_idx in range(config.num_hidden_layers):
+        new_layers.append(SparseMistralDecoderLayer(config=config, layer_idx=layer_idx))
+    model.model.layers = nn.ModuleList(new_layers)    
 
 # https://github.com/huggingface/transformers/issues/22222
 def generate_sentence(tokenizer, model, prompt: str, prompt_tokens: int = 64, max_tokens: int = 128, num_return_sequences: int = 3, num_beams: int = 4):
@@ -76,7 +194,7 @@ def generate_sentence(tokenizer, model, prompt: str, prompt_tokens: int = 64, ma
     outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
     return input_sentence, outputs, output_ids.shape[-1]
 
-def benchmark_generation(context_length, generation_length, prompt_path="text.txt", is_debugging=False, use_sparse_model=False, ths_path="thresholds.json"):
+def benchmark_generation(context_length, generation_length, prompt_path="text.txt", is_debugging=False, sparse_mode=0, ths_path="thresholds.json", **kwargs):
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
     if is_debugging:
         config = MistralConfig(
@@ -92,10 +210,19 @@ def benchmark_generation(context_length, generation_length, prompt_path="text.tx
             "mistralai/Mistral-7B-Instruct-v0.1",
         ).to(torch.float16).to("cuda").eval()
 
-    if use_sparse_model:
+    if sparse_mode == 0:
         replace_mlp(model, config)
         load_thresholds(model, ths_path)
         transpose_weights(model)
+    elif sparse_mode == 1:
+        svd_path = kwargs.pop("svd_path", "svd_weights.pth")
+        if not os.path.exists(svd_path):
+            store_fake_svd_weights(model, config, svd_path)
+        set_rank_load_threshold(config, model, kwargs.pop("sp_rank", 128), ths_path)
+        replace_decoder_layer(model, config)
+        load_svd_weights(model, svd_path)
+        transpose_weights(model)
+
 
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
@@ -118,7 +245,9 @@ def benchmark_generation(context_length, generation_length, prompt_path="text.tx
         print("=====================================")
         print(sentence)
     print("=====================================")
-    print("Use sparse? {}; Context Length: {}; Generation Length: {}. Elapsed time: {} ms. Throughput: {:.2f} tokens/s".format(use_sparse_model, context_length, outlen - context_length, elapsed_time_ms, outlen / (elapsed_time_ms / 1000.0)))
+    print("Sparse mode: {}; Context Length: {}; Generation Length: {}. Elapsed time: {} ms. Throughput: {:.2f} tokens/s".format(sparse_mode, context_length, outlen - context_length, elapsed_time_ms, outlen / (elapsed_time_ms / 1000.0)))
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Sparse Mistral inference benchmark")
@@ -126,8 +255,10 @@ if __name__ == "__main__":
     parser.add_argument("--generation_length", type=int, default=128)
     parser.add_argument("--prompt_path", type=str, default="text.txt")
     parser.add_argument("--is_debugging", action="store_true")
-    parser.add_argument("--use_sparse_model", action="store_true")
+    parser.add_argument("--sparse_mode", type=int, default=-1)
     parser.add_argument("--ths_path", type=str, default="thresholds.json")
+    parser.add_argument("--sp_rank", type=int, default=128)
+    parser.add_argument("--svd_path", type=str, default="svd_weights.pth")
     args = parser.parse_args()
     # benchmark_generation(64, 128, "text.txt", False, True, "thresholds.json")
-    benchmark_generation(args.context_length, args.generation_length, args.prompt_path, args.is_debugging, args.use_sparse_model, args.ths_path)
+    benchmark_generation(args.context_length, args.generation_length, args.prompt_path, args.is_debugging, args.sparse_mode, args.ths_path, {"sp_rank": args.sp_rank, "svd_path": args.svd_path})
