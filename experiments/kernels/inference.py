@@ -78,11 +78,13 @@ class FlagMistralMLP(MistralMLP):
         x = gather_gemv2_flag(x, self.gate_proj.weight, self.up_proj.weight, flags, self.config.hidden_act)
         return gather_transposed_gemv_flag(x, self.fc2_weight_t, flags).unsqueeze(0)
 
-class SparseMistralDecoderLayer(MistralDecoderLayer):
+class AsyncSparseMistralDecoderLayer(MistralDecoderLayer):
     def __init__(self, config: MistralConfig, layer_id: int):
         super().__init__(config, layer_id)
         self.pred_mlp = PredictorMLP(config)
         self.mlp = FlagMistralMLP(config)
+        self.pred_stream = torch.cuda.Stream(device="cuda", priority=0)
+        self.event_mlp_sp = torch.cuda.Event(enable_timing=False, blocking=False)
 
     def forward(
         self,
@@ -94,10 +96,15 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
         use_cache: Optional[bool] = False,
         **kwargs,
     ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
-        
+        curr_stream = torch.cuda.current_stream()
+
         residual = hidden_states
-        
-        flags = self.pred_mlp(hidden_states)
+
+        with torch.cuda.stream(self.pred_stream):
+            flags = self.pred_mlp(residual)
+            self.pred_stream.record_event(self.event_mlp_sp)
+
+        flags = self.pred_mlp(residual)
 
         hidden_states = self.input_layernorm(hidden_states)
 
@@ -116,6 +123,58 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
 
+        curr_stream.wait_event(self.event_mlp_sp)
+        hidden_states = self.mlp(hidden_states, flags)
+            
+        hidden_states = residual + hidden_states
+
+        outputs = (hidden_states,)
+
+        if output_attentions:
+            outputs += (self_attn_weights,)
+
+        if use_cache:
+            outputs += (present_key_value,)
+
+        return outputs
+
+class SparseMistralDecoderLayer(MistralDecoderLayer):
+    def __init__(self, config: MistralConfig, layer_id: int):
+        super().__init__(config, layer_id)
+        self.pred_mlp = PredictorMLP(config)
+        self.mlp = FlagMistralMLP(config)
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_value: Optional[Tuple[torch.Tensor]] = None,
+        output_attentions: Optional[bool] = False,
+        use_cache: Optional[bool] = False,
+        **kwargs,
+    ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
+
+        residual = hidden_states
+
+        flags = self.pred_mlp(residual)
+
+        hidden_states = self.input_layernorm(hidden_states)
+
+        # Self Attention
+        hidden_states, self_attn_weights, present_key_value = self.self_attn(
+            hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_value=past_key_value,
+            output_attentions=output_attentions,
+            use_cache=use_cache,
+        )
+        hidden_states = residual + hidden_states
+        
+        # Fully Connected
+        residual = hidden_states
+        hidden_states = self.post_attention_layernorm(hidden_states)
 
         hidden_states = self.mlp(hidden_states, flags)
             
@@ -164,8 +223,7 @@ def replace_mlp(model, config):
     for layer in model.model.layers:
         layer.mlp = PrunedMistralMLP(config).to(torch.float16).to("cuda").eval()
 
-def set_rank_load_threshold(config, model, sp_rank, ths_path):
-    config.sp_rank = sp_rank
+def load_threshold_pred(model, ths_path):
     with open(ths_path, "r") as f:
         thresholds = json.load(f)
     for i, layer in enumerate(model.model.layers):
@@ -174,9 +232,15 @@ def set_rank_load_threshold(config, model, sp_rank, ths_path):
 
 def replace_decoder_layer(model, config):
     new_layers = []
-    for layer_idx in range(config.num_hidden_layers):
-        new_layers.append(SparseMistralDecoderLayer(config=config, layer_idx=layer_idx))
-    model.model.layers = nn.ModuleList(new_layers)    
+    for layer_id in range(config.num_hidden_layers):
+        new_layers.append(SparseMistralDecoderLayer(config=config, layer_id=layer_id))
+    model.model.layers = nn.ModuleList(new_layers) 
+
+def replace_decoder_layer_async(model, config):
+    new_layers = []
+    for layer_id in range(config.num_hidden_layers):
+        new_layers.append(AsyncSparseMistralDecoderLayer(config=config, layer_id=layer_id))
+    model.model.layers = nn.ModuleList(new_layers)   
 
 # https://github.com/huggingface/transformers/issues/22222
 def generate_sentence(tokenizer, model, prompt: str, prompt_tokens: int = 64, max_tokens: int = 128, num_return_sequences: int = 3, num_beams: int = 4):
@@ -216,14 +280,24 @@ def benchmark_generation(context_length, generation_length, prompt_path="text.tx
         transpose_weights(model)
     elif sparse_mode == 1:
         svd_path = kwargs.pop("svd_path", "svd_weights.pth")
+        config.sp_rank = kwargs.pop("sp_rank", 128)
         if not os.path.exists(svd_path):
             store_fake_svd_weights(model, config, svd_path)
-        set_rank_load_threshold(config, model, kwargs.pop("sp_rank", 128), ths_path)
         replace_decoder_layer(model, config)
+        load_threshold_pred(model, ths_path)
         load_svd_weights(model, svd_path)
+        model = model.to(torch.float16).to("cuda").eval()
         transpose_weights(model)
-
-
+    elif sparse_mode == 2:
+        svd_path = kwargs.pop("svd_path", "svd_weights.pth")
+        config.sp_rank = kwargs.pop("sp_rank", 128)
+        if not os.path.exists(svd_path):
+            store_fake_svd_weights(model, config, svd_path)
+        replace_decoder_layer_async(model, config)
+        load_threshold_pred(model, ths_path)
+        load_svd_weights(model, svd_path)
+        model = model.to(torch.float16).to("cuda").eval()  
+        
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
@@ -252,7 +326,7 @@ def benchmark_generation(context_length, generation_length, prompt_path="text.tx
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Sparse Mistral inference benchmark")
     parser.add_argument("--context_length", type=int, default=64)
-    parser.add_argument("--generation_length", type=int, default=128)
+    parser.add_argument("--generation_length", type=int, default=1089)
     parser.add_argument("--prompt_path", type=str, default="text.txt")
     parser.add_argument("--is_debugging", action="store_true")
     parser.add_argument("--sparse_mode", type=int, default=-1)
@@ -261,4 +335,5 @@ if __name__ == "__main__":
     parser.add_argument("--svd_path", type=str, default="svd_weights.pth")
     args = parser.parse_args()
     # benchmark_generation(64, 128, "text.txt", False, True, "thresholds.json")
-    benchmark_generation(args.context_length, args.generation_length, args.prompt_path, args.is_debugging, args.sparse_mode, args.ths_path, {"sp_rank": args.sp_rank, "svd_path": args.svd_path})
+    kwargs = {"sp_rank": args.sp_rank, "svd_path": args.svd_path}
+    benchmark_generation(args.context_length, args.generation_length, args.prompt_path, args.is_debugging, args.sparse_mode, args.ths_path, kwargs=kwargs)
