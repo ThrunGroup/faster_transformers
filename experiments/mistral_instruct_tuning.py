@@ -22,6 +22,7 @@ from transformers.utils import is_sagemaker_mp_enabled, is_sagemaker_dp_enabled
 
 
 import torch
+import torch.nn as nn
 import os
 import gc
 import wandb
@@ -29,10 +30,12 @@ import numpy as np
 import sys
 import argparse
 import time
+import warnings
 
 from experiments.models.sparse_mistral.sparsification_sftt import (
     SparseSFTTTrainer,
     apply_mistral_sparse_silu_mlp,
+    apply_mistral_sparse_decoder_layer,
     activate_stats,
     enable_sparse_silu,
     print_dead_neuron_stats,
@@ -41,7 +44,10 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     deactivate_stats,
     load_act_hist,
     save_act_hist,
+    enable_last_k_modules,
+    enable_first_k_modules,
 )
+from experiments.models.sparse_mistral.svd_router import SparsePredictor
 from utils.mistral_utils import compress_mistral
 from utils.utils import (
     print_size_of_model,
@@ -255,12 +261,14 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     dataset_type = exp_config.dataset_type
     is_plot = exp_config.is_plot
     seed = exp_config.seed
-    run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
 
     if not exp_config.use_sparse_model:
         exp_config.use_sparse_regularization = (
             exp_config.print_sparsity
         ) = exp_config.print_act_stats = exp_config.set_sparsity_aware_threshold = False
+        exp_config.targeted_sparsity = 0
+
+    run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
 
     if dataset_type == "cola":
         dataset = load_glue(dataset_type, seed=seed)
@@ -348,6 +356,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         output_dir=output_dir,
         evaluation_strategy="steps",
         eval_steps=50,  # early stopping counts only when eval step and save step match
+        max_steps=10 if is_debugging else -1,
         # save_steps=50,
         logging_steps=5,
         save_strategy="steps",
@@ -423,8 +432,33 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     deactivate_stats(model.get_base_model())
     trainer.train()
 
+    # Train model for sparse predictor
+    if exp_config.use_spm:
+        if exp_config.use_sparse_model:
+            # Inject Sparse Predictor
+            apply_mistral_sparse_decoder_layer(
+                model.get_base_model(), model.get_base_model().config
+            )
+
+            # Freeze original params
+            for params in model.parameters():
+                params.requires_grad = False
+            for name, module in model.named_modules():
+                if isinstance(module, SparsePredictor):
+                    for name, params in module.named_parameters():
+                        params.requires_grad = True
+
+            trainer.freeze_original_weights = True
+            trainer.initialize_sparse_decoder_layers(model)
+            trainer.use_spm_loss = True
+            trainer.train()
+        else:
+            warnings.warn(
+                "use_spm arg is ignored as use_spare_model arg is not activated."
+            )
+
     # Evaluate on test dataset
-    model = model.merge_and_unload()
+    model = model.get_base_model()
 
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
@@ -449,15 +483,32 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         save_act_hist(model, act_hist_path)
         plot_act(model)
 
+    if exp_config.model_save:
+        trainer.save_model()
+        torch.save(model.state_dict(), f"/tmp/mistral_spm.pt")
+
+    # Early Exit/ Early Entry experiments
+    # model.model.original_layers = nn.ModuleList([layer for layer in model.model.layers])
+    # for idx in range(len(model.model.original_layers)):
+    #     enable_last_k_modules(model, idx)
+    #     print(f"Early Start: layer {idx}!!!!")
+    #     eval_result = trainer.evaluate(test_dataset)
+    #     print(eval_result)
+    #     log_dict[f"early start-{idx} accuracy"] = eval_result["eval_accuracy"]
+    #
+    # for idx in range(len(model.model.original_layers)):
+    #     enable_first_k_modules(model, idx)
+    #     print(f"Early Exit: layer {idx}!!!!")
+    #     eval_result = trainer.evaluate(test_dataset)
+    #     print(eval_result)
+    #     log_dict[f"early exit-{idx} accuracy"] = eval_result["eval_accuracy"]
+
     if use_wandb:
         if is_running_deepspeed():
             if is_mainprocess():
                 wandb.log(log_dict)
         else:
             wandb.log(log_dict)
-
-    if exp_config.model_save:
-        trainer.save_model()
 
     # Empty out gpu memory
     del trainer
@@ -478,7 +529,7 @@ def prepare_sparse_model(
         config = MistralConfig(
             hidden_size=64,
             intermediate_size=64,
-            num_hidden_layers=2,
+            num_hidden_layers=4,
             # num_attention_heads=4,
         )
         model = MistralForCausalLM(config=config)
@@ -532,7 +583,7 @@ def parse_args():
         default=False,
         help="Whether to push the model to Hugging Face Hub",
     )
-    parser.add_argument("--model_save", action='store_true', default=False)
+    parser.add_argument("--model_save", action="store_true", default=False)
     parser.add_argument(
         "--train_batch_size", type=int, default=8, help="Training batch size"
     )
@@ -589,6 +640,12 @@ def parse_args():
         action="store_true",
         default=False,
         help="Whether to log in wandb",
+    )
+    parser.add_argument(
+        "--use_spm",
+        action="store_true",
+        default=False,
+        help="Whether to use in sparse predictor mask",
     )
 
     return parser.parse_args()
