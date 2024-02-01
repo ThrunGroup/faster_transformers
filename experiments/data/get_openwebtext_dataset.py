@@ -4,19 +4,19 @@ import pickle
 import torch
 
 from .dataset import Dataset
+from utils.constants import OPENWEBTEXT
 
 
 class OpenWebText(Dataset):
-    def __init__(self, tokenizer, model, model_type):
+    def __init__(self, tokenizer, model_type):
         """
         :param tokenizer: Tokenizer to tokenize the inputs
         :param model: Model to finetune / evaluate
         :param metrics: Metrics to evaluate the model
         :param prefix: Prefix to the inputs to start the summarization task
         """
-        super().__init__(tokenizer, model, model_type)
-        # self.tokenizer.pad_token = tokenizer.mask_toke
-        self.tokenizer.pad_token = tokenizer.eos_token
+        super().__init__(tokenizer, model_type)
+        self.dataset_type = OPENWEBTEXT
 
     def get_tokenized_dataset(self):
         """
