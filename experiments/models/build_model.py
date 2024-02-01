@@ -3,6 +3,7 @@ import os.path
 from transformers import (
     AutoConfig,
     AutoModelForSequenceClassification,
+    AutoModelForCausalLM,
 )
 import torch
 from torch import nn
@@ -95,9 +96,10 @@ def build_model(
             model.score.load_state_dict(score_dict)
     else:
         # Load a pretrained model not finetuned on a specific downstream task
-        model = AutoModelForSequenceClassification.from_pretrained(
-            model_type, config=config
-        )
+        # model = AutoModelForSequenceClassification.from_pretrained(
+        #     model_type, config=config
+        # )
+        model = AutoModelForCausalLM.from_pretrained(model_type, config=config)
 
         # You can optionally uncomment this block
         # to load a finetuned score head for faster finetuning
