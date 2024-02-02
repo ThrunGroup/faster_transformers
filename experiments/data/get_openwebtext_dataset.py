@@ -106,6 +106,9 @@ class OpenWebText(Dataset):
     def compute_metrics(self, preds):
         logits, labels = preds
 
+        logits = torch.from_numpy(logits)
+        labels = torch.from_numpy(labels)
+
         # Shift the labels to the right to align with the output of the model
         shifted_logits = logits[..., :-1, :].contiguous()
         shifted_labels = labels[..., 1:].contiguous()
