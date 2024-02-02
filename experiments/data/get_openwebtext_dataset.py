@@ -24,7 +24,7 @@ class OpenWebText(Dataset):
         :return: dataset
         """
         train_path = (
-            f"datasets/{self.model_type}_{self.dataset_type}_train_10k.pkl"
+            f"datasets/{self.model_type}_{self.dataset_type}_train_100k.pkl"
         )
         test_path = (
             f"datasets/{self.model_type}_{self.dataset_type}_test_100k.pkl"

@@ -275,8 +275,8 @@ if __name__ == "__main__":
                     "model_type": model_type,
                     "dataset_name": dataset_type,
                     "num_epochs": 20,
-                    "train_batch_size": 4,
-                    "test_batch_size": 16,
+                    "train_batch_size": 2,
+                    "test_batch_size": 2,
                     "gradient_checkpointing": False,
                     "use_lora": True,
                 }
@@ -290,14 +290,14 @@ if __name__ == "__main__":
                     run_name="_original_pretraining",
                 )
 
-                # Original model
-                create_model(
-                    **common_args,
-                    push_to_hub=False,  # whether to save the model both in local and remote repositories
-                    use_sparse_silu=True,  # when turned on, it kills negligible swish outputs < 0.1
-                    use_sparse_regularization=True,  # for sparse silu regularization
-                    run_name="_sparse_pretraining",
-                )
+                # # Original model
+                # create_model(
+                #     **common_args,
+                #     push_to_hub=False,  # whether to save the model both in local and remote repositories
+                #     use_sparse_silu=True,  # when turned on, it kills negligible swish outputs < 0.1
+                #     use_sparse_regularization=True,  # for sparse silu regularization
+                #     run_name="_sparse_pretraining",
+                # )
 
                 # # "pretrained_model_name" here means a model finetuned on a downstream task that you want to build upon
                 # # If you omit the parameter, it will automatically download a pretrained model (not finetuned)
