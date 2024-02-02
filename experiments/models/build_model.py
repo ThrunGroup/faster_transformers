@@ -99,6 +99,7 @@ def build_model(
         # model = AutoModelForSequenceClassification.from_pretrained(
         #     model_type, config=config
         # )
+        config.use_cache = False
         model = AutoModelForCausalLM.from_pretrained(model_type, config=config)
 
         # You can optionally uncomment this block
