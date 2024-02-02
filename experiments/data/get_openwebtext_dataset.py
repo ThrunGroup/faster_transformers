@@ -54,12 +54,10 @@ class OpenWebText(Dataset):
                 remove_columns=dataset.column_names["train"],
             )
 
-            print("tokenized: ", tokenized_dataset)
-
             # GLUE doesn't provide answers for TEST, so we have to manually make them
-            train_testvalid_dataset = tokenized_dataset.train_test_split(
-                test_size=0.2
-            )
+            train_testvalid_dataset = tokenized_dataset[
+                "train"
+            ].train_test_split(test_size=0.2)
             test_valid_dataset = train_testvalid_dataset[
                 "test"
             ].train_test_split(test_size=0.5)
