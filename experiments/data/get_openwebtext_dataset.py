@@ -24,12 +24,12 @@ class OpenWebText(Dataset):
         :return: dataset
         """
         train_path = (
-            f"datasets/{self.model_type}_{self.dataset_type}_train.pkl"
+            f"datasets/{self.model_type}_{self.dataset_type}_train_full.pkl"
         )
-        test_path = f"datasets/{self.model_type}_{self.dataset_type}_test.pkl"
-        validation_path = (
-            f"datasets/{self.model_type}_{self.dataset_type}_validation.pkl"
+        test_path = (
+            f"datasets/{self.model_type}_{self.dataset_type}_test_full.pkl"
         )
+        validation_path = f"datasets/{self.model_type}_{self.dataset_type}_validation_full.pkl"
 
         try:
             # Try to load preprocessed data
@@ -43,9 +43,7 @@ class OpenWebText(Dataset):
 
         except FileNotFoundError:
             print("No dataset found.")
-            dataset = load_dataset(
-                "Skylion007/openwebtext", split="train[:100]"
-            )
+            dataset = load_dataset("Skylion007/openwebtext")
 
             print("dataset: ", dataset)
 
@@ -53,7 +51,7 @@ class OpenWebText(Dataset):
                 self.preprocess,
                 batched=True,
                 batch_size=128,
-                # remove_columns=dataset.column_names["train"],
+                remove_columns=dataset.column_names["train"],
             )
 
             print("tokenized: ", tokenized_dataset)
