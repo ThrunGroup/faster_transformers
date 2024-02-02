@@ -85,6 +85,7 @@ def finetune(
 
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
+        max_steps=1,
         evaluation_strategy="steps",
         eval_steps=20,  # early stopping counts only when eval step and save step match
         save_steps=20,
