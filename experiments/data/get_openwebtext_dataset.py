@@ -27,9 +27,9 @@ class OpenWebText(Dataset):
             f"datasets/{self.model_type}_{self.dataset_type}_train_10k.pkl"
         )
         test_path = (
-            f"datasets/{self.model_type}_{self.dataset_type}_test_10k.pkl"
+            f"datasets/{self.model_type}_{self.dataset_type}_test_100k.pkl"
         )
-        validation_path = f"datasets/{self.model_type}_{self.dataset_type}_validation_10k.pkl"
+        validation_path = f"datasets/{self.model_type}_{self.dataset_type}_validation_100k.pkl"
 
         try:
             # Try to load preprocessed data
@@ -57,9 +57,9 @@ class OpenWebText(Dataset):
             )
 
             # GLUE doesn't provide answers for TEST, so we have to manually make them
-            train_testvalid_dataset = tokenized_dataset[
-                "train"
-            ].train_test_split(test_size=0.2)
+            train_testvalid_dataset = tokenized_dataset.train_test_split(
+                test_size=0.2
+            )
             test_valid_dataset = train_testvalid_dataset[
                 "test"
             ].train_test_split(test_size=0.5)
