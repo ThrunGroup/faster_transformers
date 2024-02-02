@@ -58,16 +58,16 @@ class OpenWebText(Dataset):
 
             print("tokenized: ", tokenized_dataset)
 
-            print("Tokenization completed.")
-
             # GLUE doesn't provide answers for TEST, so we have to manually make them
-            train_test_dataset = tokenized_dataset.train_test_split(
-                test_size=0.1
+            train_testvalid_dataset = tokenized_dataset.train_test_split(
+                test_size=0.2
             )
-
-            train_dataset = train_test_dataset["train"]
-            test_dataset = train_test_dataset["test"]
-            val_dataset = tokenized_dataset["validation"]
+            test_valid_dataset = train_testvalid_dataset[
+                "test"
+            ].train_test_split(test_size=0.5)
+            train_dataset = train_testvalid_dataset["train"]
+            val_dataset = test_valid_dataset["train"]
+            test_dataset = test_valid_dataset["test"]
 
             # Save the preprocessed data
             with open(train_path, "wb") as f:
