@@ -69,6 +69,10 @@ class OpenWebText(Dataset):
             val_dataset = test_valid_dataset["train"]
             test_dataset = test_valid_dataset["test"]
 
+            print(train_dataset)
+            print(val_dataset)
+            print(test_dataset)
+
             # Save the preprocessed data
             with open(train_path, "wb") as f:
                 pickle.dump(train_dataset, f)
