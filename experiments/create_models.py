@@ -278,9 +278,9 @@ if __name__ == "__main__":
                     "model_type": model_type,
                     "dataset_name": dataset_type,
                     "num_epochs": 20,
-                    "train_batch_size": 2,
-                    "test_batch_size": 8,
-                    "gradient_checkpointing": False,
+                    "train_batch_size": 1,
+                    "test_batch_size": 4,
+                    "gradient_checkpointing": True,
                     "use_lora": True,
                 }
 
