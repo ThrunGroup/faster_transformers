@@ -10,6 +10,7 @@ import wandb
 import gc
 import torch
 import argparse
+import numpy as np
 
 from experiments.data.get_dataset import get_dataset
 from experiments.models.build_model import build_model
@@ -141,6 +142,7 @@ def finetune(
 
     print("Evaluating... ")
     results = trainer.evaluate(test_dataset)
+    print("Perplexity: ", {np.exp(results['eval_loss']):.2f})
     print("Test set evaluation: ", results)
 
     if use_sparse_silu:
