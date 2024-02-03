@@ -23,13 +23,11 @@ class OpenWebText(Dataset):
         Load and build the openwebtext dataset which is already preprocessed.
         :return: dataset
         """
-        train_path = (
-            f"datasets/{self.model_type}_{self.dataset_type}_train_100k.pkl"
-        )
+        train_path = f"datasets/{self.model_type}_{self.dataset_type}_train_100k_128.pkl"
         test_path = (
-            f"datasets/{self.model_type}_{self.dataset_type}_test_100k.pkl"
+            f"datasets/{self.model_type}_{self.dataset_type}_test_100k_128.pkl"
         )
-        validation_path = f"datasets/{self.model_type}_{self.dataset_type}_validation_100k.pkl"
+        validation_path = f"datasets/{self.model_type}_{self.dataset_type}_validation_100k_128.pkl"
 
         try:
             # Try to load preprocessed data
@@ -85,7 +83,7 @@ class OpenWebText(Dataset):
     def preprocess(self, examples):
         tokenized_inputs = self.tokenizer(
             [" ".join(x) for x in examples["text"]],
-            max_length=512,
+            max_length=128,
             truncation=True,
         )
 
