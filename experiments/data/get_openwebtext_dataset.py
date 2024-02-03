@@ -104,7 +104,6 @@ class OpenWebText(Dataset):
         Original Trainer may have a memory leak.
         This is a workaround to avoid storing too many tensors that are not needed.
         """
-        return logits
         pred_ids = torch.argmax(logits, dim=-1)
         return pred_ids
 
