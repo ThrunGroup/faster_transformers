@@ -87,7 +87,7 @@ def finetune(
 
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
-        max_steps=1,
+        max_steps=40,
         evaluation_strategy="steps",
         eval_steps=20,  # early stopping counts only when eval step and save step match
         save_steps=20,
@@ -278,29 +278,29 @@ if __name__ == "__main__":
                     "model_type": model_type,
                     "dataset_name": dataset_type,
                     "num_epochs": 20,
-                    "train_batch_size": 2,
-                    "test_batch_size": 2,
+                    "train_batch_size": 8,
+                    "test_batch_size": 16,
                     "gradient_checkpointing": False,
                     "use_lora": True,
                 }
 
                 # Original model
-                create_model(
-                    **common_args,
-                    push_to_hub=False,  # whether to save the model both in local and remote repositories
-                    use_sparse_silu=False,  # when turned on, it kills negligible swish outputs < 0.1
-                    use_sparse_regularization=False,  # for sparse silu regularization
-                    run_name="_original_pretraining",
-                )
-
-                # # Original model
                 # create_model(
                 #     **common_args,
                 #     push_to_hub=False,  # whether to save the model both in local and remote repositories
-                #     use_sparse_silu=True,  # when turned on, it kills negligible swish outputs < 0.1
-                #     use_sparse_regularization=True,  # for sparse silu regularization
-                #     run_name="_sparse_pretraining",
+                #     use_sparse_silu=False,  # when turned on, it kills negligible swish outputs < 0.1
+                #     use_sparse_regularization=False,  # for sparse silu regularization
+                #     run_name="_original_pretraining",
                 # )
+
+                # Original model
+                create_model(
+                    **common_args,
+                    push_to_hub=False,  # whether to save the model both in local and remote repositories
+                    use_sparse_silu=True,  # when turned on, it kills negligible swish outputs < 0.1
+                    use_sparse_regularization=True,  # for sparse silu regularization
+                    run_name="_sparse_pretraining",
+                )
 
                 # # "pretrained_model_name" here means a model finetuned on a downstream task that you want to build upon
                 # # If you omit the parameter, it will automatically download a pretrained model (not finetuned)
