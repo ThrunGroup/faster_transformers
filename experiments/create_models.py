@@ -87,7 +87,7 @@ def finetune(
 
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
-        max_steps=40,
+        # max_steps=40,
         evaluation_strategy="steps",
         eval_steps=20,  # early stopping counts only when eval step and save step match
         save_steps=20,
@@ -279,7 +279,7 @@ if __name__ == "__main__":
                     "dataset_name": dataset_type,
                     "num_epochs": 20,
                     "train_batch_size": 4,
-                    "test_batch_size": 4,
+                    "test_batch_size": 8,
                     "gradient_checkpointing": True,
                     "use_lora": True,
                 }
