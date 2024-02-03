@@ -103,6 +103,7 @@ class OpenWebText(Dataset):
         logits, labels = preds
 
         print("logits: ", logits.shape)
+        print("labels: ", labels.shape)
 
         logits = torch.from_numpy(logits)
         labels = torch.from_numpy(labels)
