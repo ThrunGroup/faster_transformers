@@ -105,7 +105,7 @@ class OpenWebText(Dataset):
         This is a workaround to avoid storing too many tensors that are not needed.
         """
         pred_ids = logits.max(axis=-1)
-        return pred_ids
+        return pred_ids[0]
 
     def compute_metrics(self, preds):
         logits, labels = preds
