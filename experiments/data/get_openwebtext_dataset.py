@@ -113,14 +113,21 @@ class OpenWebText(Dataset):
         logits = torch.from_numpy(logits).float()
         labels = torch.from_numpy(labels)
 
+        print("logits: ", logits.shape)
+        print("labels: ", labels.shape)
+
         # Shift the labels to the right to align with the output of the model
         shifted_logits = logits[..., :-1].contiguous()
         shifted_labels = labels[..., 1:].contiguous()
 
+        print("shifted_logits: ", shifted_logits.shape)
+        print("shifted_labels: ", shifted_labels.shape)
+
         # Flatten the logits and labels to calculate loss
         loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
         loss = loss_fct(
-            shifted_logits.view(-1, shifted_logits.size(-1)),
+            # shifted_logits.view(-1, shifted_logits.size(-1)),
+            shifted_logits.view(-1),
             shifted_labels.view(-1),
         )
 
