@@ -110,7 +110,7 @@ class OpenWebText(Dataset):
     def compute_metrics(self, preds):
         logits, labels = preds
 
-        # logits = torch.from_numpy(logits)
+        logits = torch.from_numpy(logits)
         labels = torch.from_numpy(labels)
 
         print("logits: ", logits.shape)
