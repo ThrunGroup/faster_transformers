@@ -56,7 +56,7 @@ class OpenWebText(Dataset):
 
             # GLUE doesn't provide answers for TEST, so we have to manually make them
             train_testvalid_dataset = tokenized_dataset.train_test_split(
-                test_size=0.2
+                test_size=400
             )
             test_valid_dataset = train_testvalid_dataset[
                 "test"
@@ -102,7 +102,7 @@ class OpenWebText(Dataset):
     def compute_metrics(self, preds):
         logits, labels = preds
 
-        print(logits.shape)
+        print("logits: ", logits.shape)
 
         logits = torch.from_numpy(logits)
         labels = torch.from_numpy(labels)
