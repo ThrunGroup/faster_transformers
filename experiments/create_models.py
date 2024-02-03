@@ -72,6 +72,7 @@ def finetune(
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
+    preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
@@ -125,6 +126,7 @@ def finetune(
         data_collator=data_collator,
         callbacks=[early_stopping],
         compute_metrics=compute_metrics,
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         use_sparse_regularization=use_sparse_regularization,
     )
 
