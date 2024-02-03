@@ -142,7 +142,6 @@ def finetune(
 
     print("Evaluating... ")
     results = trainer.evaluate(test_dataset)
-    print("Perplexity: ", np.exp(results["eval_loss"]))
     print("Test set evaluation: ", results)
 
     if use_sparse_silu:

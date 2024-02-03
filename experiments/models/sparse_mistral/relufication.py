@@ -1,6 +1,18 @@
 from transformers import TrainerCallback, Trainer
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 from datasets import Dataset
+import math
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
+
 
 import torch
 import torch.nn as nn
@@ -141,6 +153,18 @@ class SparseSiLUTrainer(Trainer):
             loss += self.regularization_coefficient * regularization_loss
 
         return (loss, outputs) if return_outputs else loss
+
+    def evaluate(
+        self,
+        eval_dataset: Optional[Dataset] = None,
+        ignore_keys: Optional[List[str]] = None,
+        metric_key_prefix: str = "eval",
+    ):
+        eval_results = super().evaluate(
+            eval_dataset, ignore_keys, metric_key_prefix
+        )
+        eval_results["perplexity"] = math.exp(eval_results["eval_loss"])
+        return eval_results
 
 
 class MistralDistributionCheck(MistralMLP):
