@@ -125,8 +125,8 @@ def finetune(
         tokenizer=tokenizer,
         data_collator=data_collator,
         callbacks=[early_stopping],
-        compute_metrics=compute_metrics,
-        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        # compute_metrics=compute_metrics,
+        # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         use_sparse_regularization=use_sparse_regularization,
     )
 
