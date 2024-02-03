@@ -87,7 +87,7 @@ def finetune(
 
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
-        # max_steps=40,
+        max_steps=40,
         evaluation_strategy="steps",
         eval_steps=20,  # early stopping counts only when eval step and save step match
         save_steps=20,
@@ -104,7 +104,7 @@ def finetune(
         report_to="wandb",
         run_name=model_name,
         gradient_accumulation_steps=2,
-        deepspeed="ds_config.json",
+        deepspeed="mistral_ds_config.json",
         per_device_train_batch_size=config["train_batch_size"],
         per_device_eval_batch_size=config["test_batch_size"],
         gradient_checkpointing=config["gradient_checkpointing"],
