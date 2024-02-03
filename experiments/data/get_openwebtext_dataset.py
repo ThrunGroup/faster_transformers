@@ -104,13 +104,13 @@ class OpenWebText(Dataset):
         Original Trainer may have a memory leak.
         This is a workaround to avoid storing too many tensors that are not needed.
         """
-        pred_ids = torch.max(logits, dim=-1)
+        pred_ids = logits.max(axis=-1)
         return pred_ids
 
     def compute_metrics(self, preds):
         logits, labels = preds
 
-        # logits = torch.from_numpy(logits)
+        logits = torch.from_numpy(logits)
         labels = torch.from_numpy(labels)
 
         print("logits: ", logits.shape)
