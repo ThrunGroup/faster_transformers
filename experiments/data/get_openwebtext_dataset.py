@@ -99,6 +99,21 @@ class OpenWebText(Dataset):
         )
         return data_collator
 
+    def preprocess_logits_for_metrics(self, logits, labels):
+        """
+        Original Trainer may have a memory leak.
+        This is a workaround to avoid storing too many tensors that are not needed.
+        """
+        print(logits.shape)
+        # pred_ids = torch.argmax(logits[0], dim=-1)
+        # print(logits)
+        pred_ids = torch.argmax(logits, dim=-1)
+        # if "mistral" in self.model_type:
+        #     pred_ids = logits[:, 0]
+        # else:
+        #     pred_ids = logits[0][:, 0]
+        return pred_ids
+
     def compute_metrics(self, preds):
         logits, labels = preds
 
