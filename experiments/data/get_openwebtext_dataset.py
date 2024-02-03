@@ -105,16 +105,15 @@ class OpenWebText(Dataset):
         This is a workaround to avoid storing too many tensors that are not needed.
         """
         pred_ids = logits.max(axis=-1)
-        print(pred_ids)
         return pred_ids[0]
 
     def compute_metrics(self, preds):
         logits, labels = preds
 
-        logits = torch.from_numpy(logits)
+        logits = torch.from_numpy(logits).float()
         labels = torch.from_numpy(labels)
 
-        print("logits: ", logits.shape)
+        print("logits: ", logits.shape, logits[0][:4])
         print("labels: ", labels.shape)
 
         # Shift the labels to the right to align with the output of the model
