@@ -87,7 +87,7 @@ def finetune(
 
     training_args = TrainingArguments(
         output_dir=os.path.join("ckpt", model_name),
-        max_steps=200,
+        max_steps=2,
         evaluation_strategy="steps",
         eval_steps=20,  # early stopping counts only when eval step and save step match
         save_steps=20,
@@ -296,7 +296,7 @@ if __name__ == "__main__":
                 # Original model
                 create_model(
                     **common_args,
-                    push_to_hub=False,  # whether to save the model both in local and remote repositories
+                    push_to_hub=True,  # whether to save the model both in local and remote repositories
                     use_sparse_silu=True,  # when turned on, it kills negligible swish outputs < 0.1
                     use_sparse_regularization=True,  # for sparse silu regularization
                     run_name="_sparse_pretraining",
