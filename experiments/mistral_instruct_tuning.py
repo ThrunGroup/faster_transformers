@@ -51,6 +51,7 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     load_act_hist,
     save_act_hist,
     GradualSparsificationScheduler,
+    SparseMistral,
 )
 from utils.mistral_utils import compress_mistral
 from utils.utils import (
@@ -324,6 +325,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         use_sparse_model,
         exp_config.use_sparse_regularization,
         use_relu,
+        model_name,
         pretrained_model_to_load,
     )
 
@@ -509,8 +511,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     trainer.train()
 
     # Evaluate on test dataset
-    # model = model.merge_and_unload()
-    # trainer.model = model
+    model = model.merge_and_unload()
+    trainer.model = model
 
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
@@ -566,6 +568,7 @@ def prepare_sparse_model(
     use_sparse_model: bool = True,
     use_sparse_regularization: bool = False,
     use_relu: bool = False,
+    model_name: str = None,
     pretrained_model_to_load: str = None,
 ):
     print("Loading a model...")
@@ -578,9 +581,14 @@ def prepare_sparse_model(
         )
         model = MistralForCausalLM(config=config)
     else:
-        model = AutoModelForCausalLM.from_pretrained(
-            pretrained_model_to_load,
-        )
+        if model_name == "mistralai/Mistral-7B-Instruct-v0.1":
+            model = MistralForCausalLM.from_pretrained(
+                pretrained_model_to_load,
+            )
+        else:
+            model = SparseMistral.from_pretrained(
+                pretrained_model_to_load,
+            )
 
     if use_sparse_model:
         print("Enabling Sparse SiLU...")
@@ -607,7 +615,7 @@ def prepare_sparse_model(
         target_modules=["q_proj", "v_proj", "gate_proj", "down_proj"],
         task_type="CAUSAL_LM",
     )
-    # model = get_peft_model(model, peft_config)
+    model = get_peft_model(model, peft_config)
     model.enable_input_require_grads()
 
     return model, tokenizer

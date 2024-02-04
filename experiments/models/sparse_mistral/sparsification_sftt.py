@@ -18,7 +18,7 @@ from typing import (
 
 from transformers.models.mistral.modeling_mistral import (
     MistralMLP,
-    MistralAttention,
+    MistralForCausalLM,
     MistralModel,
 )
 
@@ -173,6 +173,12 @@ class SparseSFTTTrainer(SFTTrainer):
         if self.state.global_step % 20 == 0 and loss != 0:
             print("Negative relularizer loss: ", loss.item())
         return loss
+
+
+class SparseMistral(MistralForCausalLM):
+    def __init__(self, config):
+        super().__init__(config)
+        apply_mistral_sparse_silu_mlp(self, config)
 
 
 class MistralSparseSiluMLP(MistralMLP):
