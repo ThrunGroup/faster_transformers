@@ -556,7 +556,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         print("Pushing to hub")
         print("model: ", model)
         torch.save(model.state_dict(), "model.pt")
-        trainer.push_to_hub()
+        # trainer.push_to_hub()
         print(f"Pushed to hub: thrunlab/{model_name}")
 
     # Empty out gpu memory
