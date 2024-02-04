@@ -468,13 +468,10 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if exp_config.set_sparsity_aware_threshold:
         print("Setting Sparsity-Aware Threshold...")
         if is_debugging:
-            act_hist_path = (
-                f"histograms/debugging/{model_name}/{dataset_type}_act_hist.pt"
-            )
+            act_hist_path = f"histograms/debugging/{model_name}/act_hist.pt"
         else:
-            act_hist_path = (
-                f"histograms/{model_name}/{dataset_type}_act_hist.pt"
-            )
+            act_hist_path = f"histograms/{model_name}/act_hist.pt"
+        print("histogram: ", act_hist_path)
 
         activate_stats(model.get_base_model())
         if os.path.exists(act_hist_path):  # @luke TODO: remove False
