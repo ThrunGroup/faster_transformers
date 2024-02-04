@@ -264,6 +264,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             else:
                 wandb.config = exp_config
 
+    pretrained_model_to_load = exp_config.pretrained_model_to_load
     model_name = exp_config.model_name
     max_steps = exp_config.max_steps
     num_epochs = exp_config.num_epochs
@@ -323,6 +324,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         use_sparse_model,
         exp_config.use_sparse_regularization,
         use_relu,
+        pretrained_model_to_load,
     )
 
     print("Loading a dataset...")
@@ -566,6 +568,7 @@ def prepare_sparse_model(
     use_sparse_model: bool = True,
     use_sparse_regularization: bool = False,
     use_relu: bool = False,
+    pretrained_model_to_load: str = None,
 ):
     print("Loading a model...")
     if is_debugging:
@@ -578,7 +581,7 @@ def prepare_sparse_model(
         model = MistralForCausalLM(config=config)
     else:
         model = AutoModelForCausalLM.from_pretrained(
-            "mistralai/Mistral-7B-Instruct-v0.1",
+            pretrained_model_to_load,
         )
 
     if use_sparse_model:
@@ -630,12 +633,17 @@ def parse_args():
         help="Name of the model",
     )
     parser.add_argument(
+        "--pretrained_model_to_load",
+        type=str,
+        default="mistralai/Mistral-7B-Instruct-v0.1",
+        help="Name of the model",
+    )
+    parser.add_argument(
         "--dataset_type", type=str, default="cola", help="Dataset Type"
     )
     parser.add_argument(
         "--output_dir",
         type=str,
-        # default="/scr/jay/ckpt",
         default="ckpt",
         help="Output Directory",
     )
