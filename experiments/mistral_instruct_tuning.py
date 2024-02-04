@@ -512,9 +512,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     eval_result = trainer.evaluate(test_dataset)
     print("===Test Result==")
     print(eval_result)
-    log_dict = {
-        "test_accuracy": eval_result["eval_accuracy"],
-    }
+    log_dict = {"test_loss": eval_result["eval_loss"]}
+    if "eval_accuracy" in eval_result.keys():
+        log_dict["test_accuracy"] = eval_result["eval_accuracy"]
 
     if exp_config.print_sparsity:
         total_sparsity = print_dead_neuron_stats(model)
