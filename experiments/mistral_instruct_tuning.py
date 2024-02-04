@@ -473,7 +473,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         else:
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
             trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
-            trainer.evaluate(sample_dataset)
+            # trainer.evaluate(sample_dataset)
+            trainer.evaluate(test_dataset)
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(model.get_base_model(), act_hist_path)
 
