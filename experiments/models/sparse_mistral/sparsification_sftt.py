@@ -176,7 +176,9 @@ class SparseSFTTTrainer(SFTTrainer):
 
 
 def get_sparse_mistral_config(
-    config, use_sparse_model, use_sparse_regularization
+    config,
+    use_sparse_model: bool = True,
+    use_sparse_regularization: bool = True,
 ):
     config.use_sparse_model = use_sparse_model
     config.use_sparse_regularization = use_sparse_regularization
