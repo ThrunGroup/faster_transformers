@@ -23,7 +23,7 @@ from transformers.models.mistral.modeling_mistral import (
 )
 
 
-class SparseSFTTTrainer(Trainer):
+class SparseTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         self.regularization_coefficient = kwargs.pop(
             "regularization_coefficient", 10

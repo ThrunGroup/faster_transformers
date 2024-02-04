@@ -38,6 +38,7 @@ from experiments.models.sparse_mistral.relufication import (
 )
 from experiments.models.sparse_mistral.sparsification_sftt import (
     SparseSFTTTrainer,
+    SparseTrainer,
     apply_mistral_sparse_silu_mlp,
     activate_stats,
     enable_sparse_silu,
@@ -334,7 +335,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         data_collator = dataset.get_data_collator()
         compute_metrics = None
         preprocess_logits_for_metrics = None
-        # trainer_func = SparseSiLUTrainer
+        trainer_func = trainer_func
     else:
         if dataset_type == "cola":
             dataset = load_glue(dataset_type, seed=seed)
@@ -451,7 +452,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             preprocess_logits_for_metrics
         )
 
-    trainer_func = SparseSFTTTrainer
     trainer = trainer_func(**trainer_args)
 
     # Collect statistics and find the threshold for given sparsity
