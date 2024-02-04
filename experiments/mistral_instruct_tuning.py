@@ -617,7 +617,7 @@ def parse_args():
     )
     parser.add_argument(
         "--do_pretraining",
-        type=bool,
+        action="store_true",
         default=False,
         help="Whether to pretrain the model on OpenWebText",
     )
