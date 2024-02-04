@@ -480,7 +480,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             trainer_config2.max_steps = 1
             trainer_args2 = copy.deepcopy(trainer_args)
             trainer_args2["args"] = trainer_config2
-            trainer2 = trainer_func(**trainer_config2)
+            trainer2 = trainer_func(**trainer_args2)
             trainer2.train()
             trainer2.evaluate(test_dataset)
             # trainer.is_deepspeed_enabled = is_deepspeed_enabled
