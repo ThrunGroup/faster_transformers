@@ -432,20 +432,24 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         is_enabled=use_gradual_sparsification,
     )
 
-    trainer = trainer_func(
-        model=model,
-        max_seq_length=max_seq_length,
-        tokenizer=tokenizer,
-        data_collator=data_collator,
-        formatting_func=formatting_func,
-        args=trainer_config,
-        train_dataset=train_dataset,
-        eval_dataset=val_dataset,
-        compute_metrics=compute_metrics,
-        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
-        callbacks=[early_stopping, sparsification_scheduler],
-        use_sparse_regularization=exp_config.use_sparse_regularization,
-    )
+    trainer_args = {
+        "model": model,
+        "max_seq_length": max_seq_length,
+        "tokenizer": tokenizer,
+        "data_collator": data_collator,
+        "args": trainer_config,
+        "train_dataset": train_dataset,
+        "eval_dataset": val_dataset,
+        "compute_metrics": compute_metrics,
+        "preprocess_logits_for_metrics": preprocess_logits_for_metrics,
+        "callbacks": [early_stopping, sparsification_scheduler],
+        "use_sparse_regularization": exp_config.use_sparse_regularization,
+    }
+
+    if not do_pretraining:
+        trainer_args["formatting_func"] = formatting_func
+
+    trainer = trainer_func(**trainer_args)
 
     # Collect statistics and find the threshold for given sparsity
     if exp_config.set_sparsity_aware_threshold:
