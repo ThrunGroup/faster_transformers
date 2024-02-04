@@ -23,6 +23,82 @@ from transformers.models.mistral.modeling_mistral import (
 )
 
 
+class SparseSFTTTrainer(Trainer):
+    def __init__(self, *args, **kwargs):
+        self.regularization_coefficient = kwargs.pop(
+            "regularization_coefficient", 10
+        )
+        self.use_sparse_regularization = kwargs.pop(
+            "use_sparse_regularization", False
+        )
+        self.regularization_type = kwargs.pop(
+            "regularization_type", "L1 positive activation"
+        )
+        assert self.regularization_type in [
+            "L2 activation",
+            "L1 positive activation",
+        ], f"Invalid regularization type: {self.regularization_type}"
+        self.sparse_layers = []
+        super(Trainer, self).__init__(*args, **kwargs)
+
+    def initialize_sparse_silu_layers(self, model):
+        self.sparse_layers = [
+            m for m in model.modules() if isinstance(m, MistralSparseSiluMLP)
+        ]
+
+    def training_step(
+        self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
+    ) -> torch.Tensor:
+        """
+        Override the huggingface's training_step function to add a regularization term.
+        A regularization term is computed with intermediate values, which are freed after "backward()."
+        You need to set `retain_graph=True` inside `backward` function to keep the values.
+        """
+        model.train()
+        inputs = self._prepare_inputs(inputs)
+
+        with self.compute_loss_context_manager():
+            loss = self.compute_loss(model, inputs)
+
+        if self.args.n_gpu > 1:
+            loss = (
+                loss.mean()
+            )  # mean() to average on multi-gpu parallel training
+
+        self.accelerator.backward(
+            loss, retain_graph=self.use_sparse_regularization
+        )
+
+        if self.use_sparse_regularization:
+            regularization_loss = self.compute_regularization(model)
+            if self.args.n_gpu > 1:
+                regularization_loss = regularization_loss.mean()
+            self.accelerator.backward(regularization_loss, retain_graph=False)
+            loss += regularization_loss
+
+        return loss.detach() / self.args.gradient_accumulation_steps
+
+    def compute_regularization(self, model):
+        """
+        Compute a sparse regularization loss for SiLU
+        """
+        loss = 0
+        if len(self.sparse_layers) == 0:
+            self.initialize_sparse_silu_layers(model)
+        num_layers = len(self.sparse_layers)
+
+        for module in self.sparse_layers:
+            if module.activation_norm is not None:
+                loss += module.activation_norm
+
+        loss /= num_layers
+        loss *= self.regularization_coefficient
+
+        if self.state.global_step % 20 == 0 and loss != 0:
+            print("Negative relularizer loss: ", loss.item())
+        return loss
+
+
 class SparseSFTTTrainer(SFTTrainer):
     def __init__(self, *args, **kwargs):
         self.regularization_coefficient = kwargs.pop(

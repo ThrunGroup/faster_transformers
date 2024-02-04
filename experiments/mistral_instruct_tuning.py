@@ -434,20 +434,22 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     trainer_args = {
         "model": model,
-        "max_seq_length": max_seq_length,
         "tokenizer": tokenizer,
         "data_collator": data_collator,
         "args": trainer_config,
         "train_dataset": train_dataset,
         "eval_dataset": val_dataset,
-        "compute_metrics": compute_metrics,
-        "preprocess_logits_for_metrics": preprocess_logits_for_metrics,
         "callbacks": [early_stopping, sparsification_scheduler],
         "use_sparse_regularization": exp_config.use_sparse_regularization,
     }
 
     if not do_pretraining:
         trainer_args["formatting_func"] = formatting_func
+        trainer_args["max_seq_length"] = max_seq_length
+        trainer_args["compute_metrics"] = compute_metrics
+        trainer_args["preprocess_logits_for_metrics"] = (
+            preprocess_logits_for_metrics
+        )
 
     trainer = trainer_func(**trainer_args)
 
