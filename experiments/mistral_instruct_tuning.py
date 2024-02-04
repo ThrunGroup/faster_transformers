@@ -510,6 +510,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     # Evaluate on test dataset
     model = model.merge_and_unload()
+    trainer.model = model
 
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
