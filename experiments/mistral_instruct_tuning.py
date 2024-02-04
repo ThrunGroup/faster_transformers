@@ -57,7 +57,7 @@ from utils.utils import (
     is_mainprocess,
     get_datetime,
 )
-from utils.constants import MISTRAL_YES_ID, MISTRAL_NO_ID, OPENWEBTEXT,
+from utils.constants import MISTRAL_YES_ID, MISTRAL_NO_ID, OPENWEBTEXT
 
 
 def load_glue(data_type: str, seed: int = 0):
@@ -279,7 +279,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         exp_config.use_sparse_regularization = exp_config.print_sparsity = (
             exp_config.print_act_stats
         ) = exp_config.set_sparsity_aware_threshold = False
-    
+
     if use_wandb:
         run_name = f"{model_name}_{dataset_type}"
         if use_sparse_model:
@@ -610,7 +610,10 @@ def parse_args():
         "--num_epochs", type=int, default=8, help="Number of training epochs"
     )
     parser.add_argument(
-        "--max_steps", type=int, default=-1, help="Max number of training steps"
+        "--max_steps",
+        type=int,
+        default=-1,
+        help="Max number of training steps",
     )
     parser.add_argument(
         "--do_pretraining",
