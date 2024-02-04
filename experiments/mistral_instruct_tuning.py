@@ -549,6 +549,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if exp_config.model_save:
         trainer.save_model()
 
+    if push_to_hub and is_mainprocess():
+        print("Pushing to hub")
+        trainer.push_to_hub()
+        print(f"Pushed to hub: thrunlab/{model_name}")
+
     # Empty out gpu memory
     del trainer
     gc.collect()
