@@ -389,6 +389,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             response_template, tokenizer=tokenizer
         )
         trainer_func = SparseSFTTTrainer
+        compute_metrics = compute_metrics
 
     if is_debugging:
         debugging_output_dir = "debugging_output"
@@ -447,7 +448,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         "use_sparse_regularization": exp_config.use_sparse_regularization,
     }
 
-    if not do_pretraining:
+    print("Do pretraining: ", do_pretraining)
+    if do_pretraining == False:
         trainer_args["formatting_func"] = formatting_func
         trainer_args["max_seq_length"] = max_seq_length
         trainer_args["compute_metrics"] = compute_metrics
