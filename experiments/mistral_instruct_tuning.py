@@ -218,7 +218,7 @@ def extract_response(logits, labels):
     return np.array(new_logits, dtype=int), np.array(new_labels, dtype=int)
 
 
-def preprocess_logits_for_metrics(logits, labels):
+def classification_preprocess_logits_for_metrics(logits, labels):
     if isinstance(logits, tuple):
         logits = logits[0]
 
@@ -390,6 +390,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         )
         trainer_func = SparseSFTTTrainer
         compute_metrics = classification_compute_metrics
+        preprocess_logits_for_metrics = (
+            classification_preprocess_logits_for_metrics
+        )
 
     if is_debugging:
         debugging_output_dir = "debugging_output"
