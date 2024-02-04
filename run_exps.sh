@@ -38,4 +38,4 @@ deepspeed experiments/mistral_instruct_tuning.py --use_wandb --do_pretraining --
 # --use_gradual_sparsification --num_warmup_steps 450 --increment_ratio 0.5
 
 # ReLU
-deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --print_sparsity --use_relu --num_epochs 16
+# deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --print_sparsity --use_relu --num_epochs 16
