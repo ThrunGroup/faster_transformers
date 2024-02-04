@@ -52,6 +52,7 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     save_act_hist,
     GradualSparsificationScheduler,
     SparseMistral,
+    get_sparse_mistral_config,
 )
 from utils.mistral_utils import compress_mistral
 from utils.utils import (
@@ -577,19 +578,19 @@ def prepare_sparse_model(
             hidden_size=64,
             intermediate_size=64,
             num_hidden_layers=2,
-            # num_attention_heads=4,
         )
         model = MistralForCausalLM(config=config)
     else:
+        config = MistralConfig()
         if pretrained_model_to_load == "mistralai/Mistral-7B-Instruct-v0.1":
-            model = MistralForCausalLM.from_pretrained(
-                pretrained_model_to_load,
+            sparse_config = get_sparse_mistral_config(
+                config, use_sparse_model=False, use_sparse_regularization=False
             )
         else:
-            print("SparseMistral ")
-            model = SparseMistral.from_pretrained(
-                pretrained_model_to_load,
-            )
+            sparse_config = get_sparse_mistral_config(config)
+        model = SparseMistral.from_pretrained(
+            pretrained_model_to_load, sparse_config
+        )
 
     if use_sparse_model:
         print("Enabling Sparse SiLU...")

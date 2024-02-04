@@ -175,10 +175,27 @@ class SparseSFTTTrainer(SFTTrainer):
         return loss
 
 
+def get_sparse_mistral_config(
+    config, use_sparse_model, use_sparse_regularization
+):
+    config.use_sparse_model = use_sparse_model
+    config.use_sparse_regularization = use_sparse_regularization
+    config.regularization_type = "L1 Regularization"
+    config.regularization_coefficient = 10
+    return config
+
+
 class SparseMistral(MistralForCausalLM):
     def __init__(self, config):
         super().__init__(config)
-        apply_mistral_sparse_silu_mlp(self, config)
+        self.config = config
+        if config.use_sparse_model:
+            self.apply_sparse_mlp()
+
+    def apply_sparse_mlp(self):
+        apply_mistral_sparse_silu_mlp(
+            self, self.config, self.config.use_sparse_regularization
+        )
 
 
 class MistralSparseSiluMLP(MistralMLP):
