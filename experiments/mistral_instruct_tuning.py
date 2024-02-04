@@ -11,6 +11,7 @@ from transformers import (
     MistralForCausalLM,
     MistralConfig,
 )
+import copy
 from transformers.integrations.deepspeed import deepspeed_init
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 from datasets import Dataset, load_dataset, load_metric
@@ -475,9 +476,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
             # trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
             # trainer.evaluate(sample_dataset)
-            trainer_config2 = trainer_config.copy()
+            trainer_config2 = copy.deepcopy(trainer.config)
             trainer_config2.max_steps = 1
-            trainer_args2 = trainer_args.copy()
+            trainer_args2 = copy.deepcopy(trainer_args)
             trainer_args2["args"] = trainer_config2
             trainer2 = trainer_func(**trainer_config2)
             trainer2.train()
