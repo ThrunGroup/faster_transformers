@@ -327,7 +327,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     print("Loading a dataset...")
     if do_pretraining:
-        dataset = get_dataset(OPENWEBTEXT, tokenizer, MISTRAL_7B)
+        dataset_type = OPENWEBTEXT
+        dataset = get_dataset(dataset_type, tokenizer, MISTRAL_7B)
         train_dataset, val_dataset, test_dataset = (
             dataset.get_tokenized_dataset()
         )
@@ -415,7 +416,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         metric_for_best_model="eval_loss",
         greater_is_better=False,
         gradient_accumulation_steps=2,
-        deepspeed="ds_config.json" if not is_debugging else None,
+        deepspeed="mistral_ds_config.json" if not is_debugging else None,
         per_device_train_batch_size=train_batch_size,
         per_device_eval_batch_size=test_batch_size,
         gradient_checkpointing=gradient_checkpointing,
@@ -459,21 +460,19 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if exp_config.set_sparsity_aware_threshold:
         print("Setting Sparsity-Aware Threshold...")
         if is_debugging:
-            # act_hist_path = "/tmp/pre_finetune__act_hist.pt"
             act_hist_path = (
                 f"histograms/debugging/{model_name}/{dataset_type}_act_hist.pt"
             )
         else:
-            # act_hist_path = f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist.pt"
             act_hist_path = (
                 f"histograms/{model_name}/{dataset_type}_act_hist.pt"
             )
 
         activate_stats(model.get_base_model())
-        if False and os.path.exists(act_hist_path):  # @luke TODO: remove False
+        if os.path.exists(act_hist_path):  # @luke TODO: remove False
             load_act_hist(model.get_base_model(), act_hist_path)
         else:
-            is_deepspeed_enabled = trainer.is_deepspeed_enabled
+            # is_deepspeed_enabled = trainer.is_deepspeed_enabled
             # trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
             # trainer.evaluate(sample_dataset)
             # trainer_config2 = copy.deepcopy(trainer_config)
