@@ -581,11 +581,12 @@ def prepare_sparse_model(
         )
         model = MistralForCausalLM(config=config)
     else:
-        if model_name == "mistralai/Mistral-7B-Instruct-v0.1":
+        if pretrained_model_to_load == "mistralai/Mistral-7B-Instruct-v0.1":
             model = MistralForCausalLM.from_pretrained(
                 pretrained_model_to_load,
             )
         else:
+            print("SparseMistral ")
             model = SparseMistral.from_pretrained(
                 pretrained_model_to_load,
             )

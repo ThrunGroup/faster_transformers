@@ -339,11 +339,7 @@ def apply_mistral_sparse_silu_mlp(
     config,
     use_sparse_regularization: bool = False,
 ):
-    # counts = 0
     for layer in model.model.layers:
-        # counts += 1
-        # if counts < 4:
-        #     continue
         original_mlp = layer.mlp
         new_mlp = MistralSparseSiluMLP(
             config, use_sparse_regularization=use_sparse_regularization
