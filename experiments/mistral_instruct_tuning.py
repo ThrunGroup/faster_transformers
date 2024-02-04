@@ -57,7 +57,12 @@ from utils.utils import (
     is_mainprocess,
     get_datetime,
 )
-from utils.constants import MISTRAL_YES_ID, MISTRAL_NO_ID, OPENWEBTEXT
+from utils.constants import (
+    MISTRAL_YES_ID,
+    MISTRAL_NO_ID,
+    OPENWEBTEXT,
+    MISTRAL_7B,
+)
 
 
 def load_glue(data_type: str, seed: int = 0):
@@ -320,7 +325,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     print("Loading a dataset...")
     if do_pretraining:
-        dataset = get_dataset(OPENWEBTEXT, tokenizer, model_name)
+        dataset = get_dataset(OPENWEBTEXT, tokenizer, MISTRAL_7B)
         train_dataset, val_dataset, test_dataset = (
             dataset.get_tokenized_dataset()
         )
