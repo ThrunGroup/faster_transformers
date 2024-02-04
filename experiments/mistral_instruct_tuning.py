@@ -411,6 +411,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
+        max_steps=max_steps,
         save_total_limit=1,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
