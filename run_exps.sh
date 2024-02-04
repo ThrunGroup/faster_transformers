@@ -9,7 +9,7 @@
 
 # Pretraining on openwebtext
 deepspeed experiments/mistral_instruct_tuning.py --use_wandb --do_pretraining \
---num_epochs 1 --max_steps 2 --train_batch_size 8 \
+--num_epochs 1 --max_steps 4 --train_batch_size 8 \
 --gradient_checkpointing True --push_to_hub True --model_name "Mistral_Sparse_pretraining_80_percent"
 
 # Zeroshot with the pretrained model

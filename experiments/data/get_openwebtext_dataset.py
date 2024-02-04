@@ -95,7 +95,7 @@ class OpenWebText(Dataset):
         and converting them into a format that can be consumed by the model.
         """
         data_collator = DataCollatorForLanguageModeling(
-            tokenizer=self.tokenizer, mlm=False, mlm_probability=0.15
+            tokenizer=self.tokenizer, mlm=False
         )
         return data_collator
 

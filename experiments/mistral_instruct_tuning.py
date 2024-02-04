@@ -340,8 +340,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         sample_dataset = test_dataset
         max_seq_length = 128
         data_collator = dataset.get_data_collator()
-        compute_metrics = None
-        preprocess_logits_for_metrics = None
         trainer_func = SparseTrainer
     else:
         if dataset_type == "cola":
@@ -556,6 +554,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     if push_to_hub and is_mainprocess():
         print("Pushing to hub")
+        print("model: ", model)
         trainer.push_to_hub()
         print(f"Pushed to hub: thrunlab/{model_name}")
 
@@ -584,15 +583,16 @@ def prepare_sparse_model(
         model = MistralForCausalLM(config=config)
     else:
         config = MistralConfig()
-        if pretrained_model_to_load == "mistralai/Mistral-7B-Instruct-v0.1":
-            sparse_config = get_sparse_mistral_config(
-                config, use_sparse_model=False, use_sparse_regularization=False
-            )
-        else:
-            sparse_config = get_sparse_mistral_config(config)
-        model = SparseMistral.from_pretrained(
-            pretrained_model_to_load, config=sparse_config
-        )
+        # if pretrained_model_to_load == "mistralai/Mistral-7B-Instruct-v0.1":
+        #     sparse_config = get_sparse_mistral_config(
+        #         config, use_sparse_model=False, use_sparse_regularization=False
+        #     )
+        # else:
+        #     sparse_config = get_sparse_mistral_config(config)
+        # model = SparseMistral.from_pretrained(
+        #     pretrained_model_to_load, config=sparse_config
+        # )
+        model = AutoModelForCausalLM.from_pretrained(pretrained_model_to_load)
 
     if use_sparse_model:
         print("Enabling Sparse SiLU...")
