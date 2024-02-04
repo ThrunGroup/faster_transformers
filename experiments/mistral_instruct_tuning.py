@@ -334,7 +334,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         data_collator = dataset.get_data_collator()
         compute_metrics = None
         preprocess_logits_for_metrics = None
-        trainer_func = SparseSiLUTrainer
+        # trainer_func = SparseSiLUTrainer
     else:
         if dataset_type == "cola":
             dataset = load_glue(dataset_type, seed=seed)
@@ -451,6 +451,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             preprocess_logits_for_metrics
         )
 
+    trainer_func = SparseSFTTTrainer
     trainer = trainer_func(**trainer_args)
 
     # Collect statistics and find the threshold for given sparsity
@@ -474,9 +475,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
             # trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
             # trainer.evaluate(sample_dataset)
+            trainer_config2 = trainer_config.copy()
+            trainer_config2.max_steps = 1
             trainer_args2 = trainer_args.copy()
-            trainer_args2["max_steps"] = 1
-            trainer2 = trainer_func(**trainer_args2)
+            trainer_args2["args"] = trainer_config2
+            trainer2 = trainer_func(**trainer_config2)
             trainer2.train()
             trainer2.evaluate(test_dataset)
             # trainer.is_deepspeed_enabled = is_deepspeed_enabled
