@@ -98,41 +98,6 @@ class SparseSFTTTrainer(SFTTrainer):
             print("Negative relularizer loss: ", loss.item())
         return loss
 
-    # def compute_loss(self, model, inputs, return_outputs=False):
-    #     loss = super().compute_loss(model, inputs, return_outputs)
-    #
-    #     if is_sagemaker_mp_enabled():
-    #         import smdistributed.modelparallel.torch as smp
-    #         @smp.step()
-    #         def smp_forward_backward(model, inputs, gradient_accumulation_steps=1):
-    #             outputs = model(**inputs)
-    #             loss = outputs["loss"] if isinstance(outputs, dict) else outputs[0]
-    #             loss /= gradient_accumulation_steps
-    #             model.backward(loss)
-    #             return loss
-    #
-    #         loss_mb = smp_forward_backward(
-    #             model, inputs, self.args.gradient_accumulation_steps
-    #         )
-    #         if self.use_sparse_regularization:
-    #             return loss_mb.reduce_mean().detach().to(
-    #                 self.args.device
-    #             ) + self.regularization_coefficient * self.compute_regularization(model)
-    #         else:
-    #             return loss_mb.reduce_mean().detach().to(self)
-    #
-    #     if return_outputs:
-    #         classification_loss, outputs = loss
-    #     else:
-    #         classification_loss = loss
-    #
-    #     loss = classification_loss
-    #     if self.use_sparse_regularization:
-    #         regularization_loss = self.compute_regularization(model)
-    #         loss += self.regularization_coefficient * regularization_loss
-    #
-    #     return (loss, outputs) if return_outputs else loss
-
 
 class MistralSparseSiluMLP(MistralMLP):
     def __init__(self, config, *args, **kwargs):

@@ -23,8 +23,6 @@ from peft import (
 from evaluate import load
 from transformers.utils import is_sagemaker_mp_enabled, is_sagemaker_dp_enabled
 import logging
-
-
 import torch
 import os
 import gc
@@ -33,6 +31,11 @@ import numpy as np
 import sys
 import argparse
 
+from experiments.data.get_dataset import get_dataset
+from experiments.models.sparse_mistral.relufication import (
+    SparseSiLUTrainer,
+    enable_sparse_silu,
+)
 from experiments.models.sparse_mistral.sparsification_sftt import (
     SparseSFTTTrainer,
     apply_mistral_sparse_silu_mlp,
@@ -54,7 +57,7 @@ from utils.utils import (
     is_mainprocess,
     get_datetime,
 )
-from utils.constants import MISTRAL_YES_ID, MISTRAL_NO_ID
+from utils.constants import MISTRAL_YES_ID, MISTRAL_NO_ID, OPENWEBTEXT,
 
 
 def load_glue(data_type: str, seed: int = 0):
@@ -255,6 +258,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
                 wandb.config = exp_config
 
     model_name = exp_config.model_name
+    max_steps = exp_config.max_steps
     num_epochs = exp_config.num_epochs
     train_batch_size = exp_config.train_batch_size
     test_batch_size = exp_config.test_batch_size
@@ -269,81 +273,13 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     seed = exp_config.seed
     use_sparse_model = exp_config.use_sparse_model
     use_relu = exp_config.use_relu
+    do_pretraining = exp_config.do_pretraining
 
     if not use_sparse_model:
-        exp_config.use_sparse_regularization = (
-            exp_config.print_sparsity
-        ) = (
+        exp_config.use_sparse_regularization = exp_config.print_sparsity = (
             exp_config.print_act_stats
         ) = exp_config.set_sparsity_aware_threshold = False
-
-    debugging_output_dir = ""
-
-    print("Loading a dataset...")
-    if dataset_type == "cola":
-        dataset = load_glue(dataset_type, seed=seed)
-        formatting_func = formatting_func_cola
-        create_prompt = create_cola_prompt
-    elif dataset_type == "boolq":
-        dataset = load_glue(dataset_type, seed=seed)
-        formatting_func = formatting_func_boolq
-        create_prompt = create_boolq_prompt
-
-    model, tokenizer = prepare_sparse_model(
-        is_debugging,
-        use_sparse_model,
-        exp_config.use_sparse_regularization,
-        use_relu,
-    )
-    max_seq_length = 1024
-
-    def tokenize(element):
-        outputs = tokenizer(
-            formatting_func(element),
-            add_special_tokens=True,
-            truncation=True,
-            padding=False,
-            max_length=max_seq_length,
-            return_overflowing_tokens=False,
-            return_length=False,
-        )
-        return {
-            "input_ids": outputs["input_ids"],
-            "attention_mask": outputs["attention_mask"],
-        }
-
-    # Roundabout way to avoid error
-    test_dataset = dataset["test"].map(
-        tokenize,
-        batched=True,
-        remove_columns=dataset["test"].column_names,
-        num_proc=None,
-        batch_size=test_batch_size,
-    )
-    sampled_train_dataset = Dataset.from_dict(dataset["train"][:1000])
-
-    # Use only 1000 samples of training dataset to collect statistics
-    if exp_config.set_sparsity_aware_threshold:
-        sampled_train_dataset = sampled_train_dataset.map(
-            tokenize,
-            batched=True,
-            remove_columns=sampled_train_dataset.column_names,
-            num_proc=None,
-            batch_size=train_batch_size,
-        )
-
-    if is_debugging:
-        debugging_output_dir = "debugging_output"
-        os.makedirs(debugging_output_dir, exist_ok=True)
-        dataset["train"] = Dataset.from_dict(dataset["train"][:300])
-        dataset["validation"] = Dataset.from_dict(dataset["validation"][:300])
-        dataset["test"] = Dataset.from_dict(dataset["test"][:])
-
-    if not is_debugging:
-        output_dir = os.path.join(exp_config.output_dir, model_name)
-    else:
-        output_dir = debugging_output_dir
-
+    
     if use_wandb:
         run_name = f"{model_name}_{dataset_type}"
         if use_sparse_model:
@@ -373,10 +309,88 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
                 config=exp_config,
             )
 
-    response_template = "Response:"
-    collator = DataCollatorForCompletionOnlyLM(
-        response_template, tokenizer=tokenizer
+    debugging_output_dir = ""
+
+    model, tokenizer = prepare_sparse_model(
+        is_debugging,
+        use_sparse_model,
+        exp_config.use_sparse_regularization,
+        use_relu,
     )
+
+    print("Loading a dataset...")
+    if do_pretraining:
+        dataset = get_dataset(OPENWEBTEXT, tokenizer, model_name)
+        train_dataset, val_dataset, test_dataset = (
+            dataset.get_tokenized_dataset()
+        )
+        sample_dataset = test_dataset
+        max_seq_length = 128
+        data_collator = dataset.get_data_collator()
+        compute_metrics = None
+        preprocess_logits_for_metrics = None
+        trainer_func = SparseSiLUTrainer
+    else:
+        if dataset_type == "cola":
+            dataset = load_glue(dataset_type, seed=seed)
+            formatting_func = formatting_func_cola
+            create_prompt = create_cola_prompt
+        elif dataset_type == "boolq":
+            dataset = load_glue(dataset_type, seed=seed)
+            formatting_func = formatting_func_boolq
+            create_prompt = create_boolq_prompt
+        max_seq_length = 1024
+
+        def tokenize(element):
+            outputs = tokenizer(
+                formatting_func(element),
+                add_special_tokens=True,
+                truncation=True,
+                padding=False,
+                max_length=max_seq_length,
+                return_overflowing_tokens=False,
+                return_length=False,
+            )
+            return {
+                "input_ids": outputs["input_ids"],
+                "attention_mask": outputs["attention_mask"],
+            }
+
+        # Roundabout way to avoid error
+        test_dataset = dataset["test"].map(
+            tokenize,
+            batched=True,
+            remove_columns=dataset["test"].column_names,
+            num_proc=None,
+            batch_size=test_batch_size,
+        )
+        if exp_config.set_sparsity_aware_threshold:
+            sample_dataset = Dataset.from_dict(dataset["train"][:1000])
+            sample_dataset = sample_dataset.map(
+                tokenize,
+                batched=True,
+                remove_columns=sample_dataset.column_names,
+                num_proc=None,
+                batch_size=train_batch_size,
+            )
+        train_dataset = dataset["train"]
+        val_dataset = dataset["validation"]
+
+        response_template = "Response:"
+        data_collator = DataCollatorForCompletionOnlyLM(
+            response_template, tokenizer=tokenizer
+        )
+        trainer_func = SparseSFTTTrainer
+
+    if is_debugging:
+        debugging_output_dir = "debugging_output"
+        os.makedirs(debugging_output_dir, exist_ok=True)
+        train_dataset = train_dataset.select(range(300))
+        val_dataset = val_dataset.select(range(300))
+        test_dataset = test_dataset.select(range(300))
+        output_dir = debugging_output_dir
+    else:
+        output_dir = os.path.join(exp_config.output_dir, model_name)
 
     trainer_config = TrainingArguments(
         output_dir=output_dir,
@@ -393,7 +407,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
-        # report_to="wandb" if use_wandb else None,
         gradient_accumulation_steps=2,
         deepspeed="mistral_ds_config.json" if not is_debugging else None,
         per_device_train_batch_size=train_batch_size,
@@ -413,16 +426,16 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         increment_ratio=increment_ratio,
         is_enabled=use_gradual_sparsification,
     )
-    trainer = SparseSFTTTrainer(
+
+    trainer = trainer_func(
         model=model,
-        # peft_config=peft_config,
         max_seq_length=max_seq_length,
         tokenizer=tokenizer,
-        data_collator=collator,
+        data_collator=data_collator,
         formatting_func=formatting_func,
         args=trainer_config,
-        train_dataset=Dataset.from_dict(dataset["train"][:]),
-        eval_dataset=Dataset.from_dict(dataset["validation"][:]),
+        train_dataset=train_dataset,
+        eval_dataset=val_dataset,
         compute_metrics=compute_metrics,
         preprocess_logits_for_metrics=preprocess_logits_for_metrics,
         callbacks=[early_stopping, sparsification_scheduler],
@@ -449,7 +462,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         else:
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
             trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
-            trainer.evaluate(sampled_train_dataset)
+            trainer.evaluate(sample_dataset)
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(model.get_base_model(), act_hist_path)
 
@@ -597,6 +610,15 @@ def parse_args():
         "--num_epochs", type=int, default=8, help="Number of training epochs"
     )
     parser.add_argument(
+        "--max_steps", type=int, default=-1, help="Max number of training steps"
+    )
+    parser.add_argument(
+        "--do_pretraining",
+        type=bool,
+        default=False,
+        help="Whether to pretrain the model on OpenWebText",
+    )
+    parser.add_argument(
         "--push_to_hub",
         type=bool,
         default=False,
@@ -660,6 +682,7 @@ def parse_args():
         default=0.9,
         help="Targeted Sparsity of the sparse mlp layers in Mistral.",
     )
+
     parser.add_argument(
         "--use_sparse_model",
         action="store_true",
