@@ -589,7 +589,7 @@ def prepare_sparse_model(
         else:
             sparse_config = get_sparse_mistral_config(config)
         model = SparseMistral.from_pretrained(
-            pretrained_model_to_load, sparse_config
+            pretrained_model_to_load, config=sparse_config
         )
 
     if use_sparse_model:
