@@ -415,7 +415,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         metric_for_best_model="eval_loss",
         greater_is_better=False,
         gradient_accumulation_steps=2,
-        deepspeed="mistral_ds_config.json" if not is_debugging else None,
+        deepspeed="ds_config.json" if not is_debugging else None,
         per_device_train_batch_size=train_batch_size,
         per_device_eval_batch_size=test_batch_size,
         gradient_checkpointing=gradient_checkpointing,
@@ -476,13 +476,14 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
             # trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
             # trainer.evaluate(sample_dataset)
-            trainer_config2 = copy.deepcopy(trainer_config)
-            trainer_config2.max_steps = 1
-            trainer_args2 = copy.deepcopy(trainer_args)
-            trainer_args2["args"] = trainer_config2
-            trainer2 = trainer_func(**trainer_args2)
-            trainer2.train()
-            trainer2.evaluate(test_dataset)
+            # trainer_config2 = copy.deepcopy(trainer_config)
+            # trainer_config2.max_steps = 1
+            # trainer_args2 = copy.deepcopy(trainer_args)
+            # trainer_args2["args"] = trainer_config2
+            # trainer2 = trainer_func(**trainer_args2)
+            # trainer2.train()
+            # trainer2.evaluate(test_dataset)
+            trainer.evaluate(test_dataset)
             # trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(model.get_base_model(), act_hist_path)
 
