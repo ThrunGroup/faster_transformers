@@ -472,10 +472,14 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             load_act_hist(model.get_base_model(), act_hist_path)
         else:
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
-            trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
+            # trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
             # trainer.evaluate(sample_dataset)
-            trainer.evaluate(test_dataset)
-            trainer.is_deepspeed_enabled = is_deepspeed_enabled
+            trainer_args2 = trainer_args.copy()
+            trainer_args2["max_steps"] = 1
+            trainer2 = trainer_func(**trainer_args2)
+            trainer2.train()
+            trainer2.evaluate(test_dataset)
+            # trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(model.get_base_model(), act_hist_path)
 
         set_sparse_threshold(
