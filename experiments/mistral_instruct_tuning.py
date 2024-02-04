@@ -555,7 +555,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if push_to_hub and is_mainprocess():
         print("Pushing to hub")
         print("model: ", model)
-        torch.save(model.state_dict(), "model.pt")
+        torch.save(model.state_dict(), f"{model_name}.pt")
         # trainer.push_to_hub()
         print(f"Pushed to hub: thrunlab/{model_name}")
 
@@ -594,7 +594,7 @@ def prepare_sparse_model(
         else:
             sparse_config = get_sparse_mistral_config(config)
             model = SparseMistral(sparse_config)
-            model.load_state_dict(torch.load("model.pt"))
+            model.load_state_dict(torch.load(f"{model_name}.pt"))
 
     if use_sparse_model:
         print("Enabling Sparse SiLU...")
