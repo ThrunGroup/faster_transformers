@@ -619,7 +619,7 @@ def prepare_sparse_model(
         target_modules=["q_proj", "v_proj", "gate_proj", "down_proj"],
         task_type="CAUSAL_LM",
     )
-    model = get_peft_model(model, peft_config)
+    # model = get_peft_model(model, peft_config)
     model.enable_input_require_grads()
 
     return model, tokenizer
