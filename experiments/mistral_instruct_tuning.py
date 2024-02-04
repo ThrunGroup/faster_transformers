@@ -235,7 +235,7 @@ def preprocess_logits_for_metrics(logits, labels):
     return max_value_indices
 
 
-def compute_metrics(eval_preds):
+def classification_compute_metrics(eval_preds):
     preds, labels = eval_preds
 
     if isinstance(preds, tuple):
@@ -389,7 +389,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             response_template, tokenizer=tokenizer
         )
         trainer_func = SparseSFTTTrainer
-        compute_metrics = compute_metrics
+        compute_metrics = classification_compute_metrics
 
     if is_debugging:
         debugging_output_dir = "debugging_output"
