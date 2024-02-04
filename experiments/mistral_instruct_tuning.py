@@ -588,13 +588,13 @@ def prepare_sparse_model(
             sparse_config = get_sparse_mistral_config(
                 config, use_sparse_model=False, use_sparse_regularization=False
             )
+            model = SparseMistral.from_pretrained(
+                pretrained_model_to_load, config=sparse_config
+            )
         else:
             sparse_config = get_sparse_mistral_config(config)
-        # model = SparseMistral.from_pretrained(
-        #     pretrained_model_to_load, config=sparse_config
-        # )
-        model = SparseMistral(sparse_config)
-        model.load_state_dict(torch.load("model.pt"))
+            model = SparseMistral(sparse_config)
+            model.load_state_dict(torch.load("model.pt"))
 
     if use_sparse_model:
         print("Enabling Sparse SiLU...")
