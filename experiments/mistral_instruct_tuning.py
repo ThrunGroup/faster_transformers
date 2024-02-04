@@ -335,7 +335,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         data_collator = dataset.get_data_collator()
         compute_metrics = None
         preprocess_logits_for_metrics = None
-        trainer_func = trainer_func
+        trainer_func = SparseTrainer
     else:
         if dataset_type == "cola":
             dataset = load_glue(dataset_type, seed=seed)
