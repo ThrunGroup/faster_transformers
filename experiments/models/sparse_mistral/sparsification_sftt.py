@@ -39,7 +39,7 @@ class SparseTrainer(Trainer):
             "L1 positive activation",
         ], f"Invalid regularization type: {self.regularization_type}"
         self.sparse_layers = []
-        super(Trainer, self).__init__(*args, **kwargs)
+        super(SparseTrainer, self).__init__(*args, **kwargs)
 
     def initialize_sparse_silu_layers(self, model):
         self.sparse_layers = [
