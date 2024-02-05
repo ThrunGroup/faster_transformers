@@ -413,7 +413,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         evaluation_strategy="steps",
         eval_steps=eval_steps,  # early stopping counts only when eval step and save step match
         save_steps=50,
-        logging_steps=50,
+        logging_steps=5,
         save_strategy="steps",
         learning_rate=1e-5,
         weight_decay=0.01,
@@ -557,7 +557,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         print("Pushing to hub")
         print("model: ", model)
         torch.save(model.state_dict(), f"{model_name}.pt")
-        # trainer.push_to_hub()
+        trainer.push_to_hub()
         print(f"Pushed to hub: thrunlab/{model_name}")
 
     # Empty out gpu memory

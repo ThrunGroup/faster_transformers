@@ -8,25 +8,24 @@
 # --is_plot --set_sparsity_aware_threshold --print_sparsity --num_epochs 16
 
 # # Pretraining on openwebtext
-deepspeed experiments/mistral_instruct_tuning.py --use_wandb --do_pretraining --use_sparse_model --targeted_sparsity 0.8 \
---is_plot --set_sparsity_aware_threshold --print_sparsity --num_epochs 1 --max_steps 2000 --train_batch_size 8 \
---gradient_checkpointing True --push_to_hub True --model_name "Mistral_Sparse_pretraining_80_percent_2000"
+# deepspeed experiments/mistral_instruct_tuning.py --use_wandb --do_pretraining --use_sparse_model --targeted_sparsity 0.8 \
+# --is_plot --set_sparsity_aware_threshold --print_sparsity --num_epochs 1 --max_steps 2000 --train_batch_size 8 \
+# --gradient_checkpointing True --push_to_hub True --model_name "Mistral_Sparse_pretraining_80_percent_2000"
 
-deepspeed experiments/mistral_instruct_tuning.py --use_wandb --do_pretraining --use_sparse_model --targeted_sparsity 0.8 \
---is_plot --set_sparsity_aware_threshold --print_sparsity --num_epochs 1 --max_steps 3000 --train_batch_size 8 \
---gradient_checkpointing True --push_to_hub True --model_name "Mistral_Sparse_pretraining_80_percent_3000"
+# deepspeed experiments/mistral_instruct_tuning.py --use_wandb --do_pretraining --use_sparse_model --targeted_sparsity 0.8 \
+# --is_plot --set_sparsity_aware_threshold --print_sparsity --num_epochs 1 --max_steps 3000 --train_batch_size 8 \
+# --gradient_checkpointing True --push_to_hub True --model_name "Mistral_Sparse_pretraining_80_percent_3000"
 
 # Zeroshot with the pretrained model
 deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --targeted_sparsity 0.8 \
---is_plot --set_sparsity_aware_threshold --print_sparsity --num_epochs 1 --max_steps 5 --eval_steps 1  \
---train_batch_size 2 --test_batch_size 2 \
---gradient_checkpointing True --push_to_hub False --model_name "Mistral_Sparse_80_percent_cola_2000" \
---pretrained_model_to_load "Mistral_Sparse_pretraining_80_percent_2000"
+--is_plot --set_sparsity_aware_threshold --print_sparsity --num_epochs 10 --eval_steps 25  \
+--train_batch_size 8 --test_batch_size 16 \
+--gradient_checkpointing True --push_to_hub True --model_name "original_glue_cola" \
 
 deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --targeted_sparsity 0.8 \
---is_plot --set_sparsity_aware_threshold --print_sparsity --num_epochs 1 --max_steps 5 --eval_steps 1  \
---train_batch_size 2 --test_batch_size 2 \
---gradient_checkpointing True --push_to_hub False --model_name "Mistral_Sparse_80_percent_cola_3000" \
+--is_plot --set_sparsity_aware_threshold --print_sparsity --num_epochs 10 --eval_steps 25  \
+--train_batch_size 8 --test_batch_size 16 \
+--gradient_checkpointing True --push_to_hub True --model_name "mistral_sparse_80_percent_cola_3000" \
 --pretrained_model_to_load "Mistral_Sparse_pretraining_80_percent_3000"
 
 # # Sparse SiLU with Warmup
