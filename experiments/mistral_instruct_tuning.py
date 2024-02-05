@@ -284,6 +284,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     use_sparse_model = exp_config.use_sparse_model
     use_relu = exp_config.use_relu
     do_pretraining = exp_config.do_pretraining
+    eval_steps = exp_config.eval_steps
 
     if not use_sparse_model:
         exp_config.use_sparse_regularization = exp_config.print_sparsity = (
@@ -410,9 +411,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     trainer_config = TrainingArguments(
         output_dir=output_dir,
         evaluation_strategy="steps",
-        eval_steps=50,  # early stopping counts only when eval step and save step match
+        eval_steps=eval_steps,  # early stopping counts only when eval step and save step match
         save_steps=50,
-        logging_steps=5,
+        logging_steps=50,
         save_strategy="steps",
         learning_rate=1e-5,
         weight_decay=0.01,
@@ -594,7 +595,9 @@ def prepare_sparse_model(
         else:
             sparse_config = get_sparse_mistral_config(config)
             model = SparseMistral(sparse_config)
-            state_dict = torch.load(f"{model_name}.pt", map_location="cpu")
+            state_dict = torch.load(
+                f"{pretrained_model_to_load}.pt", map_location="cpu"
+            )
             model.load_state_dict(state_dict)
 
     if use_sparse_model:
@@ -662,6 +665,9 @@ def parse_args():
     )
     parser.add_argument(
         "--num_epochs", type=int, default=8, help="Number of training epochs"
+    )
+    parser.add_argument(
+        "--eval_steps", type=int, default=50, help="Evaluation steps"
     )
     parser.add_argument(
         "--max_steps",
