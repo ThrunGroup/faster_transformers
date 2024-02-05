@@ -307,14 +307,14 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         if is_running_deepspeed():
             if is_mainprocess():
                 wandb_run = wandb.init(
-                    project=f"{model_name}_{dataset_type}",
+                    project=f"MISTRAL_{dataset_type}",
                     name=run_name,
                     reinit=True,
                     config=exp_config,
                 )
         else:
             wandb_run = wandb.init(
-                project=f"{model_name}_{dataset_type}",
+                project=f"MISTRAL_{dataset_type}",
                 name=run_name,
                 reinit=True,
                 config=exp_config,
