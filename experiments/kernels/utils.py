@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import pandas as pd
 
 ACT2FN = {
     "gelu": nn.GELU(),
@@ -8,8 +9,21 @@ ACT2FN = {
 }
 
 
-def benchmark(fn, input, Wgate, Wup, Wdown, idx, activation="swish", warmup=20, rep=80, quantiles=None, fast_flush=True, return_mode="mean"):
-    # https://github.com/nox-410/tvm.tl/blob/tl/python/tvm/tl/utils.py#L144    
+def benchmark(
+    fn,
+    input,
+    Wgate,
+    Wup,
+    Wdown,
+    idx,
+    activation="swish",
+    warmup=20,
+    rep=80,
+    quantiles=None,
+    fast_flush=True,
+    return_mode="mean",
+):
+    # https://github.com/nox-410/tvm.tl/blob/tl/python/tvm/tl/utils.py#L144
     fn(input, Wgate, Wup, Wdown, idx, activation)
     torch.cuda.synchronize()
 
@@ -37,7 +51,7 @@ def benchmark(fn, input, Wgate, Wup, Wdown, idx, activation="swish", warmup=20, 
     # Warm-up
     for _ in range(n_warmup):
         fn(input, Wgate, Wup, Wdown, idx, activation)
-    
+
     # Benchmark
     for i in range(n_repeat):
         cache.zero_()
@@ -55,8 +69,26 @@ def benchmark(fn, input, Wgate, Wup, Wdown, idx, activation="swish", warmup=20, 
         return ret
     return getattr(torch, return_mode)(times).item()
 
-def benchmark_pred(fn, input, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdown, activation, K, warmup=20, rep=80, quantiles=None, fast_flush=True, return_mode="mean"):
-    # https://github.com/nox-410/tvm.tl/blob/tl/python/tvm/tl/utils.py#L144    
+
+def benchmark_pred(
+    fn,
+    input,
+    Wu,
+    Wsv,
+    Bsv,
+    svd_activation,
+    Wgate,
+    Wup,
+    Wdown,
+    activation,
+    K,
+    warmup=20,
+    rep=80,
+    quantiles=None,
+    fast_flush=True,
+    return_mode="mean",
+):
+    # https://github.com/nox-410/tvm.tl/blob/tl/python/tvm/tl/utils.py#L144
     fn(input, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdown, activation, K)
     torch.cuda.synchronize()
 
@@ -84,7 +116,7 @@ def benchmark_pred(fn, input, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdown, a
     # Warm-up
     for _ in range(n_warmup):
         fn(input, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdown, activation, K)
-    
+
     # Benchmark
     for i in range(n_repeat):
         cache.zero_()
@@ -102,8 +134,26 @@ def benchmark_pred(fn, input, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdown, a
         return ret
     return getattr(torch, return_mode)(times).item()
 
+
+def print_csv(csv_file: str):
+    # Load the CSV file into a DataFrame
+    df = pd.read_csv(csv_file)
+
+    # Print the DataFrame
+    print(df)
+
+
 class Config:
-    def __init__(self, hidden_size, intermediate_size, rank, K, dtype, hidden_act='swish', svd_act='relu'):
+    def __init__(
+        self,
+        hidden_size,
+        intermediate_size,
+        rank,
+        K,
+        dtype,
+        hidden_act="swish",
+        svd_act="relu",
+    ):
         self.hidden_size = hidden_size
         self.intermediate_size = intermediate_size
         self.rank = rank
@@ -111,6 +161,7 @@ class Config:
         self.dtype = dtype
         self.hidden_act = hidden_act
         self.svd_act = svd_act
+
 
 class MistralMLP(nn.Module):
     def __init__(self, config):
@@ -127,6 +178,7 @@ class MistralMLP(nn.Module):
         print(l1.dtype)
         return self.down_proj(self.act_fn(l1) * self.up_proj(x))
 
+
 class MistralSparseMLP(MistralMLP):
     def __init__(self, config):
         super().__init__(config)
@@ -140,15 +192,18 @@ class MistralSparseMLP(MistralMLP):
         probs = self.svd_act_fn(self.sv_proj(self.u_proj(x)))
         self.probs = probs[0]
         _, topk_idcs = torch.topk(self.probs, k=self.K, dim=-1)
-        self.topk_idcs, _ = torch.sort(topk_idcs) # [0] to make i compatible with deja vu
+        self.topk_idcs, _ = torch.sort(
+            topk_idcs
+        )  # [0] to make i compatible with deja vu
         mask = torch.zeros(
             self.intermediate_size,
             dtype=probs.dtype,
             device=probs.device,
         ).scatter(-1, self.topk_idcs, 1)
-        masked_up = (self.act_fn(self.gate_proj(x)) * self.up_proj(x) * mask)
+        masked_up = self.act_fn(self.gate_proj(x)) * self.up_proj(x) * mask
         return self.down_proj(masked_up)
-    
+
+
 def degrad_tensor(x):
     x.grad = None
     x.requires_grad = False

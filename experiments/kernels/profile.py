@@ -1,9 +1,9 @@
 import torch
 import argparse
 import time
-from utils import benchmark, ACT2FN, benchmark_pred, Config, MistralSparseMLP, degrad_tensor
-from dejavu import mistral_mlp_sparse, mistral_mlp_sparse_fuse
-from kernels import matmul_triton, matmul_triton_bias, matmul_triton_bias_where
+from .utils import benchmark, ACT2FN, benchmark_pred, Config, MistralSparseMLP, degrad_tensor, print_csv
+from .dejavu import mistral_mlp_sparse, mistral_mlp_sparse_fuse
+from .kernels import matmul_triton, matmul_triton_bias, matmul_triton_bias_where
 # @torch.compile
 # def svd_where(x, Wu, Wsv, Bsv, svd_activation, threshold, K):
 #     svd_act_fn = torch.nn.SiLU()
@@ -139,3 +139,5 @@ if __name__ == "__main__":
         if args.record:
             f.write("{},{:.2f},{:.2f},{:.2f},{:.2f}\n".format(K, time_dense_torch, time_dejavu, time_pred_dejavu, time_pred_where))
         print("{},{:.2f},{:.2f},{:.2f},{:.2f}".format(K, time_dense_torch, time_dejavu, time_pred_dejavu, time_pred_where))
+
+    print_csv(args.filename)
