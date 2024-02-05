@@ -8,6 +8,8 @@ import os
 import matplotlib.pyplot as plt
 import gc
 
+from scipy.sparse.linalg import svds
+
 
 class SparsePredictor(nn.Module):
     def __init__(self):
@@ -18,14 +20,27 @@ class SparsePredictor(nn.Module):
         return self.router(x)
 
 
-def low_rank_approximation(linear_layer, act_func=nn.ReLU(), rank=64):
+def low_rank_approximation(linear_layer, act_func=nn.ReLU(), rank=1):
     # Decompose the weight matrix of the layer
-    U, S, V = torch.svd(linear_layer.weight.T.data)
+    # Solve "RuntimeError: "svd_cuda_gesvdj" not implemented for 'BFloat16'"
+    weight_data = linear_layer.weight.T.data
+    weight_data_type = weight_data.dtype
+    print("Computing SVD...")
+    weight_data = weight_data.float()
+
+    # U, S, V = torch.svd(weight_data)
+    U_approx, S_approx, V_approx = svds(
+        np.array(weight_data),
+        k=min(rank, weight_data.shape[1] - 1, weight_data.shape[0] - 1),
+    )
+    U_approx = torch.from_numpy(U_approx.copy())
+    S_approx = torch.from_numpy(S_approx.copy()).unsqueeze(-1)
+    V_approx = torch.from_numpy(V_approx.copy())
 
     # Take the top `rank` components
-    U_approx = U[:, :rank]
-    S_approx = torch.diag(S[:rank])
-    V_approx = V[:, :rank].t()
+    # U_approx = U[:, :rank]
+    # S_approx = torch.diag(S[:rank])
+    # V_approx = V[:, :rank].t()
 
     # Create two new linear layers for low-rank approximation
     first_layer = nn.Linear(linear_layer.in_features, rank, bias=False)
@@ -33,7 +48,7 @@ def low_rank_approximation(linear_layer, act_func=nn.ReLU(), rank=64):
 
     # Assign the low-rank matrices to the layers' weights
     first_layer.weight.data = U_approx.T.contiguous()
-    second_layer.weight.data = torch.mm(S_approx, V_approx).T.contiguous()
+    second_layer.weight.data = (S_approx * V_approx).T.contiguous()
 
     # If the original linear layer had a bias, assign it to the second layer's bias
     if linear_layer.bias is not None:
@@ -43,5 +58,6 @@ def low_rank_approximation(linear_layer, act_func=nn.ReLU(), rank=64):
 
     sparse_predictor = SparsePredictor()
     sparse_predictor.router = nn.Sequential(first_layer, second_layer, act_func)
+    sparse_predictor = sparse_predictor.type(weight_data_type)
 
     return sparse_predictor

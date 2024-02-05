@@ -22,6 +22,7 @@ from transformers.models.mistral.modeling_mistral import (
     MistralConfig,
     MISTRAL_ATTENTION_CLASSES,
     MistralRMSNorm,
+    MistralForCausalLM,
 )
 from experiments.models.sparse_mistral.svd_router import (
     low_rank_approximation,
@@ -53,7 +54,7 @@ class SparseSFTTTrainer(SFTTrainer):
 
     def initialize_sparse_decoder_layers(self, model):
         self.sparse_decoder_layers = [
-            m for m in model.modules() if isinstance(m, MistralDecoderLayer)
+            m for m in model.modules() if isinstance(m, SparseMistralDecoderLayer)
         ]
 
     def training_step(
@@ -73,7 +74,7 @@ class SparseSFTTTrainer(SFTTrainer):
         if self.args.n_gpu > 1:
             loss = loss.mean()  # mean() to average on multi-gpu parallel training
         if not self.freeze_original_weights:
-            self.accelerator.backward(loss, retain_graph=self.use_sparse_regularization)
+            self.accelerator.backward(loss, retain_graph=True)
 
         if self.use_sparse_regularization:
             regularization_loss = self.compute_regularization(model)
@@ -121,6 +122,7 @@ class SparseSFTTTrainer(SFTTrainer):
         if self.state.global_step % 20 == 0 and loss != 0:
             print("Sparse Predictor Distillation loss: ", loss.item())
         return loss
+
     # def compute_loss(self, model, inputs, return_outputs=False):
     #     loss = super().compute_loss(model, inputs, return_outputs)
     #
@@ -168,7 +170,8 @@ class SparseSiLU(nn.SiLU):
         self.m = nn.Threshold(threshold, 0)
 
     def forward(self, x):
-        return self.m(super(SparseSiLU, self).forward(x))
+        act = super(SparseSiLU, self).forward(x)
+        return self.m(act) - self.m(-act)
 
 
 class MistralSparseSiluMLP(MistralMLP):
@@ -261,7 +264,7 @@ class MistralSparseSiluMLP(MistralMLP):
                     ) / (self.visit_counts + 1)
                     self.visit_counts += 1
 
-                    print(self.agg_sparsity)
+                    # print(self.agg_sparsity)
 
                     # Collect histogram stats
                     if self.is_collect_histogram:
@@ -300,9 +303,7 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
         self.hidden_size = config.hidden_size
         self.intermediate_size = config.intermediate_size
 
-        self.self_attn = MISTRAL_ATTENTION_CLASSES[config._attn_implementation](
-            config, layer_idx
-        )
+        self.self_attn =  decoder_layer.self_attn
 
         self.mlp = decoder_layer.mlp
         self.input_layernorm = decoder_layer.input_layernorm
@@ -315,6 +316,7 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
             decoder_layer.mlp.gate_proj, act_func=self.sparse_act_func
         )
         self.use_async = kwargs.pop("use_async", True)
+        self.use_sparse_predictor = False
         self.distill_loss = None
 
     def forward(
@@ -335,6 +337,7 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
             )
 
         residual = hidden_states
+        sp_mask = None
 
         if self.use_async:
             sp_mask = self.sp_mlp(hidden_states)
@@ -366,6 +369,9 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
         # Convert sp mask into binary form
         sp_mask = sp_mask > 0
 
+        if not self.use_sparse_predictor:
+            sp_mask = None
+
         hidden_states = self.mlp(hidden_states, sp_mask)
         hidden_states = residual + hidden_states
 
@@ -378,6 +384,39 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
             outputs += (present_key_value,)
 
         return outputs
+
+
+class SparseMistralforCausalLM(MistralForCausalLM):
+    def __init__(self, config):
+        super().__init__(config)
+        self.config = config
+        if config.use_sparse_model:
+            self.apply_sparse_mlp()
+        if config.use_sparse_predictor:
+            self.apply_sparse_predictor()
+
+    def apply_sparse_mlp(self):
+        apply_mistral_sparse_silu_mlp(
+            self,
+            config=self.config,
+            use_sparse_regularization=self.config.use_sparse_regularization,
+        )
+
+    def apply_sparse_predictor(self):
+        apply_mistral_sparse_decoder_layer(self, config=self.config)
+
+
+def get_sparse_mistral_config(
+    config: MistralConfig,
+    use_sparse_model=False,
+    use_sparse_predictor=False,
+    use_sparse_regularization=False,
+):
+    config.use_sparse_model = use_sparse_model
+    config.use_sparse_predictor = use_sparse_predictor
+    config.use_sparse_regularization = use_sparse_regularization
+
+    return config
 
 
 def apply_mistral_sparse_silu_mlp(
@@ -416,6 +455,22 @@ def apply_mistral_sparse_decoder_layer(
         else:
             new_layers.append(layer)
     model.model.layers = nn.ModuleList(new_layers)
+
+
+def enable_sparse_predictor(
+    model,
+):
+    for layer_idx, layer in enumerate(model.model.layers):
+        if isinstance(layer, MistralDecoderLayer):
+            layer.use_sparse_predictor = True
+
+
+def disable_sparse_predictor(
+    model,
+):
+    for layer_idx, layer in enumerate(model.model.layers):
+        if isinstance(layer, MistralDecoderLayer):
+            layer.use_sparse_predictor = False
 
 
 def activate_stats(model, is_collect_histogram: bool = True):

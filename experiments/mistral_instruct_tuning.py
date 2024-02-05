@@ -16,12 +16,14 @@ from peft import (
     LoraConfig,
     get_peft_model,
     prepare_model_for_kbit_training,
+    PeftModel,
 )
 from evaluate import load
 from transformers.utils import is_sagemaker_mp_enabled, is_sagemaker_dp_enabled
 
 
 import torch
+import deepspeed
 import torch.nn as nn
 import os
 import gc
@@ -34,6 +36,7 @@ import warnings
 
 from experiments.models.sparse_mistral.sparsification_sftt import (
     SparseSFTTTrainer,
+    SparseMistralforCausalLM,
     apply_mistral_sparse_silu_mlp,
     apply_mistral_sparse_decoder_layer,
     activate_stats,
@@ -46,6 +49,9 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     save_act_hist,
     enable_last_k_modules,
     enable_first_k_modules,
+    enable_sparse_predictor,
+    disable_sparse_predictor,
+    get_sparse_mistral_config,
 )
 from experiments.models.sparse_mistral.svd_router import SparsePredictor
 from utils.mistral_utils import compress_mistral
@@ -262,25 +268,40 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     is_plot = exp_config.is_plot
     seed = exp_config.seed
 
+    # If not using sparse Mistral model, all flags related to sparse model should be set as zero or false.
     if not exp_config.use_sparse_model:
         exp_config.use_sparse_regularization = (
             exp_config.print_sparsity
         ) = exp_config.print_act_stats = exp_config.set_sparsity_aware_threshold = False
         exp_config.targeted_sparsity = 0
+        exp_config.sparse_model_dir = None
 
     run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
 
+    # Load dataset
     if dataset_type == "cola":
         dataset = load_glue(dataset_type, seed=seed)
         formatting_func = formatting_func_cola
-        create_prompt = create_cola_prompt
     elif dataset_type == "boolq":
         dataset = load_glue(dataset_type, seed=seed)
         formatting_func = formatting_func_boolq
-        create_prompt = create_boolq_prompt
 
-    model, tokenizer = prepare_sparse_model(
-        is_debugging, exp_config.use_sparse_model, exp_config.use_sparse_regularization
+    if is_debugging:
+        output_dir = "debugging_output"
+        dataset["train"] = Dataset.from_dict(dataset["train"][:300])
+        dataset["validation"] = Dataset.from_dict(dataset["validation"][:300])
+        dataset["test"] = Dataset.from_dict(dataset["test"][:])
+    else:
+        output_dir = os.path.join(exp_config.output_dir, run_name)
+
+    # Load model
+    model, tokenizer, config = prepare_sparse_model(
+        is_debugging,
+        exp_config.use_sparse_model,
+        exp_config.use_sparse_regularization,
+        exp_config.use_spm,
+        exp_config.sparse_model_dir,
+        exp_config.use_lora,
     )
     max_seq_length = 1024
 
@@ -318,14 +339,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             num_proc=None,
             batch_size=train_batch_size,
         )
-
-    if is_debugging:
-        output_dir = "debugging_output"
-        dataset["train"] = Dataset.from_dict(dataset["train"][:300])
-        dataset["validation"] = Dataset.from_dict(dataset["validation"][:300])
-        dataset["test"] = Dataset.from_dict(dataset["test"][:])
-    else:
-        output_dir = os.path.join(exp_config.output_dir, run_name)
 
     if use_wandb:
         if is_debugging:
@@ -399,6 +412,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         use_sparse_regularization=exp_config.use_sparse_regularization,
     )
 
+    if exp_config.use_lora:
+        base_model = model.get_base_model()
+    else:
+        base_model = model
+
     # Collect statistics and find the threshold for given sparsity
     if exp_config.set_sparsity_aware_threshold:
         if is_debugging:
@@ -408,57 +426,55 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
                 f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist.pt"
             )
 
-        activate_stats(model.get_base_model())
+        activate_stats(base_model)
         if os.path.exists(act_hist_path):
-            load_act_hist(model.get_base_model(), act_hist_path)
+            load_act_hist(base_model, act_hist_path)
         else:
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
             trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
             trainer.evaluate(sampled_train_dataset)
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
-            save_act_hist(model.get_base_model(), act_hist_path)
+            save_act_hist(base_model, act_hist_path)
 
-        set_sparse_threshold(model.get_base_model(), exp_config.targeted_sparsity)
+        set_sparse_threshold(base_model, exp_config.targeted_sparsity)
 
     # Plot activation histograms
     if is_plot:
         if is_running_deepspeed():
             if is_mainprocess():
-                plot_act(model.get_base_model())
+                plot_act(base_model)
         else:
-            plot_act(model.get_base_model())
+            plot_act(base_model)
 
     # Train Model after deactivating collecting statistics
-    deactivate_stats(model.get_base_model())
-    trainer.train()
+    deactivate_stats(base_model)
 
-    # Train model for sparse predictor
+    # Only use distillation loss if training sparse predictor
     if exp_config.use_spm:
         if exp_config.use_sparse_model:
-            # Inject Sparse Predictor
-            apply_mistral_sparse_decoder_layer(
-                model.get_base_model(), model.get_base_model().config
-            )
-
-            # Freeze original params
-            for params in model.parameters():
-                params.requires_grad = False
-            for name, module in model.named_modules():
-                if isinstance(module, SparsePredictor):
-                    for name, params in module.named_parameters():
-                        params.requires_grad = True
-
             trainer.freeze_original_weights = True
-            trainer.initialize_sparse_decoder_layers(model)
+            trainer.initialize_sparse_decoder_layers(base_model)
             trainer.use_spm_loss = True
+            disable_sparse_predictor(base_model)
             trainer.train()
         else:
             warnings.warn(
                 "use_spm arg is ignored as use_spare_model arg is not activated."
             )
+    trainer.train()
 
     # Evaluate on test dataset
-    model = model.get_base_model()
+    if exp_config.use_lora:
+        model = model.merge_and_unload()
+
+    # Enable sparse predictor in inference stage
+    if exp_config.use_spm:
+        if exp_config.use_sparse_model:
+            enable_sparse_predictor(model)
+        else:
+            warnings.warn(
+                "use_spm arg is ignored as use_spare_model arg is not activated."
+            )
 
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
@@ -484,8 +500,10 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         plot_act(model)
 
     if exp_config.model_save:
-        trainer.save_model()
-        torch.save(model.state_dict(), f"/tmp/mistral_spm.pt")
+        config.save_pretrained(output_dir)
+        model.save_pretrained(output_dir)
+        # trainer.save_model()
+        # torch.save(model.state_dict(), f"/tmp/mistral_spm.pt")
 
     # Early Exit/ Early Entry experiments
     # model.model.original_layers = nn.ModuleList([layer for layer in model.model.layers])
@@ -524,36 +542,81 @@ def prepare_sparse_model(
     is_debugging=False,
     use_sparse_model: bool = True,
     use_sparse_regularization: bool = False,
+    use_sparse_predictor: bool = False,
+    sparse_model_dir: str = None,
+    use_lora: bool = True,
 ):
-    if is_debugging:
-        config = MistralConfig(
-            hidden_size=64,
-            intermediate_size=64,
-            num_hidden_layers=4,
-            # num_attention_heads=4,
-        )
-        model = MistralForCausalLM(config=config)
+    print(use_sparse_predictor, sparse_model_dir)
+    if sparse_model_dir is None:
+        if is_debugging:
+            config = MistralConfig(
+                hidden_size=64,
+                intermediate_size=64,
+                num_hidden_layers=4,
+                # num_attention_heads=4,
+            )
+            config = get_sparse_mistral_config(config)
+            model = SparseMistralforCausalLM(config=config)
+        else:
+            config = MistralConfig.from_pretrained("mistralai/Mistral-7B-Instruct-v0.1")
+            config = get_sparse_mistral_config(config)
+            model = SparseMistralforCausalLM.from_pretrained(
+                "mistralai/Mistral-7B-Instruct-v0.1", config=config
+            )
+
+        if use_sparse_model:
+            model.config.use_sparse_model = use_sparse_model
+            apply_mistral_sparse_silu_mlp(
+                model, model.config, use_sparse_regularization=use_sparse_regularization
+            )
+            enable_sparse_silu(model)
+        if use_sparse_predictor:
+            model.config.use_sparse_predictor = use_sparse_predictor
+            apply_mistral_sparse_decoder_layer(model, model.config)
+        if use_sparse_regularization:
+            model.config.us_sparse_regularization = use_sparse_regularization
     else:
-        model = AutoModelForCausalLM.from_pretrained(
-            "mistralai/Mistral-7B-Instruct-v0.1",
+        config = MistralConfig.from_pretrained(sparse_model_dir)
+        model = SparseMistralforCausalLM.from_pretrained(
+            sparse_model_dir, config=config
         )
-    if use_sparse_model:
-        apply_mistral_sparse_silu_mlp(
-            model, model.config, use_sparse_regularization=use_sparse_regularization
-        )
-        enable_sparse_silu(model)
+        if use_sparse_predictor:
+            model.config.use_sparse_predictor = use_sparse_predictor
+            apply_mistral_sparse_decoder_layer(model, model.config)
+            # Freeze original params
+            for params in model.parameters():
+                params.requires_grad = False
+            for name, module in model.named_modules():
+                if isinstance(module, SparsePredictor):
+                    for name, params in module.named_parameters():
+                        params.requires_grad = True
+                        print(f"{name} is unfrozen.")
+
+                    for name, param in model.named_parameters():
+                        if param.requires_grad:
+                            print(name)
+    print(model.config)
 
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
 
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
-    peft_config = LoraConfig(
-        lora_alpha=16, lora_dropout=0.1, r=64, bias="none", task_type="CAUSAL_LM"
-    )
-    model = get_peft_model(model, peft_config)
+    if use_lora:
+        peft_config = LoraConfig(
+            lora_alpha=16,
+            lora_dropout=0.1,
+            r=64,
+            bias="none",
+            task_type="CAUSAL_LM",
+            target_modules=["q_proj", "v_proj", "gate_proj", "up_proj", "down_proj"],
+        )
+        model = get_peft_model(model, peft_config)
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            print(name)
 
-    return model, tokenizer
+    return model, tokenizer, model.config
 
 
 def parse_args():
@@ -575,7 +638,7 @@ def parse_args():
         "--output_dir", type=str, default="/scr/jay/ckpt", help="Output Directory"
     )
     parser.add_argument(
-        "--num_epochs", type=int, default=8, help="Number of training epochs"
+        "--num_epochs", type=int, default=7, help="Number of training epochs"
     )
     parser.add_argument(
         "--push_to_hub",
@@ -647,6 +710,14 @@ def parse_args():
         default=False,
         help="Whether to use in sparse predictor mask",
     )
+    parser.add_argument(
+        "--sparse_model_dir",
+        type=str,
+        default=None,
+        help="Whether to load fine-tuned sparse model from given directory",
+    )
+    parser.add_argument("--use_lora", action=argparse.BooleanOptionalAction)
+    parser.set_defaults(use_lora=True)
 
     return parser.parse_args()
 
