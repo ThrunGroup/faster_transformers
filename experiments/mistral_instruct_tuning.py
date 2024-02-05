@@ -594,9 +594,8 @@ def prepare_sparse_model(
         else:
             sparse_config = get_sparse_mistral_config(config)
             model = SparseMistral(sparse_config)
-            model.load_state_dict(
-                torch.load(f"{model_name}.pt"), map_location="cpu"
-            )
+            state_dict = torch.load(f"{model_name}.pt", map_location="cpu")
+            model.load_state_dict(state_dict)
 
     if use_sparse_model:
         print("Enabling Sparse SiLU...")
