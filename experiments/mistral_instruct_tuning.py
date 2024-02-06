@@ -72,6 +72,10 @@ from utils.constants import (
     SST2,
     WIC,
 )
+from format_dataset_for_instruction_tuning import (
+    get_formatting_func,
+    get_dataset,
+)
 
 
 def load_glue(data_type: str, seed: int = 0):
@@ -93,84 +97,6 @@ def load_glue(data_type: str, seed: int = 0):
     dataset["validation"] = train_dataset["test"]
     dataset["test"] = dataset["validation"]  # Set original validation
     return dataset
-
-
-def create_cola_prompt(sample):
-    bos_token = "<s>"
-    instruction = "Is the following 'input' sentence is grammatically correct? Respond in 'yes' or 'no'."
-    input = sample["sentence"]
-    response = "yes" if sample["label"] == 1 else "no"
-    eos_token = "</s>"
-
-    full_prompt = ""
-    full_prompt += bos_token
-    full_prompt += f"[INST]### Instruction: {instruction}"
-    full_prompt += f"### Input: {input}[/INST]"
-    full_prompt += f"### Response: {response}"
-    full_prompt += eos_token
-
-    return full_prompt
-
-
-def create_boolq_prompt(sample):
-    bos_token = "<s>"
-    instruction = "Based on the following 'passage', determine if the 'question' is true or false. Respond in 'yes' or 'no'."
-    passage = sample["passage"]
-    question = sample["question"]
-    response = "yes" if sample["label"] == 1 else "no"
-    eos_token = "</s>"
-
-    full_prompt = ""
-    full_prompt += bos_token
-    full_prompt += f"[INST]### Instruction: {instruction}"
-    full_prompt += f"### Passage: {passage}"
-    full_prompt += f"### Question: {question}[/INST]"
-    full_prompt += f"### Response: {response}"
-    full_prompt += eos_token
-
-    return full_prompt
-
-
-def formatting_func_cola(samples):
-    formatted_prompts = []
-    bos_token = "<s>"
-    instruction = "Is the following 'input' sentence is grammatically correct? Respond in 'yes' or 'no'."
-    eos_token = "</s>"
-    for idx in range(len(samples["sentence"])):
-        input = samples["sentence"][idx]
-        response = "yes" if samples["label"][idx] == 1 else "no"
-
-        full_prompt = ""
-        full_prompt += bos_token
-        full_prompt += f"[INST]### Instruction: {instruction}"
-        full_prompt += f"### Input: {input}[/INST]"
-        full_prompt += f"### Response: {response}"
-        full_prompt += eos_token
-        formatted_prompts.append(full_prompt)
-    return formatted_prompts
-
-
-def formatting_func_boolq(samples):
-    formatted_prompts = []
-    bos_token = "<s>"
-    instruction = "Based on the following 'passage', is the 'question' true or false? Respond in 'yes' or 'no'."
-    eos_token = "</s>"
-
-    for idx in range(len(samples["question"])):
-        passage = samples["passage"][idx]
-        question = samples["question"][idx]
-        response = "yes" if samples["label"][idx] == 1 else "no"
-
-        full_prompt = ""
-        full_prompt += bos_token
-        full_prompt += f"[INST]### Instruction: {instruction}"
-        full_prompt += f"### Passage: {passage}"
-        full_prompt += f"### Question: {question}[/INST]"
-        full_prompt += f"### Response: {response}"
-        full_prompt += eos_token
-        formatted_prompts.append(full_prompt)
-
-    return formatted_prompts
 
 
 def find_left_of_a(np_array, a):
@@ -348,14 +274,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         data_collator = dataset.get_data_collator()
         trainer_func = SparseTrainer
     else:
-        if dataset_type == "cola":
-            dataset = load_glue(dataset_type, seed=seed)
-            formatting_func = formatting_func_cola
-            create_prompt = create_cola_prompt
-        elif dataset_type == "boolq":
-            dataset = load_glue(dataset_type, seed=seed)
-            formatting_func = formatting_func_boolq
-            create_prompt = create_boolq_prompt
+        train_dataset, val_dataset, test_dataset = get_dataset(dataset_type)
+        formatting_func = get_formatting_func(dataset_type)
         max_seq_length = 1024
 
         def tokenize(element):
@@ -374,15 +294,15 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             }
 
         # Roundabout way to avoid error
-        test_dataset = dataset["test"].map(
+        tokenized_test_dataset = test_dataset.map(
             tokenize,
             batched=True,
-            remove_columns=dataset["test"].column_names,
+            remove_columns=test_dataset.column_names,
             num_proc=None,
             batch_size=test_batch_size,
         )
         if exp_config.set_sparsity_aware_threshold:
-            sample_dataset = Dataset.from_dict(dataset["train"][:1000])
+            sample_dataset = Dataset.from_dict(train_dataset[:1000])
             sample_dataset = sample_dataset.map(
                 tokenize,
                 batched=True,
@@ -390,8 +310,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
                 num_proc=None,
                 batch_size=train_batch_size,
             )
-        train_dataset = dataset["train"]
-        val_dataset = dataset["validation"]
 
         response_template = "Response:"
         data_collator = DataCollatorForCompletionOnlyLM(
@@ -496,7 +414,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             # trainer2 = trainer_func(**trainer_args2)
             # trainer2.train()
             # trainer2.evaluate(test_dataset)
-            trainer.evaluate(test_dataset)
+            trainer.evaluate(tokenized_test_dataset)
             # trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(model.get_base_model(), act_hist_path)
 
