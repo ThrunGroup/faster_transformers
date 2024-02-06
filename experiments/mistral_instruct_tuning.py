@@ -64,8 +64,13 @@ from utils.utils import (
 from utils.constants import (
     MISTRAL_YES_ID,
     MISTRAL_NO_ID,
-    OPENWEBTEXT,
     MISTRAL_7B,
+    OPENWEBTEXT,
+    COLA,
+    BOOLQ,
+    QNLI,
+    SST2,
+    WIC,
 )
 
 

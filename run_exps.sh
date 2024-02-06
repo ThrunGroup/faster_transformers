@@ -19,19 +19,13 @@
 # Zeroshot with the pretrained model
 deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --targeted_sparsity 0.8 \
 --is_plot --set_sparsity_aware_threshold --print_sparsity --num_epochs 10  \
---train_batch_size 8 --test_batch_size 16 \
---gradient_checkpointing True --push_to_hub False --model_name "mistral_sparse_80_percent_cola_1000" \
+--train_batch_size 2 --test_batch_size 4 --dataset_type "boolq" \
+--gradient_checkpointing True --push_to_hub False --model_name "mistral_sparse_80_percent_boolq_1000" \
 --pretrained_model_to_load "Mistral_Sparse_pretraining_80_percent_10000"
 
-# deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --targeted_sparsity 0.8 \
-# --is_plot --set_sparsity_aware_threshold --print_sparsity --max_steps 1  \
-# --train_batch_size 8 --test_batch_size 16 \
-# --gradient_checkpointing True --push_to_hub True --model_name "mistral_sparse_80_percent_cola_3000" \
-# --pretrained_model_to_load "Mistral_Sparse_pretraining_80_percent_3000" --seed 42
-
 deepspeed experiments/mistral_instruct_tuning.py --use_wandb  --num_epochs 10  \
---train_batch_size 8 --test_batch_size 16 \
---gradient_checkpointing True --push_to_hub False --model_name "original_glue_cola"
+--train_batch_size 2 --test_batch_size 4 --dataset_type "boolq" \
+--gradient_checkpointing True --push_to_hub False --model_name "original_glue_boolq"
 
 # deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --targeted_sparsity 0.8 \
 # --is_plot --set_sparsity_aware_threshold --print_sparsity --num_epochs 10 --eval_steps 25  \
