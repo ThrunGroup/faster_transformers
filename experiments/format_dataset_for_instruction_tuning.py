@@ -20,15 +20,12 @@ def get_dataset(dataset_type: str, seed: int = 42):
     else:
         raise NotImplementedError(f"{dataset_type} is not implemented.")
 
-    # Split the training dataset into 85% train and 15% new validation
-    train_testval_dataset = dataset.train_test_split(test_size=0.2, seed=seed)
-    train_dataset = train_testval_dataset["train"]
-    testval_dataset = train_testval_dataset["test"].train_test_split(
-        test_size=0.5, seed=seed
+    train_test_dataset = dataset["train"].train_test_split(
+        test_size=0.1, seed=seed
     )
-    test_dataset = testval_dataset["test"]
-    val_dataset = testval_dataset["train"]
-
+    train_dataset = train_test_dataset["train"]
+    test_dataset = train_test_dataset["test"]
+    val_dataset = dataset["validation"]
     return train_dataset, val_dataset, test_dataset
 
 
