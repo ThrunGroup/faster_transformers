@@ -12,7 +12,7 @@ from utils.constants import (
 )
 
 
-def get_dataset(dataset_type: str, seed: int = 42):
+def get_dataset_for_instruction_tuning(dataset_type: str, seed: int = 42):
     if dataset_type in GLUE:
         dataset = load_dataset("glue", dataset_type)
     elif dataset_type in SUPERGLUE:

@@ -74,29 +74,8 @@ from utils.constants import (
 )
 from format_dataset_for_instruction_tuning import (
     get_formatting_func,
-    get_dataset,
+    get_dataset_for_instruction_tuning,
 )
-
-
-def load_glue(data_type: str, seed: int = 0):
-    # Load = dataset
-    if data_type == "cola":
-        dataset = load_dataset("glue", data_type)
-    elif data_type == "boolq":
-        dataset = load_dataset("super_glue", data_type)
-    else:
-        raise NotImplementedError(f"{data_type} is not implemented.")
-
-    # Split the training dataset into 85% train and 15% new validation
-    train_dataset = dataset["train"].train_test_split(
-        test_size=0.15, seed=seed
-    )
-
-    # Set the new splits
-    dataset["train"] = train_dataset["train"]
-    dataset["validation"] = train_dataset["test"]
-    dataset["test"] = dataset["validation"]  # Set original validation
-    return dataset
 
 
 def find_left_of_a(np_array, a):
@@ -263,6 +242,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     )
 
     print("Loading a dataset...")
+    print("============")
+    print("SEED: ", seed)
+    print("============")
     if do_pretraining:
         dataset_type = OPENWEBTEXT
         dataset = get_dataset(dataset_type, tokenizer, MISTRAL_7B)
@@ -274,7 +256,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         data_collator = dataset.get_data_collator()
         trainer_func = SparseTrainer
     else:
-        train_dataset, val_dataset, test_dataset = get_dataset(dataset_type)
+        train_dataset, val_dataset, test_dataset = (
+            get_dataset_for_instruction_tuning(dataset_type, seed=seed)
+        )
         formatting_func = get_formatting_func(dataset_type)
         max_seq_length = 1024
 
