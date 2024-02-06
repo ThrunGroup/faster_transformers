@@ -57,7 +57,7 @@ def get_formatting_func(dataset_type):
         formatted_prompts = []
         bos_token = "<s>"
         eos_token = "</s>"
-        for idx in range(len(samples["sentence"])):
+        for idx in range(len(samples[keys[0]])):
             response = "yes" if samples["label"][idx] == 1 else "no"
 
             full_prompt = ""
