@@ -1,5 +1,5 @@
 #!/bin/bash
-dataset=("cola" "qnli" "other_dataset1" "other_dataset2")
+dataset=("wic" "qnli")
 seeds=(1 2 3)
 
 for data in "${dataset[@]}"; do
