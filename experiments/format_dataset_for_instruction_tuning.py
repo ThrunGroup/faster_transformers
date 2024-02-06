@@ -16,7 +16,7 @@ def get_dataset(dataset_type: str, seed: int = 42):
     if dataset_type in GLUE:
         dataset = load_dataset("glue", dataset_type)
     elif dataset_type in SUPERGLUE:
-        dataset = load_dataset("superglue", dataset_type)
+        dataset = load_dataset("super_glue", dataset_type)
     else:
         raise NotImplementedError(f"{dataset_type} is not implemented.")
 
