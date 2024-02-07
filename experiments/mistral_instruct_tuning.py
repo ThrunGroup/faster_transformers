@@ -501,6 +501,10 @@ def prepare_sparse_model(
         else:
             sparse_config = get_sparse_mistral_config(config)
             model = SparseMistral(sparse_config)
+            print(f"Loading from /matx/u/lukeai/{pretrained_model_to_load}.pt")
+            print(
+                os.path.exists(f"/matx/u/lukeai/{pretrained_model_to_load}.pt")
+            )
             state_dict = torch.load(
                 f"/matx/u/lukeai/{pretrained_model_to_load}.pt",
                 map_location="cpu",
