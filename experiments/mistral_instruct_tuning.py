@@ -462,7 +462,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if push_to_hub and is_mainprocess():
         print("Pushing to hub")
         print("model: ", model)
-        torch.save(model.state_dict(), f"{model_name}.pt")
+        torch.save(model.state_dict(), f"/matx/u/lukeai/{model_name}.pt")
         trainer.push_to_hub()
         print(f"Pushed to hub: thrunlab/{model_name}")
 
