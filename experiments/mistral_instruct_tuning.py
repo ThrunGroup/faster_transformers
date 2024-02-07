@@ -380,9 +380,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         if is_debugging:
             act_hist_path = f"histograms/debugging/{exp_config.targeted_sparsity}/act_hist.pt"
         else:
-            act_hist_path = (
-                f"histograms/{exp_config.targeted_sparsity}/act_hist.pt"
-            )
+            act_hist_path = f"/matx/u/lukeai/histograms/{exp_config.targeted_sparsity}/act_hist.pt"
         print("histogram: ", act_hist_path)
 
         activate_stats(model.get_base_model())
@@ -504,7 +502,8 @@ def prepare_sparse_model(
             sparse_config = get_sparse_mistral_config(config)
             model = SparseMistral(sparse_config)
             state_dict = torch.load(
-                f"{pretrained_model_to_load}.pt", map_location="cpu"
+                f"/matx/u/lukeai/{pretrained_model_to_load}.pt",
+                map_location="cpu",
             )
             model.load_state_dict(state_dict)
 
