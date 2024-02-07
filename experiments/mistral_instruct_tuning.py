@@ -328,10 +328,10 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         num_proc=None,
         batch_size=test_batch_size,
     )
-    sampled_train_dataset = Dataset.from_dict(dataset["train"][:1000])
 
     # Use only 1000 samples of training dataset to collect statistics
     if exp_config.set_sparsity_aware_threshold:
+        sampled_train_dataset = Dataset.from_dict(dataset["train"][:1000])
         sampled_train_dataset = sampled_train_dataset.map(
             tokenize,
             batched=True,
@@ -369,7 +369,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         output_dir=output_dir,
         evaluation_strategy="steps",
         eval_steps=50,  # early stopping counts only when eval step and save step match
-        max_steps=10 if is_debugging else -1,
+        max_steps=10 if is_debugging else 10,
         # save_steps=50,
         logging_steps=5,
         save_strategy="steps",
@@ -456,7 +456,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             trainer.initialize_sparse_decoder_layers(base_model)
             trainer.use_spm_loss = True
             disable_sparse_predictor(base_model)
-            trainer.train()
+
+            is_deepspeed_enabled = trainer.is_deepspeed_enabled
+            trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
+            print(trainer.evaluate(test_dataset))
+            trainer.is_deepspeed_enabled = is_deepspeed_enabled
         else:
             warnings.warn(
                 "use_spm arg is ignored as use_spare_model arg is not activated."
@@ -500,10 +504,15 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         plot_act(model)
 
     if exp_config.model_save:
-        config.save_pretrained(output_dir)
+        # Save thresholds
+        if exp_config.use_sparse_model:
+            thresholds = [float(m.mlp.dead_threshold) for m in model.model.layers]
+            model.config.thresholds = thresholds
+        model.config.save_pretrained(output_dir)
         model.save_pretrained(output_dir)
-        # trainer.save_model()
-        # torch.save(model.state_dict(), f"/tmp/mistral_spm.pt")
+
+    if push_to_hub:
+        trainer.push_to_hub()
 
     # Early Exit/ Early Entry experiments
     # model.model.original_layers = nn.ModuleList([layer for layer in model.model.layers])
@@ -577,6 +586,7 @@ def prepare_sparse_model(
             model.config.us_sparse_regularization = use_sparse_regularization
     else:
         config = MistralConfig.from_pretrained(sparse_model_dir)
+        print(config)
         model = SparseMistralforCausalLM.from_pretrained(
             sparse_model_dir, config=config
         )
@@ -590,12 +600,6 @@ def prepare_sparse_model(
                 if isinstance(module, SparsePredictor):
                     for name, params in module.named_parameters():
                         params.requires_grad = True
-                        print(f"{name} is unfrozen.")
-
-                    for name, param in model.named_parameters():
-                        if param.requires_grad:
-                            print(name)
-    print(model.config)
 
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
 
@@ -612,9 +616,6 @@ def prepare_sparse_model(
             target_modules=["q_proj", "v_proj", "gate_proj", "up_proj", "down_proj"],
         )
         model = get_peft_model(model, peft_config)
-    for name, param in model.named_parameters():
-        if param.requires_grad:
-            print(name)
 
     return model, tokenizer, model.config
 

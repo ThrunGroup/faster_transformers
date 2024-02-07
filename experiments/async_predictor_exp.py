@@ -10,6 +10,8 @@ def main(targeted_sparsity):
     args.set_sparsity_aware_threshold = True
     args.print_sparsity = True
     args.use_lora = True
+    args.num_epochs = 5
+    # args.gradient_checkpointing = True
     # train(args)
 
     args.use_spm = True
