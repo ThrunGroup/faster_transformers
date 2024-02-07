@@ -2,6 +2,7 @@ from transformers import TrainerCallback, Trainer
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 from datasets import Dataset
 from transformers.utils import is_sagemaker_mp_enabled, is_sagemaker_dp_enabled
+import torch
 
 import torch
 import torch.nn as nn
@@ -15,11 +16,17 @@ from typing import (
     Dict,
     Union,
 )
-
 from transformers.models.mistral.modeling_mistral import (
     MistralMLP,
     MistralForCausalLM,
     MistralModel,
+)
+
+from utils.utils import (
+    print_size_of_model,
+    is_running_deepspeed,
+    is_mainprocess,
+    get_datetime,
 )
 
 
@@ -313,6 +320,7 @@ class GradualSparsificationScheduler(TrainerCallback):
         num_warmup_steps=40,
         increment_ratio=0.5,
         is_enabled: bool = False,
+        model_name: str = "mistral",
     ):
         """Scheduler for gradually increasing a dead threshold until it reaches the desired threshold.
 
@@ -324,13 +332,13 @@ class GradualSparsificationScheduler(TrainerCallback):
         self.increment_ratio = increment_ratio
         self.step_size = int(num_warmup_steps * increment_ratio)
         self.is_enabled = is_enabled
+        self.model_name = model_name
 
     def on_step_end(self, args, state, control, **kwargs):
         model = kwargs["model"]
 
         if not self.is_enabled:
             if state.global_step <= 10:
-                print("NO WARM UP")
                 for module in model.modules():
                     if isinstance(module, MistralSparseSiluMLP):
                         module.current_dead_threshold = module.dead_threshold
@@ -338,7 +346,7 @@ class GradualSparsificationScheduler(TrainerCallback):
 
         current_dead_threshold = 0
 
-        if state.global_step % self.step_size == 0:
+        if state.global_step % self.step_size == 2:
             for module in model.modules():
                 if isinstance(module, MistralSparseSiluMLP):
                     desired_dead_threshold = module.dead_threshold
@@ -350,7 +358,18 @@ class GradualSparsificationScheduler(TrainerCallback):
                         desired_dead_threshold, current_dead_threshold
                     )
 
-            print(state.global_step, current_dead_threshold)
+            print(
+                state.global_step,
+                current_dead_threshold,
+                desired_dead_threshold,
+            )
+
+        if state.global_step % 2000 == 0:
+            if is_running_deepspeed and is_mainprocess():
+                torch.save(
+                    model.state_dict(),
+                    f"{self.model_name}_{state.global_step-2}.pt",
+                )
 
 
 def apply_mistral_sparse_silu_mlp(
@@ -445,7 +464,7 @@ def set_sparse_threshold(model, sparsity_level: float):
                 sparsity_level,
             )
             layer.mlp.regularization_threshold = (
-                layer.mlp.dead_threshold * 1.2
+                layer.mlp.dead_threshold
             )  # TODO: find better param
 
 

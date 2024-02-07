@@ -349,6 +349,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         num_warmup_steps=num_warmup_steps,
         increment_ratio=increment_ratio,
         is_enabled=use_gradual_sparsification,
+        model_name=model_name,
     )
 
     trainer_args = {
@@ -527,9 +528,15 @@ def prepare_sparse_model(
     peft_config = LoraConfig(
         lora_alpha=16,
         lora_dropout=0.1,
-        r=64,
+        r=128,
         bias="none",
-        target_modules=["q_proj", "v_proj", "gate_proj", "down_proj"],
+        target_modules=[
+            "q_proj",
+            "v_proj",
+            "gate_proj",
+            "down_proj",
+            "up_proj",
+        ],
         task_type="CAUSAL_LM",
     )
     model = get_peft_model(model, peft_config)
