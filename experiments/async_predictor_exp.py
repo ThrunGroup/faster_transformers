@@ -12,7 +12,7 @@ def main(targeted_sparsity):
     args.use_lora = True
     args.num_epochs = 5
     # args.gradient_checkpointing = True
-    # train(args)
+    train(args)
 
     args.use_spm = True
     args.use_lora = False
