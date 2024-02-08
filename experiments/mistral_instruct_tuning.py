@@ -1,6 +1,5 @@
 import os
 
-os.environ["MASTER_PORT"] = "29501"
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
