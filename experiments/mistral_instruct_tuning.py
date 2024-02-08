@@ -194,6 +194,13 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     use_relu = exp_config.use_relu
     do_pretraining = exp_config.do_pretraining
     eval_steps = exp_config.eval_steps
+    do_evaluate = exp_config.do_evaluate
+    learning_rate = 1e-5
+
+    if do_evaluate:
+        print("Evaluating without training...")
+        max_steps = 1
+        learning_rate = 0.0
 
     if not use_sparse_model:
         exp_config.use_sparse_regularization = exp_config.print_sparsity = (
@@ -321,7 +328,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         save_steps=50,
         logging_steps=5,
         save_strategy="steps",
-        learning_rate=1e-5,
+        learning_rate=learning_rate,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
@@ -553,7 +560,12 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Training script for text classification"
     )
-
+    parser.add_argument(
+        "--do_evaluate",
+        action="store_true",
+        default=False,
+        help="Whether to evaluate the model without training",
+    )
     parser.add_argument(
         "--seed",
         type=int,
