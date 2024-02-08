@@ -18,8 +18,8 @@
 #     done
 # done
 
-dataset=("sst2" "cola" "wic")
-seeds=(1 2 3)
+dataset=("cola" "wic" "boolq" "qnli")
+seeds=(1)
 
 for data in "${dataset[@]}"; do
     for seed in "${seeds[@]}"; do
