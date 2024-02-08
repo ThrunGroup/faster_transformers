@@ -173,6 +173,11 @@ class SparseSFTTTrainer(SFTTrainer):
         for module in self.sparse_layers:
             if module.activation_norm is not None:
                 loss += module.activation_norm
+            # DISTILLATION
+            if module.original_outputs is not None:
+                loss += 0.5 * F.mse_loss(
+                    module.original_outputs, module.outputs
+                )
 
         loss /= num_layers
         loss *= self.regularization_coefficient
@@ -210,8 +215,8 @@ class SparseMistral(MistralForCausalLM):
 class MistralSparseSiluMLP(MistralMLP):
     def __init__(self, config, *args, **kwargs):
         super().__init__(config)
-        self.swish_outputs = None
-        # self.relu = nn.ReLU()
+        self.original_outputs = None
+        self.outputs = None
 
         self.kill_sparse_swish_outputs = False
         self.dead_percentage = 0
@@ -307,11 +312,17 @@ class MistralSparseSiluMLP(MistralMLP):
                 if self.is_collect_histogram:
                     self.collect_stats(pre_act, post_act)
 
+            # DISTILLATION
+            with torch.no_grad():
+                post_act[dead_neurons] = 0
+                self.original_outputs = self.down_proj(
+                    post_act * self.up_proj(x)
+                )
             post_act[dead_neurons] = 0
 
-        out = self.down_proj(post_act * self.up_proj(x))
+        self.outputs = self.down_proj(post_act * self.up_proj(x))
 
-        return out
+        return self.outputs
 
 
 class GradualSparsificationScheduler(TrainerCallback):
