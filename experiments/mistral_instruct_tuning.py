@@ -505,27 +505,33 @@ def prepare_sparse_model(
             sparse_config = get_sparse_mistral_config(
                 config, use_sparse_model=False, use_sparse_regularization=False
             )
-            model = SparseMistral.from_pretrained(
-                pretrained_model_to_load,
-                config=sparse_config,
-                use_flash_attention_2=True,
-            )
-            # model = AutoModelForCausalLM.from_pretrained(
+            # model = SparseMistral.from_pretrained(
             #     pretrained_model_to_load,
+            #     config=sparse_config,
             #     use_flash_attention_2=True,
             # )
+            model = AutoModelForCausalLM.from_pretrained(
+                pretrained_model_to_load,
+                use_flash_attention_2=True,
+            )
         else:
             sparse_config = get_sparse_mistral_config(config)
             model = SparseMistral(sparse_config)
-            print(f"Loading from /matx/u/lukeai/{pretrained_model_to_load}.pt")
-            print(
-                os.path.exists(f"/matx/u/lukeai/{pretrained_model_to_load}.pt")
-            )
-            state_dict = torch.load(
-                f"/matx/u/lukeai/{pretrained_model_to_load}.pt",
+            original_state_dict = torch.load(
+                f"/matx/u/lukeai/auto.pt",
                 map_location="cpu",
             )
-            model.load_state_dict(state_dict)
+            model.load_state_dict(original_state_dict, strict=False)
+
+            # print(f"Loading from /matx/u/lukeai/{pretrained_model_to_load}.pt")
+            # print(
+            #     os.path.exists(f"/matx/u/lukeai/{pretrained_model_to_load}.pt")
+            # )
+            # state_dict = torch.load(
+            #     f"/matx/u/lukeai/{pretrained_model_to_load}.pt",
+            #     map_location="cpu",
+            # )
+            # model.load_state_dict(state_dict)
 
     if use_sparse_model:
         print("Enabling Sparse SiLU...")
