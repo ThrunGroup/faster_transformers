@@ -434,7 +434,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
-    eval_result = trainer.evaluate(tokenized_test_dataset)
+
+    if do_pretraining:
+        eval_result = trainer.evaluate(test_dataset)
+    else:
+        eval_result = trainer.evaluate(tokenized_test_dataset)
     print("===Test Result==")
     print(eval_result)
     log_dict = {"test_loss": eval_result["eval_loss"]}
