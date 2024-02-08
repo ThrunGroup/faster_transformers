@@ -197,6 +197,10 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     do_evaluate = exp_config.do_evaluate
     learning_rate = 1e-5
 
+    print("==========")
+    print(model_name)
+    print("==========")
+
     if do_evaluate:
         print("Evaluating without training...")
         max_steps = 1
@@ -498,12 +502,12 @@ def prepare_sparse_model(
     else:
         config = MistralConfig()
         if pretrained_model_to_load == "mistralai/Mistral-7B-Instruct-v0.1":
-            sparse_config = get_sparse_mistral_config(
-                config, use_sparse_model=False, use_sparse_regularization=False
-            )
-            model = SparseMistral.from_pretrained(
+            # sparse_config = get_sparse_mistral_config(
+            #     config, use_sparse_model=False, use_sparse_regularization=False
+            # )
+            model = AutoModelForCausalLM.from_pretrained(
                 pretrained_model_to_load,
-                config=sparse_config,
+                # config=sparse_config,
                 use_flash_attention_2=True,
             )
         else:

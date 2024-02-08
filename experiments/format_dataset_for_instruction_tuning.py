@@ -26,7 +26,6 @@ def get_dataset_for_instruction_tuning(dataset_type: str, seed: int = 42):
     train_dataset = train_test_dataset["train"]
     test_dataset = train_test_dataset["test"]
     val_dataset = dataset["validation"]
-    print(test_dataset)
     return train_dataset, val_dataset, test_dataset
 
 
