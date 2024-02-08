@@ -366,9 +366,12 @@ class GradualSparsificationScheduler(TrainerCallback):
 
         if state.global_step % 2000 == 0:
             if is_running_deepspeed and is_mainprocess():
+                print(
+                    f"Saving to /matx/u/lukeai/{self.model_name}_{state.global_step-2}.pt",
+                )
                 torch.save(
                     model.state_dict(),
-                    f"{self.model_name}_{state.global_step-2}.pt",
+                    f"/matx/u/lukeai/{self.model_name}_{state.global_step-2}.pt",
                 )
 
 
