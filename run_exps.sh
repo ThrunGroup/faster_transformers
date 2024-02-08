@@ -14,6 +14,6 @@ for data in "${dataset[@]}"; do
         # Original Mistral
         deepspeed experiments/mistral_instruct_tuning.py --use_wandb  --num_epochs 15  \
         --train_batch_size 4 --test_batch_size 8 --dataset_type $data \
-        --gradient_checkpointing True --push_to_hub False --model_name "ojriginal_glue_$data" --seed $seed
+        --gradient_checkpointing True --push_to_hub False --model_name "original_glue_$data" --seed $seed
     done
 done
