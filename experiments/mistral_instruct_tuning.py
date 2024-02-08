@@ -547,7 +547,8 @@ def prepare_sparse_model(
         else:
             enable_sparse_silu(model)
 
-    print("model1: ", model)
+    if is_mainprocess():
+        print("model2: ", model)
 
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
     tokenizer.pad_token = tokenizer.eos_token
