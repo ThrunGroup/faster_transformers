@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # # Sparse Mistral Pretrained with 30K Steps
 # deepspeed experiments/mistral_instruct_tuning.py --use_wandb --do_pretraining --use_sparse_model --targeted_sparsity 0.8 \
 # --is_plot --set_sparsity_aware_threshold --print_sparsity --max_steps 5000 \
