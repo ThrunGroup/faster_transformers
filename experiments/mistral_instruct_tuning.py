@@ -502,19 +502,18 @@ def prepare_sparse_model(
     else:
         config = MistralConfig()
         if pretrained_model_to_load == "mistralai/Mistral-7B-Instruct-v0.1":
-            # sparse_config = get_sparse_mistral_config(
-            #     config, use_sparse_model=False, use_sparse_regularization=False
-            # )
-            # model = SparseMistral.from_pretrained(
-            #     pretrained_model_to_load,
-            #     config=sparse_config,
-            #     use_flash_attention_2=True,
-            # )
-            model = AutoModelForCausalLM.from_pretrained(
+            sparse_config = get_sparse_mistral_config(
+                config, use_sparse_model=False, use_sparse_regularization=False
+            )
+            model = SparseMistral.from_pretrained(
                 pretrained_model_to_load,
-                # config=sparse_config,
+                config=sparse_config,
                 use_flash_attention_2=True,
             )
+            # model = AutoModelForCausalLM.from_pretrained(
+            #     pretrained_model_to_load,
+            #     use_flash_attention_2=True,
+            # )
         else:
             sparse_config = get_sparse_mistral_config(config)
             model = SparseMistral(sparse_config)
