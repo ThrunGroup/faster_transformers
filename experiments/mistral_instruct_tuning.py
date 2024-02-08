@@ -522,6 +522,8 @@ def prepare_sparse_model(
                 map_location="cpu",
             )
             model.load_state_dict(original_state_dict, strict=False)
+            if is_mainprocess():
+                print("model1: ", model)
 
             # print(f"Loading from /matx/u/lukeai/{pretrained_model_to_load}.pt")
             # print(
@@ -544,6 +546,8 @@ def prepare_sparse_model(
             enable_relu(model)
         else:
             enable_sparse_silu(model)
+
+    print("model1: ", model)
 
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
     tokenizer.pad_token = tokenizer.eos_token
