@@ -354,7 +354,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         data_seed=seed,
     )
 
-    early_stopping = EarlyStoppingCallback(early_stopping_patience=10)
+    early_stopping = EarlyStoppingCallback(early_stopping_patience=20)
     sparsification_scheduler = GradualSparsificationScheduler(
         num_warmup_steps=num_warmup_steps,
         increment_ratio=increment_ratio,
