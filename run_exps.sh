@@ -18,7 +18,7 @@
 #     done
 # done
 
-dataset=("sst2", "cola", "wic")
+dataset=("sst2" "cola" "wic")
 seeds=(1 2 3)
 
 for data in "${dataset[@]}"; do
