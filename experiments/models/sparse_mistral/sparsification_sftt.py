@@ -345,6 +345,7 @@ class GradualSparsificationScheduler(TrainerCallback):
             return
 
         current_dead_threshold = 0
+        desired_dead_threshold = 0
 
         if state.global_step % self.step_size == 2:
             for module in model.modules():
@@ -357,12 +358,12 @@ class GradualSparsificationScheduler(TrainerCallback):
                     module.current_dead_threshold = min(
                         desired_dead_threshold, current_dead_threshold
                     )
-
-            print(
-                state.global_step,
-                current_dead_threshold,
-                desired_dead_threshold,
-            )
+            if is_running_deepspeed and is_mainprocess():
+                print(
+                    state.global_step,
+                    current_dead_threshold,
+                    desired_dead_threshold,
+                )
 
         if state.global_step % 2000 == 0:
             if is_running_deepspeed and is_mainprocess():
