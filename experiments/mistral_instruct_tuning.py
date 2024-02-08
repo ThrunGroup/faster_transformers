@@ -505,6 +505,11 @@ def prepare_sparse_model(
             # sparse_config = get_sparse_mistral_config(
             #     config, use_sparse_model=False, use_sparse_regularization=False
             # )
+            # model = SparseMistral.from_pretrained(
+            #     pretrained_model_to_load,
+            #     config=sparse_config,
+            #     use_flash_attention_2=True,
+            # )
             model = AutoModelForCausalLM.from_pretrained(
                 pretrained_model_to_load,
                 # config=sparse_config,
