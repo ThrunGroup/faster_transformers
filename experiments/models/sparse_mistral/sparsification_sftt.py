@@ -173,20 +173,20 @@ class SparseSFTTTrainer(SFTTrainer):
         for module in self.sparse_layers:
             if module.activation_norm is not None:
                 loss += module.activation_norm
-            # DISTILLATION
-            if module.original_outputs is not None:
-                distillation_loss = F.mse_loss(
-                    module.original_outputs, module.outputs
-                )
-                # if self.state.global_step % 100 == 2 and is_mainprocess():
-                if is_mainprocess():
-                    print(
-                        self.state.global_step,
-                        "Distillation loss: ",
-                        distillation_loss.item(),
-                    )
+            # # DISTILLATION
+            # if module.original_outputs is not None:
+            #     distillation_loss = F.mse_loss(
+            #         module.original_outputs, module.outputs
+            #     )
+            #     # if self.state.global_step % 100 == 2 and is_mainprocess():
+            #     if is_mainprocess():
+            #         print(
+            #             self.state.global_step,
+            #             "Distillation loss: ",
+            #             distillation_loss.item(),
+            #         )
 
-                loss += distillation_loss
+            #     loss += distillation_loss
 
         loss /= num_layers
         loss *= self.regularization_coefficient
@@ -322,10 +322,10 @@ class MistralSparseSiluMLP(MistralMLP):
                     self.collect_stats(pre_act, post_act)
 
             # DISTILLATION
-            with torch.no_grad():
-                self.original_outputs = self.down_proj(
-                    post_act * self.up_proj(x)
-                )
+            # with torch.no_grad():
+            #     self.original_outputs = self.down_proj(
+            #         post_act * self.up_proj(x)
+            #     )
 
             post_act[dead_neurons] = 0
 
