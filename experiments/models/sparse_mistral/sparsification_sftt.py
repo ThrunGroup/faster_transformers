@@ -178,8 +178,13 @@ class SparseSFTTTrainer(SFTTrainer):
                 distillation_loss = F.mse_loss(
                     module.original_outputs, module.outputs
                 )
-                if self.state.global_step % 100 == 2 and is_mainprocess():
-                    print("Distillation loss: ", distillation_loss.item())
+                # if self.state.global_step % 100 == 2 and is_mainprocess():
+                if is_mainprocess():
+                    print(
+                        self.state.global_step,
+                        "Distillation loss: ",
+                        distillation_loss.item(),
+                    )
 
                 loss += distillation_loss
 
