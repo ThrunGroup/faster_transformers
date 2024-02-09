@@ -175,9 +175,13 @@ class SparseSFTTTrainer(SFTTrainer):
                 loss += module.activation_norm
             # DISTILLATION
             if module.original_outputs is not None:
-                loss += 0.5 * F.mse_loss(
+                distillation_loss = F.mse_loss(
                     module.original_outputs, module.outputs
                 )
+                if self.state.global_step % 100 == 2 and is_mainprocess():
+                    print("Distillation loss: ", distillation_loss.item())
+
+                loss += distillation_loss
 
         loss /= num_layers
         loss *= self.regularization_coefficient
