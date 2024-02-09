@@ -323,10 +323,10 @@ class MistralSparseSiluMLP(MistralMLP):
 
             # DISTILLATION
             with torch.no_grad():
-                post_act[dead_neurons] = 0
                 self.original_outputs = self.down_proj(
                     post_act * self.up_proj(x)
                 )
+
             post_act[dead_neurons] = 0
 
         self.outputs = self.down_proj(post_act * self.up_proj(x))
