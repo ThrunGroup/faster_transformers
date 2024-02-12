@@ -1,4 +1,4 @@
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 
 from utils.constants import (
     COLA,
@@ -12,7 +12,11 @@ from utils.constants import (
 )
 
 
-def get_dataset_for_instruction_tuning(dataset_type: str, seed: int = 42):
+def get_dataset_for_instruction_tuning(dataset_type: str, seed: int = 42,
+                                       tokenizer=None, formatting_func=None,
+                                       train_batch_size=32, test_batch_size=32,
+                                       max_seq_length=1024,
+                                       return_sample_dataset=False, ):
     if dataset_type in GLUE:
         dataset = load_dataset("glue", dataset_type)
     elif dataset_type in SUPERGLUE:
@@ -24,9 +28,45 @@ def get_dataset_for_instruction_tuning(dataset_type: str, seed: int = 42):
         test_size=0.1, seed=seed
     )
     train_dataset = train_test_dataset["train"]
-    test_dataset = train_test_dataset["test"]
     val_dataset = dataset["validation"]
-    return train_dataset, val_dataset, test_dataset
+    test_dataset = train_test_dataset["test"]
+
+    def tokenize(element):
+        outputs = tokenizer(
+            formatting_func(element),
+            add_special_tokens=True,
+            truncation=True,
+            padding=False,
+            max_length=max_seq_length,
+            return_overflowing_tokens=False,
+            return_length=False,
+        )
+        return {
+            "input_ids": outputs["input_ids"],
+            "attention_mask": outputs["attention_mask"],
+        }
+
+    # Roundabout way to avoid error
+    tokenized_test_dataset = test_dataset.map(
+        tokenize,
+        batched=True,
+        remove_columns=test_dataset.column_names,
+        num_proc=None,
+        batch_size=test_batch_size,
+    )
+
+    if return_sample_dataset:
+        sample_dataset = Dataset.from_dict(train_dataset[:1000])
+        sample_dataset = sample_dataset.map(
+            tokenize,
+            batched=True,
+            remove_columns=sample_dataset.column_names,
+            num_proc=None,
+            batch_size=train_batch_size,
+        )
+        return train_dataset, val_dataset, tokenized_test_dataset, sample_dataset
+
+    return train_dataset, val_dataset, tokenized_test_dataset, None
 
 
 def get_instruction_and_keys(dataset_type):

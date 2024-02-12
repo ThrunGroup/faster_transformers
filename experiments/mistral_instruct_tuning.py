@@ -4,31 +4,27 @@ from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
     AutoTokenizer,
-    BitsAndBytesConfig,
+    Trainer,
     TrainingArguments,
     EarlyStoppingCallback,
     MistralForCausalLM,
     MistralConfig,
 )
-import copy
 from transformers.integrations.deepspeed import deepspeed_init
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 from datasets import Dataset, load_dataset, load_metric
 from peft import (
-    AutoPeftModelForCausalLM,
     LoraConfig,
     get_peft_model,
     prepare_model_for_kbit_training,
 )
 from evaluate import load
 from transformers.utils import is_sagemaker_mp_enabled, is_sagemaker_dp_enabled
-import logging
 import torch
 import os
 import gc
 import wandb
 import numpy as np
-import sys
 import argparse
 
 from experiments.data.get_dataset import get_dataset
@@ -159,6 +155,29 @@ def classification_compute_metrics(eval_preds):
     return results
 
 
+def evaluate_zero_shot(trainer: Trainer, dataset_types: list = None,
+                       tokenizer=None, formatting_func=None,
+                       train_batch_size=32, test_batch_size=32,
+                       max_seq_length=1024,
+                       return_sample_dataset=False):
+    print("==Test set evaluation==")
+    for dataset_type in dataset_types:
+        print(f"Evaluating on {dataset_type} dataset...")
+        for seed in range(3):
+            print("Seed: ", seed)
+            _, _, test_dataset, _ = (
+                get_dataset_for_instruction_tuning(dataset_type, seed=seed,
+                                                   tokenizer=tokenizer,
+                                                   formatting_func=formatting_func,
+                                                   max_seq_length=max_seq_length,
+                                                   train_batch_size=train_batch_size,
+                                                   test_batch_size=test_batch_size,
+                                                   return_sample_dataset=return_sample_dataset)
+            )
+            eval_result = trainer.evaluate(test_dataset)
+            print(eval_result)
+
+
 def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if use_wandb:
         if is_running_deepspeed():
@@ -266,44 +285,16 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         data_collator = dataset.get_data_collator()
         trainer_func = SparseTrainer
     else:
-        train_dataset, val_dataset, test_dataset = (
-            get_dataset_for_instruction_tuning(dataset_type, seed=seed)
-        )
         formatting_func = get_formatting_func(dataset_type)
-        max_seq_length = 1024
-
-        def tokenize(element):
-            outputs = tokenizer(
-                formatting_func(element),
-                add_special_tokens=True,
-                truncation=True,
-                padding=False,
-                max_length=max_seq_length,
-                return_overflowing_tokens=False,
-                return_length=False,
-            )
-            return {
-                "input_ids": outputs["input_ids"],
-                "attention_mask": outputs["attention_mask"],
-            }
-
-        # Roundabout way to avoid error
-        tokenized_test_dataset = test_dataset.map(
-            tokenize,
-            batched=True,
-            remove_columns=test_dataset.column_names,
-            num_proc=None,
-            batch_size=test_batch_size,
+        train_dataset, val_dataset, test_dataset, sample_dataset = (
+            get_dataset_for_instruction_tuning(dataset_type, seed=seed,
+                                               tokenizer=tokenizer,
+                                               formatting_func=formatting_func,
+                                               max_seq_length=1024,
+                                               train_batch_size=train_batch_size,
+                                               test_batch_size=test_batch_size,
+                                               return_sample_dataset=exp_config.set_sparsity_aware_threshold)
         )
-        if exp_config.set_sparsity_aware_threshold:
-            sample_dataset = Dataset.from_dict(train_dataset[:1000])
-            sample_dataset = sample_dataset.map(
-                tokenize,
-                batched=True,
-                remove_columns=sample_dataset.column_names,
-                num_proc=None,
-                batch_size=train_batch_size,
-            )
 
         response_template = "Response:"
         data_collator = DataCollatorForCompletionOnlyLM(
@@ -328,7 +319,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     trainer_config = TrainingArguments(
         output_dir=output_dir,
         evaluation_strategy="steps",
-        eval_steps=eval_steps,  # early stopping counts only when eval step and save step match
+        eval_steps=eval_steps,
+        # early stopping counts only when eval step and save step match
         save_steps=50,
         logging_steps=5,
         save_strategy="steps",
@@ -374,7 +366,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     }
 
     print("Do pretraining: ", do_pretraining)
-    if do_pretraining == False:
+    if not do_pretraining:
         trainer_args["formatting_func"] = formatting_func
         trainer_args["max_seq_length"] = max_seq_length
         trainer_args["compute_metrics"] = compute_metrics
@@ -407,7 +399,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             # trainer2 = trainer_func(**trainer_args2)
             # trainer2.train()
             # trainer2.evaluate(test_dataset)
-            trainer.evaluate(tokenized_test_dataset)
+            trainer.evaluate(test_dataset)
             # trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(model.get_base_model(), act_hist_path)
 
@@ -435,10 +427,14 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
 
-    if do_pretraining:
-        eval_result = trainer.evaluate(test_dataset)
+    if do_evaluate:
+        evaluate_zero_shot(
+            trainer, [COLA, BOOLQ, QNLI, SST2, WIC], tokenizer,
+            formatting_func,
+            train_batch_size, test_batch_size, max_seq_length,
+        )
     else:
-        eval_result = trainer.evaluate(tokenized_test_dataset)
+        eval_result = trainer.evaluate(test_dataset)
     print("===Test Result==")
     print(eval_result)
     log_dict = {"test_loss": eval_result["eval_loss"]}
@@ -488,12 +484,12 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
 
 def prepare_sparse_model(
-    is_debugging=False,
-    use_sparse_model: bool = True,
-    use_sparse_regularization: bool = False,
-    use_relu: bool = False,
-    model_name: str = None,
-    pretrained_model_to_load: str = None,
+        is_debugging=False,
+        use_sparse_model: bool = True,
+        use_sparse_regularization: bool = False,
+        use_relu: bool = False,
+        model_name: str = None,
+        pretrained_model_to_load: str = None,
 ):
     print("Loading a model...")
     if is_debugging:
