@@ -39,4 +39,4 @@ def get_datetime(only_date: bool = False):
 
 def print(*args):
     if is_mainprocess():
-        print(*args)
+        __builtins__.print(*args)
