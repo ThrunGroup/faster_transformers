@@ -1,4 +1,7 @@
 from datasets import load_dataset, Dataset
+from datasets.utils.logging import disable_progress_bar
+
+disable_progress_bar()
 
 from utils.constants import (
     COLA,
