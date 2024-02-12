@@ -156,7 +156,7 @@ def classification_compute_metrics(eval_preds):
 
 
 def evaluate_zero_shot(trainer: Trainer, dataset_types: list = None,
-                       tokenizer=None, formatting_func=None,
+                       tokenizer=None,
                        train_batch_size=32, test_batch_size=32,
                        max_seq_length=1024,
                        return_sample_dataset=False):
@@ -164,6 +164,7 @@ def evaluate_zero_shot(trainer: Trainer, dataset_types: list = None,
     print("==Test set evaluation==")
     for dataset_type in dataset_types:
         print(f"Evaluating on {dataset_type} dataset...")
+        formatting_func = get_formatting_func(dataset_type)
         for seed in range(3):
             print("Seed: ", seed)
             _, _, test_dataset, _ = (
@@ -433,7 +434,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         dataset_types = exp_config.dataset_types.split(",")
         evaluate_zero_shot(
             trainer, dataset_types, tokenizer,
-            formatting_func,
             train_batch_size, test_batch_size, max_seq_length,
         )
     else:
