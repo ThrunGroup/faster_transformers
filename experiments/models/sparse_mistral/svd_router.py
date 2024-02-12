@@ -21,7 +21,7 @@ class SparsePredictor(nn.Module):
 
 
 def low_rank_approximation(
-    linear_layer, act_func=nn.ReLU(), rank=1, init_svd: bool = True
+    linear_layer, act_func=nn.ReLU(), rank=64, init_svd: bool = True
 ):
     # Decompose the weight matrix of the layer
     # Solve "RuntimeError: "svd_cuda_gesvdj" not implemented for 'BFloat16'"
@@ -40,12 +40,13 @@ def low_rank_approximation(
         V_approx = torch.from_numpy(V_approx.copy())
     else:
         sparse_predictor = SparsePredictor()
-        sparse_predictor = sparse_predictor.type(weight_data_type)
-        return nn.Sequential(
-            nn.Linear(linear_layer.in_features, linear_layer.out_features),
-            nn.Linear(linear_layer.out_features, linear_layer.in_features, bias=True),
-            sparse_predictor
+        sparse_predictor.router = nn.Sequential(
+            nn.Linear(linear_layer.in_features, rank, bias=False),
+            nn.Linear(rank, linear_layer.out_features, bias=True),
+            act_func,
         )
+        sparse_predictor = sparse_predictor.type(weight_data_type)
+        return sparse_predictor
 
     # Take the top `rank` components
     # U_approx = U[:, :rank]

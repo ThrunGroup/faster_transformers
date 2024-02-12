@@ -75,7 +75,7 @@ class SparseSFTTTrainer(SFTTrainer):
             loss = loss.mean()  # mean() to average on multi-gpu parallel training
         if not self.freeze_original_weights:
             if loss is not None:
-                self.accelerator.backward(loss, retain_graph=True)
+                self.accelerator.backward(loss, retain_graph=False)
 
         if self.use_sparse_regularization:
             regularization_loss = self.compute_regularization(model)
@@ -318,11 +318,15 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
         self.low_rank = kwargs.pop("low_rank", 64)
         self.sparse_act_func = decoder_layer.mlp.sparse_act_fn
 
-        print(f"Setting {layer_idx}th mlp layer's sparse predictor...")
-        self.sp_mlp = low_rank_approximation(
-            decoder_layer.mlp.gate_proj, act_func=self.sparse_act_func, init_svd=init_svd,
+        print(
+            f"Setting {layer_idx}th mlp layer's sparse predictor... svd init: {init_svd}"
         )
-        self.use_async = kwargs.pop("use_async", True)
+        self.sp_mlp = low_rank_approximation(
+            decoder_layer.mlp.gate_proj,
+            act_func=self.sparse_act_func,
+            init_svd=init_svd,
+        )
+        self.use_async = kwargs.pop("use_async", False)
         self.use_sparse_predictor = False
         self.distill_loss = None
 
@@ -348,6 +352,7 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
 
         if self.use_async:
             sp_mask = self.sp_mlp(hidden_states)
+
         hidden_states = self.input_layernorm(hidden_states)
 
         # Self Attention
@@ -371,12 +376,12 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
         # Compute distillation loss
         gating_output = self.mlp.sparse_act_fn(self.mlp.gate_proj(hidden_states))
         loss_func = MSELoss()
-        self.distill_loss = loss_func(gating_output, sp_mask)
+        self.distill_loss = loss_func(sp_mask, gating_output)
 
         # Convert sp mask into binary form
         sp_mask = sp_mask > 0
 
-        if not self.training:
+        if self.training:
             sp_mask = None
         # if not self.use_sparse_predictor:
         #     sp_mask = None
@@ -396,7 +401,7 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
 
 
 class SparseMistralforCausalLM(MistralForCausalLM):
-    def __init__(self, config, init_svd: bool=True):
+    def __init__(self, config):
         super().__init__(config)
         self.config = config
         if config.use_sparse_model:
@@ -407,8 +412,7 @@ class SparseMistralforCausalLM(MistralForCausalLM):
                         m.mlp.dead_threshold = config.thresholds[idx]
                         m.mlp.sparse_act_fn.set_new_threshold(m.mlp.dead_threshold)
         if config.use_sparse_predictor:
-            self.apply_sparse_predictor(init_svd=init_svd)
-
+            self.apply_sparse_predictor(init_svd=config.init_svd)
 
     def apply_sparse_mlp(self):
         apply_mistral_sparse_silu_mlp(
@@ -417,7 +421,7 @@ class SparseMistralforCausalLM(MistralForCausalLM):
             use_sparse_regularization=self.config.use_sparse_regularization,
         )
 
-    def apply_sparse_predictor(self, init_svd: bool=True):
+    def apply_sparse_predictor(self, init_svd: bool = True):
         apply_mistral_sparse_decoder_layer(self, config=self.config, init_svd=init_svd)
 
 
@@ -467,7 +471,10 @@ def apply_mistral_sparse_decoder_layer(
         if isinstance(layer.mlp, MistralSparseSiluMLP):
             new_layers.append(
                 SparseMistralDecoderLayer(
-                    config=config, layer_idx=layer_idx, decoder_layer=layer, init_svd=init_svd,
+                    config=config,
+                    layer_idx=layer_idx,
+                    decoder_layer=layer,
+                    init_svd=init_svd,
                 )
             )
             print(f"{layer_idx}th mlp layer activation: {layer.mlp.sparse_act_fn}")

@@ -61,7 +61,21 @@ from utils.utils import (
     is_mainprocess,
     get_datetime,
 )
-from utils.constants import MISTRAL_YES_ID, MISTRAL_NO_ID
+from utils.constants import (
+    MISTRAL_YES_ID,
+    MISTRAL_NO_ID,
+    MISTRAL_7B,
+    OPENWEBTEXT,
+    COLA,
+    BOOLQ,
+    QNLI,
+    SST2,
+    WIC,
+)
+from format_dataset_for_instruction_tuning import (
+    get_formatting_func,
+    get_dataset_for_instruction_tuning,
+)
 
 
 def load_glue(data_type: str, seed: int = 0):
@@ -279,12 +293,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
 
     # Load dataset
-    if dataset_type == "cola":
-        dataset = load_glue(dataset_type, seed=seed)
-        formatting_func = formatting_func_cola
-    elif dataset_type == "boolq":
-        dataset = load_glue(dataset_type, seed=seed)
-        formatting_func = formatting_func_boolq
+    dataset = get_dataset_for_instruction_tuning(dataset_type, seed=seed)
+    formatting_func = get_formatting_func(dataset_type)
+    max_seq_length = 1024
 
     if is_debugging:
         output_dir = "debugging_output"
@@ -303,7 +314,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         exp_config.sparse_model_dir,
         exp_config.use_lora,
     )
-    max_seq_length = 1024
 
     def tokenize(element):
         outputs = tokenizer(
@@ -369,7 +379,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         output_dir=output_dir,
         evaluation_strategy="steps",
         eval_steps=50,  # early stopping counts only when eval step and save step match
-        max_steps=10 if is_debugging else 10,
+        max_steps=100 if is_debugging else -1,
         # save_steps=50,
         logging_steps=5,
         save_strategy="steps",
@@ -452,7 +462,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     # Only use distillation loss if training sparse predictor
     if exp_config.use_spm:
         if exp_config.use_sparse_model:
-            trainer.freeze_original_weights = True
+            trainer.freeze_original_weights = False
             trainer.initialize_sparse_decoder_layers(base_model)
             trainer.use_spm_loss = True
             disable_sparse_predictor(base_model)
@@ -461,6 +471,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
             print(trainer.evaluate(test_dataset))
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
+
+            enable_sparse_predictor(base_model)
         else:
             warnings.warn(
                 "use_spm arg is ignored as use_spare_model arg is not activated."
@@ -539,9 +551,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     # Empty out gpu memory
     del trainer
+    del model
     gc.collect()
     torch.cuda.empty_cache()
     gc.collect()
+    torch.cuda.empty_cache()
 
     if use_wandb:
         wandb.finish()
@@ -556,7 +570,7 @@ def prepare_sparse_model(
     use_lora: bool = True,
 ):
     print(use_sparse_predictor, sparse_model_dir)
-    if sparse_model_dir is None:
+    if (sparse_model_dir is None) or is_debugging:
         if is_debugging:
             config = MistralConfig(
                 hidden_size=64,
@@ -581,25 +595,45 @@ def prepare_sparse_model(
             enable_sparse_silu(model)
         if use_sparse_predictor:
             model.config.use_sparse_predictor = use_sparse_predictor
-            apply_mistral_sparse_decoder_layer(model, model.config)
+            apply_mistral_sparse_decoder_layer(
+                model, model.config, init_svd=not is_debugging
+            )
         if use_sparse_regularization:
             model.config.us_sparse_regularization = use_sparse_regularization
     else:
         config = MistralConfig.from_pretrained(sparse_model_dir)
         print(config)
         model = SparseMistralforCausalLM.from_pretrained(
-            sparse_model_dir, config=config
+            sparse_model_dir,
+            config=config,
         )
         if use_sparse_predictor:
+            svd_model_dir = sparse_model_dir + "_svd"
+            init_svd = not os.path.exists(svd_model_dir)
             model.config.use_sparse_predictor = use_sparse_predictor
-            apply_mistral_sparse_decoder_layer(model, model.config)
-            # Freeze original params
-            for params in model.parameters():
-                params.requires_grad = False
-            for name, module in model.named_modules():
-                if isinstance(module, SparsePredictor):
-                    for name, params in module.named_parameters():
-                        params.requires_grad = True
+
+            if init_svd:
+                apply_mistral_sparse_decoder_layer(
+                    model,
+                    model.config,
+                    init_svd=False,
+                )
+                model.config.init_svd = False
+                model.save_pretrained(svd_model_dir)
+            else:
+                config = MistralConfig.from_pretrained(svd_model_dir)
+                model = SparseMistralforCausalLM.from_pretrained(
+                    svd_model_dir,
+                    config=config,
+                )
+    # if use_sparse_predictor:
+    #     # Freeze original params
+    #     for params in model.parameters():
+    #         params.requires_grad = False
+    #     for name, module in model.named_modules():
+    #         if isinstance(module, SparsePredictor):
+    #             for name, params in module.named_parameters():
+    #                 params.requires_grad = True
 
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
 
@@ -616,6 +650,7 @@ def prepare_sparse_model(
             target_modules=["q_proj", "v_proj", "gate_proj", "up_proj", "down_proj"],
         )
         model = get_peft_model(model, peft_config)
+    print(model.print_trainable_parameters())
 
     return model, tokenizer, model.config
 
@@ -652,7 +687,7 @@ def parse_args():
         "--train_batch_size", type=int, default=8, help="Training batch size"
     )
     parser.add_argument(
-        "--test_batch_size", type=int, default=32, help="Testing batch size"
+        "--test_batch_size", type=int, default=8, help="Testing batch size"
     )
     parser.add_argument(
         "--gradient_checkpointing",
