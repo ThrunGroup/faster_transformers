@@ -1,7 +1,7 @@
 from datasets import load_dataset, Dataset
 from datasets.utils.logging import disable_progress_bar
 
-disable_progress_bar()
+# disable_progress_bar()
 
 from utils.constants import (
     COLA,
@@ -15,11 +15,16 @@ from utils.constants import (
 )
 
 
-def get_dataset_for_instruction_tuning(dataset_type: str, seed: int = 42,
-                                       tokenizer=None, formatting_func=None,
-                                       train_batch_size=32, test_batch_size=32,
-                                       max_seq_length=1024,
-                                       return_sample_dataset=False, ):
+def get_dataset_for_instruction_tuning(
+    dataset_type: str,
+    seed: int = 42,
+    tokenizer=None,
+    formatting_func=None,
+    train_batch_size=32,
+    test_batch_size=32,
+    max_seq_length=1024,
+    return_sample_dataset=False,
+):
     if dataset_type in GLUE:
         dataset = load_dataset("glue", dataset_type)
     elif dataset_type in SUPERGLUE:
@@ -27,9 +32,7 @@ def get_dataset_for_instruction_tuning(dataset_type: str, seed: int = 42,
     else:
         raise NotImplementedError(f"{dataset_type} is not implemented.")
 
-    train_test_dataset = dataset["train"].train_test_split(
-        test_size=0.1, seed=seed
-    )
+    train_test_dataset = dataset["train"].train_test_split(test_size=0.1, seed=seed)
     train_dataset = train_test_dataset["train"]
     val_dataset = dataset["validation"]
     test_dataset = train_test_dataset["test"]

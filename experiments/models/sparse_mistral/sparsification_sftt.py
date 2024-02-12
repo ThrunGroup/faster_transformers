@@ -32,12 +32,8 @@ from utils.utils import (
 
 class SparseTrainer(Trainer):
     def __init__(self, *args, **kwargs):
-        self.regularization_coefficient = kwargs.pop(
-            "regularization_coefficient", 10
-        )
-        self.use_sparse_regularization = kwargs.pop(
-            "use_sparse_regularization", False
-        )
+        self.regularization_coefficient = kwargs.pop("regularization_coefficient", 10)
+        self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", False)
         self.regularization_type = kwargs.pop(
             "regularization_type", "L1 positive activation"
         )
@@ -68,13 +64,9 @@ class SparseTrainer(Trainer):
             loss = self.compute_loss(model, inputs)
 
         if self.args.n_gpu > 1:
-            loss = (
-                loss.mean()
-            )  # mean() to average on multi-gpu parallel training
+            loss = loss.mean()  # mean() to average on multi-gpu parallel training
 
-        self.accelerator.backward(
-            loss, retain_graph=self.use_sparse_regularization
-        )
+        self.accelerator.backward(loss, retain_graph=self.use_sparse_regularization)
 
         if self.use_sparse_regularization:
             regularization_loss = self.compute_regularization(model)
@@ -108,12 +100,8 @@ class SparseTrainer(Trainer):
 
 class SparseSFTTTrainer(SFTTrainer):
     def __init__(self, *args, **kwargs):
-        self.regularization_coefficient = kwargs.pop(
-            "regularization_coefficient", 10
-        )
-        self.use_sparse_regularization = kwargs.pop(
-            "use_sparse_regularization", False
-        )
+        self.regularization_coefficient = kwargs.pop("regularization_coefficient", 10)
+        self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", False)
         self.regularization_type = kwargs.pop(
             "regularization_type", "L1 positive activation"
         )
@@ -144,13 +132,9 @@ class SparseSFTTTrainer(SFTTrainer):
             loss = self.compute_loss(model, inputs)
 
         if self.args.n_gpu > 1:
-            loss = (
-                loss.mean()
-            )  # mean() to average on multi-gpu parallel training
+            loss = loss.mean()  # mean() to average on multi-gpu parallel training
 
-        self.accelerator.backward(
-            loss, retain_graph=self.use_sparse_regularization
-        )
+        self.accelerator.backward(loss, retain_graph=self.use_sparse_regularization)
 
         if self.use_sparse_regularization:
             regularization_loss = self.compute_regularization(model)
@@ -235,15 +219,11 @@ class MistralSparseSiluMLP(MistralMLP):
         # Hyperparameters to tune
         self.dead_threshold = kwargs.pop("dead_threshold", 0)
         self.current_dead_threshold = 0.0
-        self.use_sparse_regularization = kwargs.pop(
-            "use_sparse_regularization", True
-        )
+        self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", True)
         self.regularization_type = kwargs.pop(
             "regularization_type", "L1 regularization"
         )
-        self.regularization_threshold = kwargs.pop(
-            "regularization_threshold", 0.0
-        )
+        self.regularization_threshold = kwargs.pop("regularization_threshold", 0.0)
         self.activation_norm = None
 
         # Activation Histograms
@@ -266,9 +246,7 @@ class MistralSparseSiluMLP(MistralMLP):
         self.dead_percentage = 0
         self.visit_counts = 0
         self.is_collect_histogram = is_collect_histogram
-        self.histogram_counts = torch.zeros(
-            2000
-        )  # .to(self.down_proj.weight.device)
+        self.histogram_counts = torch.zeros(2000)  # .to(self.down_proj.weight.device)
 
     def deactivate_stats(self):
         self.is_stats = False
@@ -302,9 +280,7 @@ class MistralSparseSiluMLP(MistralMLP):
                 ].mean()
             elif self.regularization_type == "L2 regularization":
                 self.activation_norm = torch.sqrt(
-                    torch.square(post_act)[
-                        post_act < self.regularization_threshold
-                    ]
+                    torch.square(post_act)[post_act < self.regularization_threshold]
                 ).mean()
 
         if self.kill_sparse_swish_outputs:
@@ -378,6 +354,7 @@ class GradualSparsificationScheduler(TrainerCallback):
                     module.current_dead_threshold = min(
                         desired_dead_threshold, current_dead_threshold
                     )
+
             if is_running_deepspeed and is_mainprocess():
                 print(
                     state.global_step,
@@ -388,11 +365,11 @@ class GradualSparsificationScheduler(TrainerCallback):
         if state.global_step % 2000 == 0:
             if is_running_deepspeed and is_mainprocess():
                 print(
-                    f"Saving to /matx/u/lukeai/{self.model_name}_{state.global_step-2}.pt",
+                    f"Saving to /matx/u/lukeai/{self.model_name}_{state.global_step - 2}.pt",
                 )
                 torch.save(
                     model.state_dict(),
-                    f"/matx/u/lukeai/{self.model_name}_{state.global_step-2}.pt",
+                    f"/matx/u/lukeai/{self.model_name}_{state.global_step - 2}.pt",
                 )
 
 
@@ -448,15 +425,13 @@ def print_dead_neuron_stats(model):
             total_sparsity += dead_percentage
             counts += 1
 
-    print(f"Total sparsity: {total_sparsity/counts: .3f}%")
+    print(f"Total sparsity: {total_sparsity / counts: .3f}%")
     return total_sparsity / counts
 
 
 def get_sparse_layers(model: MistralModel):
     sparse_layers = [
-        m.mlp
-        for m in model.layers()
-        if isinstance(m.mlp, MistralSparseSiluMLP)
+        m.mlp for m in model.layers() if isinstance(m.mlp, MistralSparseSiluMLP)
     ]
     return sparse_layers
 

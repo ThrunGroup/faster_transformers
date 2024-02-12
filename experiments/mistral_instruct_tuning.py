@@ -155,11 +155,15 @@ def classification_compute_metrics(eval_preds):
     return results
 
 
-def evaluate_zero_shot(trainer: Trainer, dataset_types: list = None,
-                       tokenizer=None,
-                       train_batch_size=32, test_batch_size=32,
-                       max_seq_length=1024,
-                       return_sample_dataset=False):
+def evaluate_zero_shot(
+        trainer: Trainer,
+        dataset_types: list = None,
+        tokenizer=None,
+        train_batch_size=32,
+        test_batch_size=32,
+        max_seq_length=1024,
+        return_sample_dataset=False,
+):
     print("Datasets: ", dataset_types)
     print("==Test set evaluation==")
     for dataset_type in dataset_types:
@@ -167,17 +171,18 @@ def evaluate_zero_shot(trainer: Trainer, dataset_types: list = None,
         formatting_func = get_formatting_func(dataset_type)
         eval_accuracy_list = []
         for seed in range(3):
-            _, _, test_dataset, _ = (
-                get_dataset_for_instruction_tuning(dataset_type, seed=seed,
-                                                   tokenizer=tokenizer,
-                                                   formatting_func=formatting_func,
-                                                   max_seq_length=max_seq_length,
-                                                   train_batch_size=train_batch_size,
-                                                   test_batch_size=test_batch_size,
-                                                   return_sample_dataset=return_sample_dataset)
+            _, _, test_dataset, _ = get_dataset_for_instruction_tuning(
+                dataset_type,
+                seed=seed,
+                tokenizer=tokenizer,
+                formatting_func=formatting_func,
+                max_seq_length=max_seq_length,
+                train_batch_size=train_batch_size,
+                test_batch_size=test_batch_size,
+                return_sample_dataset=return_sample_dataset,
             )
             eval_result = trainer.evaluate(test_dataset)
-            eval_accuracy_list += eval_result['eval_accuracy'],
+            eval_accuracy_list += (eval_result["eval_accuracy"],)
 
         if is_mainprocess():
             print(f"Mean accuracy: {np.mean(eval_accuracy_list)}")
@@ -293,13 +298,16 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         formatting_func = get_formatting_func(dataset_type)
         max_seq_length = 1024
         train_dataset, val_dataset, test_dataset, sample_dataset = (
-            get_dataset_for_instruction_tuning(dataset_type, seed,
-                                               tokenizer,
-                                               formatting_func,
-                                               max_seq_length,
-                                               train_batch_size,
-                                               test_batch_size,
-                                               return_sample_dataset=exp_config.set_sparsity_aware_threshold)
+            get_dataset_for_instruction_tuning(
+                dataset_type,
+                seed,
+                tokenizer,
+                formatting_func,
+                max_seq_length,
+                train_batch_size,
+                test_batch_size,
+                return_sample_dataset=exp_config.set_sparsity_aware_threshold,
+            )
         )
 
         response_template = "Response:"
@@ -433,45 +441,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
 
-    if do_evaluate:
-        dataset_types = exp_config.dataset_types.split(",")
-        evaluate_zero_shot(
-            trainer, dataset_types, tokenizer,
-            train_batch_size, test_batch_size, max_seq_length,
-        )
-    else:
-        eval_result = trainer.evaluate(test_dataset)
-    print("===Test Result==")
-    print(eval_result)
-    log_dict = {"test_loss": eval_result["eval_loss"]}
-    if "eval_accuracy" in eval_result.keys():
-        log_dict["test_accuracy"] = eval_result["eval_accuracy"]
-
-    if exp_config.print_sparsity:
-        total_sparsity = print_dead_neuron_stats(model)
-        log_dict.update({"total_sparsity": total_sparsity})
-
-    if exp_config.print_act_stats:
-        if is_debugging:
-            # act_hist_path = "/tmp/post_finetune__act_hist.pt"
-            act_hist_path = (
-                f"histograms/debugging/{model_name}/{dataset_type}_act_hist.pt"
-            )
-        else:
-            # act_hist_path = "/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
-            act_hist_path = (
-                f"histograms/{model_name}/{dataset_type}_act_hist.pt"
-            )
-        save_act_hist(model, act_hist_path)
-        plot_act(model)
-
-    if use_wandb:
-        if is_running_deepspeed():
-            if is_mainprocess():
-                wandb.log(log_dict)
-        else:
-            wandb.log(log_dict)
-
     if exp_config.model_save:
         trainer.save_model()
 
@@ -481,6 +450,42 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         torch.save(model.state_dict(), f"/matx/u/lukeai/{model_name}.pt")
         trainer.push_to_hub()
         print(f"Pushed to hub: thrunlab/{model_name}")
+
+    if do_evaluate:
+        dataset_types = exp_config.dataset_types.split(",")
+        evaluate_zero_shot(
+            trainer,
+            dataset_types,
+            tokenizer,
+            train_batch_size,
+            test_batch_size,
+            max_seq_length,
+        )
+    else:
+        eval_result = trainer.evaluate(test_dataset)
+        print("===Test Result==")
+        print(eval_result)
+
+        log_dict = {"test_loss": eval_result["eval_loss"]}
+        if "eval_accuracy" in eval_result.keys():
+            log_dict["test_accuracy"] = eval_result["eval_accuracy"]
+
+        if exp_config.print_sparsity:
+            total_sparsity = print_dead_neuron_stats(model)
+            log_dict.update({"total_sparsity": total_sparsity})
+
+        if exp_config.print_act_stats:
+            if is_debugging:
+                act_hist_path = f"histograms/debugging/{model_name}/{dataset_type}_act_hist.pt"
+            else:
+                act_hist_path = (
+                    f"histograms/{model_name}/{dataset_type}_act_hist.pt"
+                )
+            save_act_hist(model, act_hist_path)
+            plot_act(model)
+
+        if use_wandb and is_mainprocess():
+            wandb.log(log_dict)
 
     # Empty out gpu memory
     del trainer
@@ -585,8 +590,9 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Training script for text classification"
     )
-    parser.add_argument("--dataset_types", type=str,
-                        help="List of dataset types")
+    parser.add_argument(
+        "--dataset_types", type=str, help="List of dataset types"
+    )
     parser.add_argument(
         "--do_evaluate",
         action="store_true",

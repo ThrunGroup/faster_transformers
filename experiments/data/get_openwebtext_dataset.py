@@ -23,11 +23,15 @@ class OpenWebText(Dataset):
         Load and build the openwebtext dataset which is already preprocessed.
         :return: dataset
         """
-        train_path = f"datasets/{self.model_type}_{self.dataset_type}_train_100k_128.pkl"
-        test_path = (
-            f"datasets/{self.model_type}_{self.dataset_type}_test_100k_128.pkl"
+        train_path = (
+            f"datasets/{self.model_type}_{self.dataset_type}_train_100k_small.pkl"
         )
-        validation_path = f"datasets/{self.model_type}_{self.dataset_type}_validation_100k_128.pkl"
+        test_path = (
+            f"datasets/{self.model_type}_{self.dataset_type}_test_100k_small.pkl"
+        )
+        validation_path = (
+            f"datasets/{self.model_type}_{self.dataset_type}_validation_100k_small.pkl"
+        )
 
         try:
             # Try to load preprocessed data
@@ -41,9 +45,7 @@ class OpenWebText(Dataset):
 
         except FileNotFoundError:
             print("No dataset found.")
-            dataset = load_dataset(
-                "Skylion007/openwebtext", split="train[:100000]"
-            )
+            dataset = load_dataset("Skylion007/openwebtext", split="train[:200]")
 
             print("dataset: ", dataset)
 
@@ -54,13 +56,10 @@ class OpenWebText(Dataset):
                 # remove_columns=dataset.column_names["train"],
             )
 
-            # GLUE doesn't provide answers for TEST, so we have to manually make them
-            train_testvalid_dataset = tokenized_dataset.train_test_split(
-                test_size=1000
+            train_testvalid_dataset = tokenized_dataset.train_test_split(test_size=100)
+            test_valid_dataset = train_testvalid_dataset["test"].train_test_split(
+                test_size=0.5
             )
-            test_valid_dataset = train_testvalid_dataset[
-                "test"
-            ].train_test_split(test_size=0.5)
             train_dataset = train_testvalid_dataset["train"]
             val_dataset = test_valid_dataset["train"]
             test_dataset = test_valid_dataset["test"]
@@ -83,10 +82,9 @@ class OpenWebText(Dataset):
     def preprocess(self, examples):
         tokenized_inputs = self.tokenizer(
             [" ".join(x) for x in examples["text"]],
-            max_length=128,
+            max_length=32,
             truncation=True,
         )
-
         return tokenized_inputs
 
     def get_data_collator(self):
