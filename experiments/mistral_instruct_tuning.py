@@ -55,6 +55,7 @@ from utils.utils import (
     is_running_deepspeed,
     is_mainprocess,
     get_datetime,
+    print,
 )
 from utils.constants import (
     MISTRAL_YES_ID,
@@ -179,8 +180,7 @@ def evaluate_zero_shot(trainer: Trainer, dataset_types: list = None,
             eval_result = trainer.evaluate(test_dataset)
             eval_accuracy_list += eval_result['eval_accuracy'],
 
-        if is_mainprocess():
-            print(f"Mean accuracy: {np.mean(eval_accuracy_list)}")
+        print(f"Mean accuracy: {np.mean(eval_accuracy_list)}")
 
 
 def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
@@ -528,8 +528,7 @@ def prepare_sparse_model(
                 map_location="cpu",
             )
             model.load_state_dict(original_state_dict, strict=False)
-            if is_mainprocess():
-                print("model1: ", model)
+            print("model1: ", model)
 
             # print(f"Loading from /matx/u/lukeai/{pretrained_model_to_load}.pt")
             # print(
@@ -553,8 +552,7 @@ def prepare_sparse_model(
         else:
             enable_sparse_silu(model)
 
-    if is_mainprocess():
-        print("model2: ", model)
+    print("model2: ", model)
 
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
     tokenizer.pad_token = tokenizer.eos_token
