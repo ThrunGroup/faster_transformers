@@ -5,8 +5,7 @@ datset_types="cola,wic,boolq,qnli"
 # Original Mistral
 deepspeed experiments/mistral_instruct_tuning.py --do_evaluate \
     --train_batch_size 4 --test_batch_size 64 --dataset_types "$datset_types" \
-    --gradient_checkpointing True --model_name "original" \
-    --is_debugging
+    --model_name "original"
 
 # Sparse Mistral Pretrained with 10K Steps
 #deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --targeted_sparsity 0.8 \
