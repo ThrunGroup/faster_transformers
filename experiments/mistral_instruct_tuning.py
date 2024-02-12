@@ -503,7 +503,7 @@ def prepare_sparse_model(
         model = MistralForCausalLM(config=config)
     else:
         config = MistralConfig()
-        if pretrained_model_to_load == "mistralai/Mistral-7B-Instruct-v0.1":
+        if pretrained_model_to_load == "mistralai/Mistral-7B-v0.1":
             sparse_config = get_sparse_mistral_config(
                 config, use_sparse_model=False, use_sparse_regularization=False
             )
@@ -604,7 +604,7 @@ def parse_args():
     parser.add_argument(
         "--pretrained_model_to_load",
         type=str,
-        default="mistralai/Mistral-7B-Instruct-v0.1",
+        default="mistralai/Mistral-7B-v0.1",
         help="Name of the model",
     )
     parser.add_argument(
