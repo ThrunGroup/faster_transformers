@@ -582,7 +582,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Training script for text classification"
     )
-    parser.add_argument("--dataset_types", metavar="DATASET_TYPE", nargs='+',
+    parser.add_argument("--dataset_types", type=str,
                         help="List of dataset types")
     parser.add_argument(
         "--do_evaluate",
