@@ -165,6 +165,7 @@ def evaluate_zero_shot(trainer: Trainer, dataset_types: list = None,
     for dataset_type in dataset_types:
         print(f"Evaluating on {dataset_type} dataset...")
         formatting_func = get_formatting_func(dataset_type)
+        eval_accuracy_list = []
         for seed in range(3):
             print("Seed: ", seed)
             _, _, test_dataset, _ = (
@@ -177,8 +178,10 @@ def evaluate_zero_shot(trainer: Trainer, dataset_types: list = None,
                                                    return_sample_dataset=return_sample_dataset)
             )
             eval_result = trainer.evaluate(test_dataset)
-            if is_mainprocess():
-                print(eval_result)
+            eval_accuracy_list += eval_result['eval_accuracy']
+
+        if is_mainprocess():
+            print(f"Mean accuracy: {np.mean(eval_accuracy_list)}")
 
 
 def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
