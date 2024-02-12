@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --account=matx
 #SBATCH --partition=matx-interactive
-#SBATCH --gres=gpu:7
-#SBATCH --mem=600gb
+#SBATCH --gres=gpu:6
+#SBATCH --mem=400gb
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=100
@@ -27,6 +27,7 @@ conda activate mistral
 
 cd /sailhome/vxbrando/faster_transformers
 sh agg_sparsity.sh
+#deepspeed experiments/sparse_finetune.py
 
 
 # done
