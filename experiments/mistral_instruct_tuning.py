@@ -287,13 +287,14 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         trainer_func = SparseTrainer
     else:
         formatting_func = get_formatting_func(dataset_type)
+        max_seq_length = 1024
         train_dataset, val_dataset, test_dataset, sample_dataset = (
-            get_dataset_for_instruction_tuning(dataset_type, seed=seed,
-                                               tokenizer=tokenizer,
-                                               formatting_func=formatting_func,
-                                               max_seq_length=1024,
-                                               train_batch_size=train_batch_size,
-                                               test_batch_size=test_batch_size,
+            get_dataset_for_instruction_tuning(dataset_type, seed,
+                                               tokenizer,
+                                               formatting_func,
+                                               max_seq_length,
+                                               train_batch_size,
+                                               test_batch_size,
                                                return_sample_dataset=exp_config.set_sparsity_aware_threshold)
         )
 
