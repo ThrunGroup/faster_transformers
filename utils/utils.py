@@ -35,8 +35,3 @@ def get_datetime(only_date: bool = False):
         return now.strftime("%Y-%m-%d %Hh%Mm%Ss")
     else:
         return now.strftime("%Y-%m-%d")
-
-
-def print(*args):
-    if is_mainprocess():
-        __builtins__.print(*args)
