@@ -430,8 +430,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         activate_stats(model, exp_config.print_act_stats)
 
     if do_evaluate:
+        dataset_types = exp_config.dataset_types.split(",")
         evaluate_zero_shot(
-            trainer, exp_config.dataset_types, tokenizer,
+            trainer, dataset_types, tokenizer,
             formatting_func,
             train_batch_size, test_batch_size, max_seq_length,
         )
