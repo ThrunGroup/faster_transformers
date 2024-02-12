@@ -9,7 +9,7 @@ for data in "${dataset[@]}"; do
         deepspeed experiments/mistral_instruct_tuning.py --do_evaluate \
             --train_batch_size 4 --test_batch_size 64 --dataset_type "$data" \
             --gradient_checkpointing True --model_name "original_glue_$data" \
-            --use_wandb
+            --use_wandb --is_debugging
 
         # Sparse Mistral Pretrained with 10K Steps
         deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --targeted_sparsity 0.8 \
