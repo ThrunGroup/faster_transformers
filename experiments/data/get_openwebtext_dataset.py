@@ -42,9 +42,9 @@ class OpenWebText(Dataset):
             with open(validation_path, "rb") as f:
                 val_dataset = pickle.load(f)
             print("Loaded preprocessed data from disk.")
-
         except FileNotFoundError:
             print("No dataset found.")
+            print("Using 200 data")
             dataset = load_dataset("Skylion007/openwebtext", split="train[:200]")
 
             print("dataset: ", dataset)
