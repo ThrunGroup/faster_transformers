@@ -177,7 +177,8 @@ def evaluate_zero_shot(trainer: Trainer, dataset_types: list = None,
                                                    return_sample_dataset=return_sample_dataset)
             )
             eval_result = trainer.evaluate(test_dataset)
-            print(eval_result)
+            if is_mainprocess():
+                print(eval_result)
 
 
 def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
