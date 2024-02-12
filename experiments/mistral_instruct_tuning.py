@@ -167,7 +167,6 @@ def evaluate_zero_shot(trainer: Trainer, dataset_types: list = None,
         formatting_func = get_formatting_func(dataset_type)
         eval_accuracy_list = []
         for seed in range(3):
-            print("Seed: ", seed)
             _, _, test_dataset, _ = (
                 get_dataset_for_instruction_tuning(dataset_type, seed=seed,
                                                    tokenizer=tokenizer,
