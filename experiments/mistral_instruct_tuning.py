@@ -160,6 +160,7 @@ def evaluate_zero_shot(trainer: Trainer, dataset_types: list = None,
                        train_batch_size=32, test_batch_size=32,
                        max_seq_length=1024,
                        return_sample_dataset=False):
+    print("Datasets: ", dataset_types)
     print("==Test set evaluation==")
     for dataset_type in dataset_types:
         print(f"Evaluating on {dataset_type} dataset...")
@@ -429,7 +430,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     if do_evaluate:
         evaluate_zero_shot(
-            trainer, [COLA, BOOLQ, QNLI, SST2, WIC], tokenizer,
+            trainer, exp_config.dataset_types, tokenizer,
             formatting_func,
             train_batch_size, test_batch_size, max_seq_length,
         )
@@ -579,6 +580,8 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Training script for text classification"
     )
+    parser.add_argument("--dataset_types", metavar="DATASET_TYPE", nargs='+',
+                        help="List of dataset types")
     parser.add_argument(
         "--do_evaluate",
         action="store_true",
