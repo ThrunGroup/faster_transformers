@@ -1,5 +1,5 @@
 #!/bin/bash
-
+export TOKENIZERS_PARALLELISM=false
 datset_types="cola,wic,boolq,qnli"
 
 # Original Mistral

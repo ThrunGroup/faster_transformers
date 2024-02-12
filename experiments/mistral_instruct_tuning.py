@@ -177,7 +177,7 @@ def evaluate_zero_shot(trainer: Trainer, dataset_types: list = None,
                                                    return_sample_dataset=return_sample_dataset)
             )
             eval_result = trainer.evaluate(test_dataset)
-            eval_accuracy_list += eval_result['eval_accuracy']
+            eval_accuracy_list += eval_result['eval_accuracy'],
 
         if is_mainprocess():
             print(f"Mean accuracy: {np.mean(eval_accuracy_list)}")
