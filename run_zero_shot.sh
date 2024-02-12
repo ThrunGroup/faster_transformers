@@ -10,7 +10,7 @@ for data in "${dataset[@]}"; do
             --train_batch_size 4 --test_batch_size 64 --dataset_types "$datset_types" \
             --gradient_checkpointing True --model_name "original" \
             --use_wandb --is_debugging
-#
+
 #        # Sparse Mistral Pretrained with 10K Steps
 #        deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --targeted_sparsity 0.8 \
 #            --is_plot --set_sparsity_aware_threshold --print_sparsity --do_evaluate \
