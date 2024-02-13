@@ -23,11 +23,9 @@ class OpenWebText(Dataset):
         Load and build the openwebtext dataset which is already preprocessed.
         :return: dataset
         """
-        train_path = f"datasets/{self.model_type}_{self.dataset_type}_train_100k_small.pkl"
-        test_path = f"datasets/{self.model_type}_{self.dataset_type}_test_100k_small.pkl"
-        validation_path = f"datasets/{self.model_type}_{self.dataset_type}_validation_100k_small.pkl"
-
-        print(train_path)
+        train_path = f"/scr/lukeai/datasets/{self.model_type}_{self.dataset_type}_train_100k_small.pkl"
+        test_path = f"/scr/lukeai/datasets/{self.model_type}_{self.dataset_type}_test_100k_small.pkl"
+        validation_path = f"/scr/lukeai/datasets/{self.model_type}_{self.dataset_type}_validation_100k_small.pkl"
 
         try:
             # Try to load preprocessed data
