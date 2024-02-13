@@ -32,7 +32,7 @@ def get_dataset(
     :param model: Model to finetune / evaluate
     :return: tokenized dataset, data collator, and compute_metrics function
     """
-    print("DATASET NAME: ", dataset_name)
+    print("DATASET NAME! ", dataset_name)
     if dataset_name == BILLSUM:
         dataset = Billsum(tokenizer, model_type)
     elif dataset_name == SQUAD:
