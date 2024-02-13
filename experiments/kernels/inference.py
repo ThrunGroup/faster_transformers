@@ -13,7 +13,9 @@ import inspect
 import os
 import json
 import argparse
-from kernels import mistral_mlp_sparse_direct_flag, gather_gemv2_flag, gather_transposed_gemv_flag
+from kernels import mistral_mlp_sparse_direct_flag, gather_gemv2_flag, gather_transposed_gemv_flag, mistral_mlp_sparse_direct_flag_3d, mistral_mlp_sparse_direct_flag_beam
+
+import scipy.stats.mstats as mstats
 from transformers.activations import ACT2FN
 from transformers.models.mistral.modeling_mistral import (
     MistralMLP,
@@ -72,6 +74,36 @@ class FlagMistralMLP(MistralMLP):
             self.fc2_weight_t = self.down_proj.weight.t().contiguous()
         x = gather_gemv2_flag(x, self.gate_proj.weight, self.up_proj.weight, flags, self.config.hidden_act)
         return gather_transposed_gemv_flag(x, self.fc2_weight_t, flags).unsqueeze(0)
+
+class PrunedMistralMLP(MistralMLP):
+    def __init__(
+            self,
+            config,
+    ):
+        super().__init__(config)
+        self.fc2_weight_t = self.register_buffer("fc2_weigth_t", None)
+    
+    def forward(self, x):
+        if (x.shape[1] != 1): # batch size > 1
+            return super().forward(x)# self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
+        x_1 = self.act_fn(self.gate_proj(x))
+        # file = open("temp.txt", "a")
+        # print("{:.2f},".format(torch.nonzero(torch.abs(x_1) > self.threshold, as_tuple=False).shape[0] / self.config.intermediate_size), file=file)
+        # x_2 = mistral_mlp_sparse_direct_flag_3d(
+        #     x, # 0 is the beam dimension
+        #     x_1,
+        #     self.up_proj.weight,
+        #     self.fc2_weight_t,
+        #     torch.abs(x_1) > self.threshold,
+        # )
+        x_2 = mistral_mlp_sparse_direct_flag_beam(
+            x, # 0 is the beam dimension
+            x_1,
+            self.up_proj.weight,
+            self.fc2_weight_t,
+            torch.abs(x_1[0]) > self.threshold,
+        )
+        return x_2
 
 class AsyncMistralFlashAttention2(MistralAttention):
     """
@@ -380,30 +412,6 @@ class AsyncMistralFlashAttention2(MistralAttention):
             (max_seqlen_in_batch_q, max_seqlen_in_batch_k),
         )
 
-class PrunedMistralMLP(MistralMLP):
-    def __init__(
-            self,
-            config,
-    ):
-        super().__init__(config)
-        self.fc2_weight_t = self.register_buffer("fc2_weigth_t", None)
-    
-    def forward(self, x):
-        if (x.shape[1] != 1): # batch size > 1
-            return super().forward(x)# self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
-        x = x.squeeze(0)
-        x_1 = self.act_fn(self.gate_proj(x))
-        if self.fc2_weight_t is None:
-            self.fc2_weight_t = self.down_proj.weight.t().contiguous()
-        x_2 = mistral_mlp_sparse_direct_flag(
-            x, # 0 is the beam dimension
-            x_1,
-            self.up_proj.weight,
-            self.fc2_weight_t,
-            torch.abs(x_1) > self.threshold,
-        )
-        return x_2.unsqueeze(0)
-
 class AsyncSparseAsyncAttnMistralDecoderLayer(MistralDecoderLayer):
     def __init__(self, config: MistralConfig, layer_id: int):
         super().__init__(config, layer_id)
@@ -526,6 +534,12 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
         residual = hidden_states
 
         flags = self.pred_mlp(residual)
+        # if (residual.shape[1] == 1):
+        #     flags = self.pred_mlp(residual)
+        #     if self.mlp.config.is_debugging:
+        #         print(torch.nonzero(flags, as_tuple=False).shape)
+        # else:
+        #     flags = None
 
         hidden_states = self.input_layernorm(hidden_states)
 
@@ -561,7 +575,6 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
 
 def store_fake_svd_weights(model, config, path):
     svd_weights = {}
-    torch.manual_seed(0)
     for i in range(len(model.model.layers)):
         svd_weights[f"layer{i}.pred_mlp.w1"] = torch.randn(config.sp_rank, config.hidden_size).to(torch.float16)
         svd_weights[f"layer{i}.pred_mlp.w2"] = torch.randn(config.intermediate_size, config.sp_rank).to(torch.float16)
@@ -570,7 +583,6 @@ def store_fake_svd_weights(model, config, path):
 
 def store_fake_svd_weights_t(model, config, path):
     svd_weights = {}
-    torch.manual_seed(0)
     for i in range(len(model.model.layers)):
         svd_weights[f"layer{i}.pred_mlp.w1"] = torch.randn(config.hidden_size, config.sp_rank).to(torch.float16)
         svd_weights[f"layer{i}.pred_mlp.w2"] = torch.randn(config.sp_rank, config.intermediate_size).to(torch.float16)
@@ -661,18 +673,71 @@ def generate_sentence(tokenizer, model, prompt: str, prompt_tokens: int = 64, ma
     outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
     return input_sentence, outputs, output_ids.shape[-1]
 
-def benchmark_generation(context_length, generation_length, prompt_path="text.txt", is_debugging=False, sparse_mode=0, ths_path="thresholds.json", **kwargs):
+def benchmark_sentence(tokenizer, model, prompt: str, prompt_tokens: int = 64, max_tokens: int = 128, num_return_sequences: int = 3, num_beams: int = 4, warmup: int = 5, repeat: int = 10):
+    model.eval()
+    inputs = tokenizer(prompt, return_tensors="pt").input_ids[:, :prompt_tokens].to(model.device)
+    max_new_tokens = max_tokens - inputs.shape[1] - 1
+    assert max_new_tokens > 0, "max_tokens should be larger than the length of the prompt"
+    for _ in range(warmup):
+        model.generate(inputs, do_sample=True, max_new_tokens=max_new_tokens, pad_token_id=2, num_return_sequences=num_return_sequences, temperature=0.7, num_beams=num_beams)
+    elapsed_times = []
+    throughputs = []
+    gen_lengths = []
+    for _ in range(repeat):
+        cache = torch.empty(int(256e6), dtype=torch.int8, device="cuda")
+        cache.zero_()
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+        torch.cuda.synchronize()
+        start_event.record()
+        output_ids = model.generate(inputs, do_sample=True, max_new_tokens=max_new_tokens, pad_token_id=2, num_return_sequences=num_return_sequences, temperature=0.7, num_beams=num_beams)
+        torch.cuda.synchronize()
+        end_event.record()
+        elapsed_time_ms = start_event.elapsed_time(end_event)
+        gen_length = output_ids.shape[-1] - inputs.shape[1]
+        elapsed_times.append(elapsed_time_ms)
+        throughputs.append(gen_length / (elapsed_time_ms / 1000.0))
+        gen_lengths.append(gen_length)
+    return throughputs, elapsed_times, gen_lengths
+
+def benchmark_decoding(tokenizer, model, prompt: str, prompt_tokens: int = 64, max_tokens: int = 128, num_return_sequences: int = 3, num_beams: int = 4):
+    """
+    Change the util to time_util before benchmarking the decoding stage
+    """
+    generate_sentence(tokenizer, model, prompt, prompt_tokens=prompt_tokens, max_tokens=max_tokens, num_return_sequences=1, num_beams=num_beams)
+
+def count_nonzero(tokenizer, model, prompt: str, prompt_tokens: int = 64, max_tokens: int = 128, num_return_sequences: int = 3, num_beams: int = 4):
+    """
+    Uncomment the recording "temp.txt" part
+    """
+    f = open("temp.txt", "w")
+    f.close()
+    generate_sentence(tokenizer, model, prompt, prompt_tokens=prompt_tokens, max_tokens=max_tokens, num_return_sequences=1, num_beams=num_beams)
+    with open("temp.txt", "r") as f:
+        lines = f.readlines()
+        sum = 0
+        for line in lines:
+            sum += float(line.split(",")[0])
+        print("Average Density: {:.2f}".format(sum / len(lines)))
+
+def benchmark_generation(context_length, generation_length, prompt_path="text.txt", is_debugging=False, sparse_mode=0, ths_path="thresholds.json", num_beams=1, **kwargs):
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
     if is_debugging:
-        config = MistralConfig(
-            hidden_size=64,
-            intermediate_size=64,
-            num_hidden_layers=2,
-            # num_attention_heads=4,
-        )
-        model = MistralForCausalLM(config=config).to(torch.float16).to("cuda").eval()
+        # config = MistralConfig(
+        #     hidden_size=64,
+        #     intermediate_size=64,
+        #     num_hidden_layers=2,
+        #     # num_attention_heads=4,
+        # )
+        # model = MistralForCausalLM(config=config).to(torch.float16).to("cuda").eval()
+        config = MistralConfig()
+        config.is_debugging = True
+        model = AutoModelForCausalLM.from_pretrained(
+            "mistralai/Mistral-7B-Instruct-v0.1",
+        ).to(torch.float16).to("cuda").eval()
     else:
         config = MistralConfig()
+        config.is_debugging = False
         model = AutoModelForCausalLM.from_pretrained(
             "mistralai/Mistral-7B-Instruct-v0.1",
         ).to(torch.float16).to("cuda").eval()
@@ -717,21 +782,12 @@ def benchmark_generation(context_length, generation_length, prompt_path="text.tx
     full_string = f.read()
     f.close()
 
-    start_event = torch.cuda.Event(enable_timing=True)
-    end_event = torch.cuda.Event(enable_timing=True)
-    start_event.record()
-    input_sentence, output, outlen = generate_sentence(tokenizer, model, full_string, prompt_tokens=context_length, max_tokens=generation_length, num_return_sequences=1, num_beams=1)
-    end_event.record()
-    torch.cuda.synchronize()  # Wait for the events to be recorded!
-    elapsed_time_ms = start_event.elapsed_time(end_event)
-    print(input_sentence)
-    print("=====================================")
-    for i, sentence in enumerate(output):
-        print(i)
-        print("=====================================")
-        print(sentence)
-    print("=====================================")
-    print("Sparse mode: {}; Context Length: {}; Generation Length: {}. Elapsed time: {} ms. Throughput: {:.2f} tokens/s".format(sparse_mode, context_length, outlen - context_length, elapsed_time_ms, outlen / (elapsed_time_ms / 1000.0)))
+
+    benchmark_decoding(tokenizer, model, full_string, context_length, generation_length, num_beams=num_beams)
+    # throughputs, elapsed_times, gen_lengths = benchmark_sentence(tokenizer, model, full_string, prompt_tokens=context_length, max_tokens=generation_length, num_return_sequences=1, num_beams=num_beams)
+    # for (tp, et, gl) in zip(throughputs, elapsed_times, gen_lengths):
+    #     print("Throughput: {:.2f} tokens/s; Elapsed time: {} ms; Generation Length: {}".format(tp, et, gl))
+    # print("Average Throughput: {:.2f} tokens/s".format(mstats.gmean(throughputs)))
 
 
 
@@ -745,7 +801,9 @@ if __name__ == "__main__":
     parser.add_argument("--ths_path", type=str, default="thresholds.json")
     parser.add_argument("--sp_rank", type=int, default=128)
     parser.add_argument("--svd_path", type=str, default="svd_weights.pth")
+    parser.add_argument("--num_beams", type=int, default=1)
     args = parser.parse_args()
     # benchmark_generation(64, 128, "text.txt", False, True, "thresholds.json")
     kwargs = {"sp_rank": args.sp_rank, "svd_path": args.svd_path}
-    benchmark_generation(args.context_length, args.generation_length, args.prompt_path, args.is_debugging, args.sparse_mode, args.ths_path, kwargs=kwargs)
+    torch.manual_seed(0)
+    benchmark_generation(args.context_length, args.generation_length, args.prompt_path, args.is_debugging, args.sparse_mode, args.ths_path, args.num_beams, kwargs=kwargs)
