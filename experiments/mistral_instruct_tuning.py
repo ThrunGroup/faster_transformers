@@ -82,12 +82,16 @@ def find_left_of_a(np_array, a):
         if row.size <= 1:
             raise ValueError("Sublist length must be greater than 1.")
         try:
-            index = np.where(row == a)[0][0]  # Find the first occurrence of 'a'
+            index = np.where(row == a)[0][
+                0
+            ]  # Find the first occurrence of 'a'
             if index > 0:
                 result.append(row[index - 1])
         except IndexError:
             # This occurs if 'a' is not found in the row
-            print("ERROR: No EOS Token is found in the prompt when evaluating.")
+            print(
+                "ERROR: No EOS Token is found in the prompt when evaluating."
+            )
             pass
     return np.array(result)
 
@@ -232,9 +236,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         learning_rate = 0.0
 
     if not use_sparse_model:
-        exp_config.use_sparse_regularization = (
-            exp_config.print_sparsity
-        ) = exp_config.print_act_stats = exp_config.set_sparsity_aware_threshold = False
+        exp_config.use_sparse_regularization = exp_config.print_sparsity = (
+            exp_config.print_act_stats
+        ) = exp_config.set_sparsity_aware_threshold = False
 
     if use_wandb:
         run_name = f"{model_name}_{dataset_type}"
@@ -285,7 +289,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         dataset_type = OPENWEBTEXT
         dataset = get_dataset(dataset_type, tokenizer, MISTRAL_7B)
         print(dataset)
-        train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
+        train_dataset, val_dataset, test_dataset = (
+            dataset.get_tokenized_dataset()
+        )
         print(123)
         sample_dataset = test_dataset
         max_seq_length = 128
@@ -316,7 +322,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         )
         trainer_func = SparseSFTTTrainer
         compute_metrics = classification_compute_metrics
-        preprocess_logits_for_metrics = classification_preprocess_logits_for_metrics
+        preprocess_logits_for_metrics = (
+            classification_preprocess_logits_for_metrics
+        )
 
     if is_debugging:
         debugging_output_dir = "debugging_output"
@@ -382,7 +390,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         trainer_args["formatting_func"] = formatting_func
         trainer_args["max_seq_length"] = max_seq_length
         trainer_args["compute_metrics"] = compute_metrics
-        trainer_args["preprocess_logits_for_metrics"] = preprocess_logits_for_metrics
+        trainer_args["preprocess_logits_for_metrics"] = (
+            preprocess_logits_for_metrics
+        )
 
     trainer = trainer_func(**trainer_args)
 
@@ -390,13 +400,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if exp_config.set_sparsity_aware_threshold:
         print("Setting Sparsity-Aware Threshold...")
         if is_debugging:
-            act_hist_path = (
-                f"histograms/debugging/{exp_config.targeted_sparsity}/act_hist.pt"
-            )
+            act_hist_path = f"histograms/debugging/{exp_config.targeted_sparsity}/act_hist.pt"
         else:
-            act_hist_path = (
-                f"/matx/u/lukeai/histograms/{exp_config.targeted_sparsity}/act_hist.pt"
-            )
+            act_hist_path = f"/matx/u/lukeai/histograms/{exp_config.targeted_sparsity}/act_hist.pt"
         print("histogram: ", act_hist_path)
 
         activate_stats(model.get_base_model())
@@ -417,7 +423,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             # trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(model.get_base_model(), act_hist_path)
 
-        set_sparse_threshold(model.get_base_model(), exp_config.targeted_sparsity)
+        set_sparse_threshold(
+            model.get_base_model(), exp_config.targeted_sparsity
+        )
 
     # Plot activation histograms
     if is_plot:
@@ -474,11 +482,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
         if exp_config.print_act_stats:
             if is_debugging:
-                act_hist_path = (
-                    f"histograms/debugging/{model_name}/{dataset_type}_act_hist.pt"
-                )
+                act_hist_path = f"histograms/debugging/{model_name}/{dataset_type}_act_hist.pt"
             else:
-                act_hist_path = f"histograms/{model_name}/{dataset_type}_act_hist.pt"
+                act_hist_path = (
+                    f"histograms/{model_name}/{dataset_type}_act_hist.pt"
+                )
             save_act_hist(model, act_hist_path)
             plot_act(model)
 
@@ -588,7 +596,9 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Training script for text classification"
     )
-    parser.add_argument("--dataset_types", type=str, help="List of dataset types")
+    parser.add_argument(
+        "--dataset_types", type=str, help="List of dataset types"
+    )
     parser.add_argument(
         "--do_evaluate",
         action="store_true",
@@ -613,7 +623,9 @@ def parse_args():
         default="mistralai/Mistral-7B-v0.1",
         help="Name of the model",
     )
-    parser.add_argument("--dataset_type", type=str, default="cola", help="Dataset Type")
+    parser.add_argument(
+        "--dataset_type", type=str, default="cola", help="Dataset Type"
+    )
     parser.add_argument(
         "--output_dir",
         type=str,
@@ -623,7 +635,9 @@ def parse_args():
     parser.add_argument(
         "--num_epochs", type=int, default=8, help="Number of training epochs"
     )
-    parser.add_argument("--eval_steps", type=int, default=50, help="Evaluation steps")
+    parser.add_argument(
+        "--eval_steps", type=int, default=50, help="Evaluation steps"
+    )
     parser.add_argument(
         "--max_steps",
         type=int,
