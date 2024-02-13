@@ -4,7 +4,8 @@
  --is_plot --set_sparsity_aware_threshold --print_sparsity --max_steps 100 \
  --train_batch_size 8 --test_batch_size 16 \
  --gradient_checkpointing True --push_to_hub True --model_name "pretraining_test" \
- --use_gradual_sparsification --num_warmup_steps 50 --increment_ratio 0.10
+ --use_gradual_sparsification --num_warmup_steps 50 --increment_ratio 0.10 \
+ --is_debugging
 
 ## Sparse Mistral Pretrained with 30K Steps
 #deepspeed experiments/mistral_instruct_tuning.py --use_wandb --do_pretraining --use_sparse_model --targeted_sparsity 0.8 \

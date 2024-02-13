@@ -17,12 +17,14 @@ class OpenWebText(Dataset):
         """
         super().__init__(tokenizer, model_type)
         self.dataset_type = OPENWEBTEXT
+        print("Hello")
 
-    def get_tokenized_dataset(self):
+    def get_tokenized_datasets(self):
         """
         Load and build the openwebtext dataset which is already preprocessed.
         :return: dataset
         """
+        print("YOOOO")
         train_path = (
             f"datasets/{self.model_type}_{self.dataset_type}_train_100k_small.pkl"
         )
@@ -32,6 +34,8 @@ class OpenWebText(Dataset):
         validation_path = (
             f"datasets/{self.model_type}_{self.dataset_type}_validation_100k_small.pkl"
         )
+
+        print(train_path)
 
         try:
             # Try to load preprocessed data
