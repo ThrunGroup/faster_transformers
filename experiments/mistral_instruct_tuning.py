@@ -286,7 +286,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         dataset = get_dataset(dataset_type, tokenizer, MISTRAL_7B)
         print(dataset)
         train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-
+        print(123)
         sample_dataset = test_dataset
         max_seq_length = 128
         data_collator = dataset.get_data_collator()
