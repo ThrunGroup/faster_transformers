@@ -40,7 +40,7 @@ class OpenWebText(Dataset):
             print("No dataset found.")
             print("Using 200 data")
             dataset = load_dataset(
-                "Skylion007/openwebtext", split="train[:200]"
+                "Skylion007/openwebtext", split="train[:600]"
             )
 
             print("dataset: ", dataset)
@@ -53,7 +53,7 @@ class OpenWebText(Dataset):
             )
 
             train_testvalid_dataset = tokenized_dataset.train_test_split(
-                test_size=100
+                test_size=400
             )
             test_valid_dataset = train_testvalid_dataset[
                 "test"
