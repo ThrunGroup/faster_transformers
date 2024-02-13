@@ -291,6 +291,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         train_dataset, val_dataset, test_dataset = (
             dataset.get_tokenized_dataset()
         )
+        print(train_dataset, val_dataset, test_dataset)
         sample_dataset = test_dataset
         max_seq_length = 128
         data_collator = dataset.get_data_collator()
@@ -327,9 +328,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if is_debugging:
         debugging_output_dir = "debugging_output"
         os.makedirs(debugging_output_dir, exist_ok=True)
-        train_dataset = train_dataset.select(range(300))
-        val_dataset = val_dataset.select(range(300))
-        test_dataset = test_dataset.select(range(300))
+        train_dataset = train_dataset.select(range(64))
+        val_dataset = val_dataset.select(range(64))
+        test_dataset = test_dataset.select(range(64))
         output_dir = debugging_output_dir
     else:
         output_dir = os.path.join(exp_config.output_dir, model_name)
