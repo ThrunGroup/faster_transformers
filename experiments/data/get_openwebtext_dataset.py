@@ -17,23 +17,15 @@ class OpenWebText(Dataset):
         """
         super().__init__(tokenizer, model_type)
         self.dataset_type = OPENWEBTEXT
-        print("Hello")
 
-    def get_tokenized_datasets(self):
+    def get_tokenized_dataset(self):
         """
         Load and build the openwebtext dataset which is already preprocessed.
         :return: dataset
         """
-        print("YOOOO")
-        train_path = (
-            f"datasets/{self.model_type}_{self.dataset_type}_train_100k_small.pkl"
-        )
-        test_path = (
-            f"datasets/{self.model_type}_{self.dataset_type}_test_100k_small.pkl"
-        )
-        validation_path = (
-            f"datasets/{self.model_type}_{self.dataset_type}_validation_100k_small.pkl"
-        )
+        train_path = f"datasets/{self.model_type}_{self.dataset_type}_train_100k_small.pkl"
+        test_path = f"datasets/{self.model_type}_{self.dataset_type}_test_100k_small.pkl"
+        validation_path = f"datasets/{self.model_type}_{self.dataset_type}_validation_100k_small.pkl"
 
         print(train_path)
 
@@ -49,7 +41,9 @@ class OpenWebText(Dataset):
         except FileNotFoundError:
             print("No dataset found.")
             print("Using 200 data")
-            dataset = load_dataset("Skylion007/openwebtext", split="train[:200]")
+            dataset = load_dataset(
+                "Skylion007/openwebtext", split="train[:200]"
+            )
 
             print("dataset: ", dataset)
 
@@ -60,10 +54,12 @@ class OpenWebText(Dataset):
                 # remove_columns=dataset.column_names["train"],
             )
 
-            train_testvalid_dataset = tokenized_dataset.train_test_split(test_size=100)
-            test_valid_dataset = train_testvalid_dataset["test"].train_test_split(
-                test_size=0.5
+            train_testvalid_dataset = tokenized_dataset.train_test_split(
+                test_size=100
             )
+            test_valid_dataset = train_testvalid_dataset[
+                "test"
+            ].train_test_split(test_size=0.5)
             train_dataset = train_testvalid_dataset["train"]
             val_dataset = test_valid_dataset["train"]
             test_dataset = test_valid_dataset["test"]
