@@ -3,6 +3,7 @@ from transformers import AutoTokenizer
 from .get_billsum_dataset import Billsum
 from .get_squad_dataset import SQuAD
 from .get_openwebtext_dataset import OpenWebText
+from .get_refinedweb_dataset import RefinedWeb
 from .get_samsum_dataset_ import Samsum
 from .get_glue_dataset_classification import GLUEDataset
 
@@ -11,6 +12,7 @@ from utils.constants import (
     BILLSUM,
     SQUAD,
     OPENWEBTEXT,
+    REFINEDWEB,
     SAMSUM,
     GLUE,
     SUPERGLUE,
@@ -38,6 +40,8 @@ def get_dataset(
         dataset = SQuAD(tokenizer, model_type)
     elif dataset_name == OPENWEBTEXT:
         dataset = OpenWebText(tokenizer, model_type)
+    elif dataset_name == REFINEDWEB:
+        dataset = RefinedWeb(tokenizer, model_type)
     elif dataset_name == SAMSUM:
         dataset = Samsum(tokenizer, model_type)
     elif dataset_name in GLUE + SUPERGLUE:

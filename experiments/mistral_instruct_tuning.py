@@ -28,10 +28,7 @@ import numpy as np
 import argparse
 
 from experiments.data.get_dataset import get_dataset
-from experiments.models.sparse_mistral.relufication import (
-    SparseSiLUTrainer,
-    enable_sparse_silu,
-)
+
 from experiments.models.sparse_mistral.sparsification_sftt import (
     SparseSFTTTrainer,
     SparseTrainer,
@@ -46,8 +43,10 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     load_act_hist,
     save_act_hist,
     GradualSparsificationScheduler,
+    GracefulRegularizationScheduler,
     SparseMistral,
     get_sparse_mistral_config,
+    enable_distillation,
 )
 from utils.mistral_utils import compress_mistral
 from utils.utils import (
@@ -55,12 +54,14 @@ from utils.utils import (
     is_running_deepspeed,
     is_mainprocess,
     get_datetime,
+    ds_print,
 )
 from utils.constants import (
     MISTRAL_YES_ID,
     MISTRAL_NO_ID,
     MISTRAL_7B,
     OPENWEBTEXT,
+    REFINEDWEB,
     COLA,
     BOOLQ,
     QNLI,
@@ -82,16 +83,12 @@ def find_left_of_a(np_array, a):
         if row.size <= 1:
             raise ValueError("Sublist length must be greater than 1.")
         try:
-            index = np.where(row == a)[0][
-                0
-            ]  # Find the first occurrence of 'a'
+            index = np.where(row == a)[0][0]  # Find the first occurrence of 'a'
             if index > 0:
                 result.append(row[index - 1])
         except IndexError:
             # This occurs if 'a' is not found in the row
-            print(
-                "ERROR: No EOS Token is found in the prompt when evaluating."
-            )
+            ds_print("ERROR: No EOS Token is found in the prompt when evaluating.")
             pass
     return np.array(result)
 
@@ -135,9 +132,7 @@ def classification_preprocess_logits_for_metrics(logits, labels):
 
     # Compare and get the index where the value is larger
     # If the value at c1 is greater, return c1; otherwise, return c2
-    max_value_indices = torch.where(
-        values_at_yes > values_at_no, MISTRAL_YES_ID, MISTRAL_NO_ID
-    )
+    max_value_indices = torch.where(values_at_yes > values_at_no, MISTRAL_YES_ID, MISTRAL_NO_ID)
 
     return max_value_indices
 
@@ -164,10 +159,10 @@ def evaluate_zero_shot(
     max_seq_length=1024,
     return_sample_dataset=False,
 ):
-    print("Datasets: ", dataset_types)
-    print("==Test set evaluation==")
+    ds_print("Datasets: ", dataset_types)
+    ds_print("==Test set evaluation==")
     for dataset_type in dataset_types:
-        print(f"Evaluating on {dataset_type} dataset...")
+        ds_print(f"Evaluating on {dataset_type} dataset...")
         formatting_func = get_formatting_func(dataset_type)
         eval_accuracy_list = []
         for seed in range(3):
@@ -185,7 +180,7 @@ def evaluate_zero_shot(
             eval_accuracy_list += (eval_result["eval_accuracy"],)
 
         if is_mainprocess():
-            print(f"Mean accuracy: {np.mean(eval_accuracy_list)}")
+            ds_print(f"Mean accuracy: {np.mean(eval_accuracy_list)}")
 
 
 def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
@@ -211,9 +206,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     train_batch_size = exp_config.train_batch_size
     test_batch_size = exp_config.test_batch_size
     gradient_checkpointing = exp_config.gradient_checkpointing
-    use_gradual_sparsification = exp_config.use_gradual_sparsification
-    num_warmup_steps = exp_config.num_warmup_steps
-    increment_ratio = exp_config.increment_ratio
     push_to_hub = exp_config.push_to_hub
     is_debugging = exp_config.is_debugging
     dataset_type = exp_config.dataset_type
@@ -226,19 +218,31 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     do_evaluate = exp_config.do_evaluate
     learning_rate = 1e-5
 
-    print("==========")
-    print(model_name)
-    print("==========")
+    # Gradual Sparsification
+    use_gradual_sparsification = exp_config.use_gradual_sparsification
+    num_warmup_steps = exp_config.num_warmup_steps
+    increment_ratio = exp_config.increment_ratio
+
+    # Graceful Regularization
+    use_graceful_regularization = exp_config.use_graceful_regularization
+    keep_regularization_with_kill = exp_config.keep_regularization_with_kill
+
+    # Distillation
+    use_distillation = exp_config.use_distillation
+
+    ds_print("==========")
+    ds_print(model_name)
+    ds_print("==========")
 
     if do_evaluate:
-        print("Evaluating without training...")
+        ds_print("Evaluating without training...")
         max_steps = 1
         learning_rate = 0.0
 
     if not use_sparse_model:
-        exp_config.use_sparse_regularization = exp_config.print_sparsity = (
-            exp_config.print_act_stats
-        ) = exp_config.set_sparsity_aware_threshold = False
+        exp_config.use_sparse_regularization = (
+            exp_config.print_sparsity
+        ) = exp_config.print_act_stats = exp_config.set_sparsity_aware_threshold = False
 
     if use_wandb:
         run_name = f"{model_name}_{dataset_type}"
@@ -278,27 +282,27 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         use_relu,
         model_name,
         pretrained_model_to_load,
+        use_distillation,
     )
 
-    print("Loading a dataset...")
-    print("============")
-    print("SEED: ", seed)
-    print("============")
+    ds_print("Loading a dataset...")
+    ds_print("============")
+    ds_print("SEED: ", seed)
+    ds_print("============")
     if do_pretraining:
-        print("DO pretraining")
-        dataset_type = OPENWEBTEXT
+        ds_print("DO pretraining")
+        # dataset_type = OPENWEBTEXT
+        dataset_type = REFINEDWEB
         dataset = get_dataset(dataset_type, tokenizer, MISTRAL_7B)
-        train_dataset, val_dataset, test_dataset = (
-            dataset.get_tokenized_dataset()
-        )
-        print(train_dataset, val_dataset, test_dataset)
+        train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
+        ds_print(train_dataset, val_dataset, test_dataset)
         sample_dataset = test_dataset
-        max_seq_length = 128
+        max_seq_length = 1024
         data_collator = dataset.get_data_collator()
         trainer_func = SparseTrainer
     else:
         formatting_func = get_formatting_func(dataset_type)
-        max_seq_length = 1024
+        max_seq_length = 2048
         (
             train_dataset,
             val_dataset,
@@ -314,16 +318,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             test_batch_size,
             return_sample_dataset=exp_config.set_sparsity_aware_threshold,
         )
-
         response_template = "Response:"
-        data_collator = DataCollatorForCompletionOnlyLM(
-            response_template, tokenizer=tokenizer
-        )
+        data_collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
         trainer_func = SparseSFTTTrainer
         compute_metrics = classification_compute_metrics
-        preprocess_logits_for_metrics = (
-            classification_preprocess_logits_for_metrics
-        )
+        preprocess_logits_for_metrics = classification_preprocess_logits_for_metrics
 
     if is_debugging:
         debugging_output_dir = "debugging_output"
@@ -340,7 +339,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         evaluation_strategy="steps",
         eval_steps=eval_steps,
         # early stopping counts only when eval step and save step match
-        save_steps=50,
+        save_steps=1000,
         logging_steps=5,
         save_strategy="steps",
         learning_rate=learning_rate,
@@ -353,11 +352,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         metric_for_best_model="eval_loss",
         greater_is_better=False,
         gradient_accumulation_steps=2,
-        deepspeed="mistral_ds_config.json" if not is_debugging else None,
+        deepspeed="mistral_ds_config.json",
         per_device_train_batch_size=train_batch_size,
         per_device_eval_batch_size=test_batch_size,
         gradient_checkpointing=gradient_checkpointing,
-        bf16=True if not is_debugging else False,
+        bf16=True,
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
         push_to_hub=push_to_hub,
@@ -365,13 +364,24 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         data_seed=seed,
     )
 
-    early_stopping = EarlyStoppingCallback(early_stopping_patience=20)
+    early_stopping = EarlyStoppingCallback(early_stopping_patience=3)
     sparsification_scheduler = GradualSparsificationScheduler(
         num_warmup_steps=num_warmup_steps,
         increment_ratio=increment_ratio,
         is_enabled=use_gradual_sparsification,
         model_name=model_name,
     )
+    graceful_regularization_scheduler = GracefulRegularizationScheduler(
+        num_warmup_steps=num_warmup_steps,
+        is_enabled=use_graceful_regularization,
+        model_name=model_name,
+        test_dataset=test_dataset,
+        targeted_sparsity=exp_config.targeted_sparsity,
+        keep_regularization_with_kill=keep_regularization_with_kill,
+    )
+
+    ds_print("Use sparse reg: ", exp_config.use_sparse_regularization)
+    ds_print("Use graceful reg: ", use_graceful_regularization)
 
     trainer_args = {
         "model": model,
@@ -380,64 +390,54 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         "args": trainer_config,
         "train_dataset": train_dataset,
         "eval_dataset": val_dataset,
-        "callbacks": [early_stopping, sparsification_scheduler],
+        "callbacks": [early_stopping, sparsification_scheduler, graceful_regularization_scheduler],
         "use_sparse_regularization": exp_config.use_sparse_regularization,
+        "use_distillation": use_distillation,
     }
 
-    print("Do pretraining: ", do_pretraining)
+    ds_print("Do pretraining: ", do_pretraining)
     if not do_pretraining:
         trainer_args["formatting_func"] = formatting_func
         trainer_args["max_seq_length"] = max_seq_length
         trainer_args["compute_metrics"] = compute_metrics
-        trainer_args["preprocess_logits_for_metrics"] = (
-            preprocess_logits_for_metrics
-        )
+        trainer_args["preprocess_logits_for_metrics"] = preprocess_logits_for_metrics
 
     trainer = trainer_func(**trainer_args)
+    graceful_regularization_scheduler.set_trainer(trainer)
 
     # Collect statistics and find the threshold for given sparsity
-    if exp_config.set_sparsity_aware_threshold:
-        print("Setting Sparsity-Aware Threshold...")
+    if not use_graceful_regularization and exp_config.set_sparsity_aware_threshold:
+        ds_print("Setting Sparsity-Aware Threshold...")
         if is_debugging:
             act_hist_path = f"histograms/debugging/{exp_config.targeted_sparsity}/act_hist.pt"
         else:
             act_hist_path = f"/matx/u/lukeai/histograms/{exp_config.targeted_sparsity}/act_hist.pt"
-        print("histogram: ", act_hist_path)
+        ds_print("histogram: ", act_hist_path)
 
         activate_stats(model.get_base_model())
-        if os.path.exists(act_hist_path):  # @luke TODO: remove False
+        if os.path.exists(act_hist_path):
             load_act_hist(model.get_base_model(), act_hist_path)
         else:
-            # is_deepspeed_enabled = trainer.is_deepspeed_enabled
-            # trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
-            # trainer.evaluate(sample_dataset)
-            # trainer_config2 = copy.deepcopy(trainer_config)
-            # trainer_config2.max_steps = 1
-            # trainer_args2 = copy.deepcopy(trainer_args)
-            # trainer_args2["args"] = trainer_config2
-            # trainer2 = trainer_func(**trainer_args2)
-            # trainer2.train()
-            # trainer2.evaluate(test_dataset)
             trainer.evaluate(test_dataset)
-            # trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(model.get_base_model(), act_hist_path)
 
-        set_sparse_threshold(
-            model.get_base_model(), exp_config.targeted_sparsity
-        )
+        set_sparse_threshold(model.get_base_model(), exp_config.targeted_sparsity)
 
-    # Plot activation histograms
-    if is_plot:
-        if is_running_deepspeed():
-            if is_mainprocess():
+        # Plot activation histograms
+        if is_plot:
+            if is_running_deepspeed():
+                if is_mainprocess():
+                    plot_act(model.get_base_model())
+            else:
                 plot_act(model.get_base_model())
-        else:
-            plot_act(model.get_base_model())
 
-    # Train Model after deactivating collecting statistics
-    deactivate_stats(model.get_base_model())
-    print("Training...")
+        # Train Model after deactivating collecting statistics
+        deactivate_stats(model.get_base_model())
+
+    ds_print("Training...")
     trainer.train()
+
+    print(f"====TRAINER USE_SPARSE_REG: {trainer.use_sparse_regularization}===")
 
     # Evaluate on test dataset
     model = model.merge_and_unload()
@@ -450,11 +450,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         trainer.save_model()
 
     if push_to_hub and is_mainprocess():
-        print("Pushing to hub")
-        print("model: ", model)
+        ds_print("Pushing to hub")
+        ds_print("model: ", model)
         torch.save(model.state_dict(), f"/matx/u/lukeai/{model_name}.pt")
         trainer.push_to_hub()
-        print(f"Pushed to hub: thrunlab/{model_name}")
+        ds_print(f"Pushed to hub: thrunlab/{model_name}")
 
     if do_evaluate:
         dataset_types = exp_config.dataset_types.split(",")
@@ -468,8 +468,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         )
     else:
         eval_result = trainer.evaluate(test_dataset)
-        print("===Test Result==")
-        print(eval_result)
+        ds_print("===Test Result==")
+        ds_print(eval_result)
 
         log_dict = {"test_loss": eval_result["eval_loss"]}
         if "eval_accuracy" in eval_result.keys():
@@ -483,9 +483,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             if is_debugging:
                 act_hist_path = f"histograms/debugging/{model_name}/{dataset_type}_act_hist.pt"
             else:
-                act_hist_path = (
-                    f"histograms/{model_name}/{dataset_type}_act_hist.pt"
-                )
+                act_hist_path = f"histograms/{model_name}/{dataset_type}_act_hist.pt"
             save_act_hist(model, act_hist_path)
             plot_act(model)
 
@@ -506,8 +504,9 @@ def prepare_sparse_model(
     use_relu: bool = False,
     model_name: str = None,
     pretrained_model_to_load: str = None,
+    use_distillation: bool = False,
 ):
-    print("Loading a model...")
+    ds_print("Loading a model...")
     if is_debugging:
         config = MistralConfig(
             hidden_size=64,
@@ -518,9 +517,7 @@ def prepare_sparse_model(
     else:
         config = MistralConfig()
         if pretrained_model_to_load == "mistralai/Mistral-7B-v0.1":
-            sparse_config = get_sparse_mistral_config(
-                config, use_sparse_model=False, use_sparse_regularization=False
-            )
+            sparse_config = get_sparse_mistral_config(config, use_sparse_model=False, use_sparse_regularization=False)
             # model = SparseMistral.from_pretrained(
             #     pretrained_model_to_load,
             #     config=sparse_config,
@@ -539,10 +536,10 @@ def prepare_sparse_model(
             )
             model.load_state_dict(original_state_dict, strict=False)
             if is_mainprocess():
-                print("model1: ", model)
+                ds_print("model1: ", model)
 
-            # print(f"Loading from /matx/u/lukeai/{pretrained_model_to_load}.pt")
-            # print(
+            # ds_print(f"Loading from /matx/u/lukeai/{pretrained_model_to_load}.pt")
+            # ds_print(
             #     os.path.exists(f"/matx/u/lukeai/{pretrained_model_to_load}.pt")
             # )
             # state_dict = torch.load(
@@ -552,7 +549,7 @@ def prepare_sparse_model(
             # model.load_state_dict(state_dict)
 
     if use_sparse_model:
-        print("Enabling Sparse SiLU...")
+        ds_print("Enabling Sparse SiLU...")
         apply_mistral_sparse_silu_mlp(
             model,
             model.config,
@@ -562,15 +559,17 @@ def prepare_sparse_model(
             enable_relu(model)
         else:
             enable_sparse_silu(model)
+        if use_distillation:
+            enable_distillation(model)
 
     if is_mainprocess():
-        print("model2: ", model)
+        ds_print("model2: ", model)
 
     tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
-    print("Applying LoRA...")
+    ds_print("Applying LoRA...")
     peft_config = LoraConfig(
         lora_alpha=16,
         lora_dropout=0.1,
@@ -592,12 +591,8 @@ def prepare_sparse_model(
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Training script for text classification"
-    )
-    parser.add_argument(
-        "--dataset_types", type=str, help="List of dataset types"
-    )
+    parser = argparse.ArgumentParser(description="Training script for text classification")
+    parser.add_argument("--dataset_types", type=str, help="List of dataset types")
     parser.add_argument(
         "--do_evaluate",
         action="store_true",
@@ -622,21 +617,15 @@ def parse_args():
         default="mistralai/Mistral-7B-v0.1",
         help="Name of the model",
     )
-    parser.add_argument(
-        "--dataset_type", type=str, default="cola", help="Dataset Type"
-    )
+    parser.add_argument("--dataset_type", type=str, default="cola", help="Dataset Type")
     parser.add_argument(
         "--output_dir",
         type=str,
         default="ckpt",
         help="Output Directory",
     )
-    parser.add_argument(
-        "--num_epochs", type=int, default=8, help="Number of training epochs"
-    )
-    parser.add_argument(
-        "--eval_steps", type=int, default=50, help="Evaluation steps"
-    )
+    parser.add_argument("--num_epochs", type=int, default=8, help="Number of training epochs")
+    parser.add_argument("--eval_steps", type=int, default=50, help="Evaluation steps")
     parser.add_argument(
         "--max_steps",
         type=int,
@@ -645,7 +634,7 @@ def parse_args():
     )
     parser.add_argument(
         "--do_pretraining",
-        action="store_true",
+        type=bool,
         default=False,
         help="Whether to pretrain the model on OpenWebText",
     )
@@ -656,12 +645,8 @@ def parse_args():
         help="Whether to push the model to Hugging Face Hub",
     )
     parser.add_argument("--model_save", type=bool, default=False)
-    parser.add_argument(
-        "--train_batch_size", type=int, default=8, help="Training batch size"
-    )
-    parser.add_argument(
-        "--test_batch_size", type=int, default=32, help="Testing batch size"
-    )
+    parser.add_argument("--train_batch_size", type=int, default=8, help="Training batch size")
+    parser.add_argument("--test_batch_size", type=int, default=32, help="Testing batch size")
     parser.add_argument(
         "--gradient_checkpointing",
         type=bool,
@@ -677,6 +662,25 @@ def parse_args():
         default=False,
         help="Set sparsity aware threshold",
     )
+    parser.add_argument(
+        "--use_graceful_regularization",
+        action="store_true",
+        default=False,
+        help="Whether to do apply regularization before killing activations",
+    )
+    parser.add_argument(
+        "--use_distillation",
+        action="store_true",
+        default=False,
+        help="Whether to do apply distillation",
+    )
+    parser.add_argument(
+        "--keep_regularization_with_kill",
+        action="store_true",
+        default=False,
+        help="Whether to keep regularization after beginning killing activations",
+    )
+
     parser.add_argument(
         "--use_gradual_sparsification",
         action="store_true",
@@ -744,5 +748,5 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    print(args)
+    ds_print(args)
     train(args, use_wandb=args.use_wandb)

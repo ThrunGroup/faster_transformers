@@ -1,12 +1,10 @@
 from transformers import TrainerCallback, Trainer
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
+from torch.nn import functional as F
+import copy
 from datasets import Dataset
-from transformers.utils import is_sagemaker_mp_enabled, is_sagemaker_dp_enabled
-import torch
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import numpy as np
 import time
@@ -27,6 +25,7 @@ from utils.utils import (
     is_running_deepspeed,
     is_mainprocess,
     get_datetime,
+    ds_print,
 )
 
 
@@ -34,9 +33,8 @@ class SparseTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         self.regularization_coefficient = kwargs.pop("regularization_coefficient", 10)
         self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", False)
-        self.regularization_type = kwargs.pop(
-            "regularization_type", "L1 positive activation"
-        )
+        self.regularization_type = kwargs.pop("regularization_type", "L1 positive activation")
+        self.use_distillation = kwargs.pop("use_distillation", False)
         assert self.regularization_type in [
             "L2 activation",
             "L1 positive activation",
@@ -45,13 +43,9 @@ class SparseTrainer(Trainer):
         super(SparseTrainer, self).__init__(*args, **kwargs)
 
     def initialize_sparse_silu_layers(self, model):
-        self.sparse_layers = [
-            m for m in model.modules() if isinstance(m, MistralSparseSiluMLP)
-        ]
+        self.sparse_layers = [m for m in model.modules() if isinstance(m, MistralSparseSiluMLP)]
 
-    def training_step(
-        self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
-    ) -> torch.Tensor:
+    def training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]) -> torch.Tensor:
         """
         Override the huggingface's training_step function to add a regularization term.
         A regularization term is computed with intermediate values, which are freed after "backward()."
@@ -90,11 +84,22 @@ class SparseTrainer(Trainer):
             if module.activation_norm is not None:
                 loss += module.activation_norm
 
-        loss /= num_layers
-        loss *= self.regularization_coefficient
+            # DISTILLATION
+            if self.use_distillation and module.original_outputs is not None:
+                distillation_loss = F.mse_loss(module.original_outputs, module.outputs)
+                if is_mainprocess() and self.state.global_step % 20 == 0 and distillation_loss != 0:
+                    ds_print(
+                        self.state.global_step,
+                        "Distillation loss: ",
+                        distillation_loss.item(),
+                    )
+
+                loss += distillation_loss
+
+        loss = loss / num_layers * self.regularization_coefficient
 
         if self.state.global_step % 20 == 0 and loss != 0:
-            print("Negative relularizer loss: ", loss.item())
+            ds_print("Negative relularizer loss: ", loss.item())
         return loss
 
 
@@ -102,9 +107,8 @@ class SparseSFTTTrainer(SFTTrainer):
     def __init__(self, *args, **kwargs):
         self.regularization_coefficient = kwargs.pop("regularization_coefficient", 10)
         self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", False)
-        self.regularization_type = kwargs.pop(
-            "regularization_type", "L1 positive activation"
-        )
+        self.regularization_type = kwargs.pop("regularization_type", "L1 positive activation")
+        self.use_distillation = kwargs.pop("use_distillation", False)
         assert self.regularization_type in [
             "L2 activation",
             "L1 positive activation",
@@ -113,13 +117,9 @@ class SparseSFTTTrainer(SFTTrainer):
         super(SparseSFTTTrainer, self).__init__(*args, **kwargs)
 
     def initialize_sparse_silu_layers(self, model):
-        self.sparse_layers = [
-            m for m in model.modules() if isinstance(m, MistralSparseSiluMLP)
-        ]
+        self.sparse_layers = [m for m in model.modules() if isinstance(m, MistralSparseSiluMLP)]
 
-    def training_step(
-        self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
-    ) -> torch.Tensor:
+    def training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]) -> torch.Tensor:
         """
         Override the huggingface's training_step function to add a regularization term.
         A regularization term is computed with intermediate values, which are freed after "backward()."
@@ -157,26 +157,23 @@ class SparseSFTTTrainer(SFTTrainer):
         for module in self.sparse_layers:
             if module.activation_norm is not None:
                 loss += module.activation_norm
-            # # DISTILLATION
-            # if module.original_outputs is not None:
-            #     distillation_loss = F.mse_loss(
-            #         module.original_outputs, module.outputs
-            #     )
-            #     # if self.state.global_step % 100 == 2 and is_mainprocess():
-            #     if is_mainprocess():
-            #         print(
-            #             self.state.global_step,
-            #             "Distillation loss: ",
-            #             distillation_loss.item(),
-            #         )
 
-            #     loss += distillation_loss
+            # DISTILLATION
+            if self.use_distillation and module.original_outputs is not None:
+                distillation_loss = F.mse_loss(module.original_outputs, module.outputs)
+                if is_mainprocess() and self.state.global_step % 20 == 0 and distillation_loss != 0:
+                    ds_print(
+                        self.state.global_step,
+                        "Distillation loss: ",
+                        distillation_loss.item(),
+                    )
 
-        loss /= num_layers
-        loss *= self.regularization_coefficient
+                loss += distillation_loss
+
+        loss = loss / num_layers * self.regularization_coefficient
 
         if self.state.global_step % 20 == 0 and loss != 0:
-            print("Negative relularizer loss: ", loss.item())
+            ds_print("Negative relularizer loss: ", loss.item())
         return loss
 
 
@@ -200,9 +197,7 @@ class SparseMistral(MistralForCausalLM):
             self.apply_sparse_mlp()
 
     def apply_sparse_mlp(self):
-        apply_mistral_sparse_silu_mlp(
-            self, self.config, self.config.use_sparse_regularization
-        )
+        apply_mistral_sparse_silu_mlp(self, self.config, self.config.use_sparse_regularization)
 
 
 class MistralSparseSiluMLP(MistralMLP):
@@ -216,13 +211,13 @@ class MistralSparseSiluMLP(MistralMLP):
         self.is_stats = False
         self.visit_counts = 0
 
+        self.use_distillation = False
+
         # Hyperparameters to tune
         self.dead_threshold = kwargs.pop("dead_threshold", 0)
         self.current_dead_threshold = 0.0
         self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", True)
-        self.regularization_type = kwargs.pop(
-            "regularization_type", "L1 regularization"
-        )
+        self.regularization_type = kwargs.pop("regularization_type", "L1 regularization")
         self.regularization_threshold = kwargs.pop("regularization_threshold", 0.0)
         self.activation_norm = None
 
@@ -256,15 +251,11 @@ class MistralSparseSiluMLP(MistralMLP):
         pre_activation = pre_activation.float().cpu().detach()
         post_activation = post_activation.float().cpu().detach()
         # self.histogram_bins=self.histogram_bins.to(pre_activation.device).type(pre_activation.dtype)
-        self.pre_act_hist_counts += torch.histogram(
-            pre_activation, bins=self.histogram_bins
-        )[0]
-        self.post_act_hist_counts += torch.histogram(
-            torch.abs(post_activation), bins=self.histogram_bins
-        )[0]
+        self.pre_act_hist_counts += torch.histogram(pre_activation, bins=self.histogram_bins)[0]
+        self.post_act_hist_counts += torch.histogram(torch.abs(post_activation), bins=self.histogram_bins)[0]
         self.t += time.time() - start_time
         if self.visit_counts % 30 == 0:
-            print(f"Time taken to collect stats: {self.t}s.")
+            ds_print(f"Time taken to collect stats: {self.t}s.")
 
     def forward(self, x):
         """
@@ -275,22 +266,16 @@ class MistralSparseSiluMLP(MistralMLP):
 
         if self.use_sparse_regularization:
             if self.regularization_type == "L1 regularization":
-                self.activation_norm = torch.abs(post_act)[
-                    post_act < self.regularization_threshold
-                ].mean()
+                self.activation_norm = torch.abs(post_act)[post_act < self.regularization_threshold].mean()
             elif self.regularization_type == "L2 regularization":
-                self.activation_norm = torch.sqrt(
-                    torch.square(post_act)[post_act < self.regularization_threshold]
-                ).mean()
+                self.activation_norm = torch.sqrt(torch.square(post_act)[post_act < self.regularization_threshold]).mean()
 
         if self.kill_sparse_swish_outputs:
             dead_neurons = post_act.abs() <= self.current_dead_threshold
             dead_percentage = dead_neurons.float().mean()
 
             if self.is_stats:
-                self.dead_percentage = (
-                    self.dead_percentage * self.visit_counts + dead_percentage
-                ) / (self.visit_counts + 1)
+                self.dead_percentage = (self.dead_percentage * self.visit_counts + dead_percentage) / (self.visit_counts + 1)
                 self.visit_counts += 1
 
                 # Collect histogram stats
@@ -298,16 +283,78 @@ class MistralSparseSiluMLP(MistralMLP):
                     self.collect_stats(pre_act, post_act)
 
             # DISTILLATION
-            # with torch.no_grad():
-            #     self.original_outputs = self.down_proj(
-            #         post_act * self.up_proj(x)
-            #     )
+            if self.use_distillation:
+                with torch.no_grad():
+                    self.original_outputs = self.down_proj(post_act * self.up_proj(x))
 
-            post_act[dead_neurons] = 0
+            post_act = post_act * (~dead_neurons)
 
         self.outputs = self.down_proj(post_act * self.up_proj(x))
 
         return self.outputs
+
+
+class GracefulRegularizationScheduler(TrainerCallback):
+    def __init__(
+        self,
+        num_warmup_steps=40,
+        is_enabled: bool = False,
+        model_name: str = "mistral",
+        test_dataset: Dataset = None,
+        targeted_sparsity: float = 0.5,
+        keep_regularization_with_kill: bool = False,
+    ):
+        """Scheduler for regularizing the model first before applying the dead threshold.
+
+        :param num_warmup_steps: number of training steps required to reach the dead threshold, defaults to 40
+        :param increment_ratio: by how much to increase the dead threshold.
+            For example, 0.5 means "increase the threshold by 0.5 * desired threshold
+        """
+        self.num_warmup_steps = num_warmup_steps
+        self.is_enabled = is_enabled
+        self.model_name = model_name
+        self.test_dataset = test_dataset
+        self.targeted_sparsity = targeted_sparsity
+        self.keep_regularization_with_kill = keep_regularization_with_kill
+        self.act_hist_path = f"/matx/u/lukeai/histograms/warm_up_reg_{targeted_sparsity}/act_hist.pt"
+        if self.is_enabled:
+            print("GracefulRegularizationScheduler is enabled.")
+        self.trainer = None
+
+    def set_trainer(self, trainer):
+        self.trainer = trainer
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if not self.is_enabled:
+            return
+
+        model = kwargs["model"]
+
+        if state.global_step == 1:
+            ds_print("Setting an initial reg threshold to 0.1")
+            set_regularization_threshold(model.get_base_model(), 0.1)
+
+        # if state.global_step >= self.num_warmup_steps and state.global_step % 50 == 0:
+        if state.global_step == self.num_warmup_steps:
+            activate_stats(model.get_base_model())
+            enable_sparse_silu(model.get_base_model())
+            self.trainer.evaluate()
+            save_act_hist(model.get_base_model(), self.act_hist_path)
+            set_sparse_threshold(model.get_base_model(), self.targeted_sparsity, True)
+            deactivate_stats(model.get_base_model())
+            self.trainer.use_sparse_regularization = self.keep_regularization_with_kill
+            # set_layer_specific_regularization(model.get_base_model())
+            print_dead_neuron_stats(model.get_base_model())
+
+        if state.global_step % 2000 == 0:
+            if is_mainprocess():
+                ds_print(
+                    f"Saving to /scr/lukeai/{self.model_name}_{state.global_step}.pt",
+                )
+                torch.save(
+                    model.state_dict(),
+                    f"/scr/lukeai/{self.model_name}_{state.global_step}.pt",
+                )
 
 
 class GradualSparsificationScheduler(TrainerCallback):
@@ -343,20 +390,19 @@ class GradualSparsificationScheduler(TrainerCallback):
         current_dead_threshold = 0
         desired_dead_threshold = 0
 
+        if is_mainprocess():
+            ds_print(state.global_step)
+
         if state.global_step % self.step_size == 2:
             for module in model.modules():
                 if isinstance(module, MistralSparseSiluMLP):
-                    desired_dead_threshold = module.dead_threshold
+                    desired_dead_threshold = copy.deepcopy(module.dead_threshold)
                     current_dead_threshold = module.current_dead_threshold
-                    current_dead_threshold += (
-                        self.increment_ratio * desired_dead_threshold
-                    )
-                    module.current_dead_threshold = min(
-                        desired_dead_threshold, current_dead_threshold
-                    )
+                    current_dead_threshold += self.increment_ratio * desired_dead_threshold
+                    module.current_dead_threshold = min(desired_dead_threshold, current_dead_threshold)
 
             if is_running_deepspeed and is_mainprocess():
-                print(
+                ds_print(
                     state.global_step,
                     current_dead_threshold,
                     desired_dead_threshold,
@@ -364,7 +410,7 @@ class GradualSparsificationScheduler(TrainerCallback):
 
         if state.global_step % 2000 == 0:
             if is_running_deepspeed and is_mainprocess():
-                print(
+                ds_print(
                     f"Saving to /matx/u/lukeai/{self.model_name}_{state.global_step - 2}.pt",
                 )
                 torch.save(
@@ -380,9 +426,7 @@ def apply_mistral_sparse_silu_mlp(
 ):
     for layer in model.model.layers:
         original_mlp = layer.mlp
-        new_mlp = MistralSparseSiluMLP(
-            config, use_sparse_regularization=use_sparse_regularization
-        )
+        new_mlp = MistralSparseSiluMLP(config, use_sparse_regularization=use_sparse_regularization)
         new_mlp.gate_proj = original_mlp.gate_proj
         new_mlp.up_proj = original_mlp.up_proj
         new_mlp.down_proj = original_mlp.down_proj
@@ -401,38 +445,57 @@ def deactivate_stats(model):
             layer.mlp.deactivate_stats()
 
 
-def enable_sparse_silu(model):
-    print("Enabling SparseSilu")
+def enable_distillation(model):
+    ds_print("Enabling distillation")
     for i, layer in enumerate(model.model.layers):
         if isinstance(layer.mlp, MistralSparseSiluMLP):
-            layer.mlp.kill_sparse_swish_outputs = True
+            layer.mlp.use_distillation = True
 
 
 def enable_relu(model):
-    print("Enabling ReLU")
+    ds_print("Enabling ReLU")
     for i, layer in enumerate(model.model.layers):
         if isinstance(layer.mlp, MistralSparseSiluMLP):
             layer.mlp.act_fn = nn.ReLU()
 
 
+def enable_sparse_silu(model):
+    for i, layer in enumerate(model.model.layers):
+        if isinstance(layer.mlp, MistralSparseSiluMLP):
+            layer.mlp.kill_sparse_swish_outputs = True
+
+
+def set_layer_specific_regularization(model):
+    for i, layer in enumerate(model.model.layers):
+        if isinstance(layer.mlp, MistralSparseSiluMLP):
+            dead_threshold = layer.mlp.dead_threshold
+
+            if dead_threshold > 0.1:
+                layer.mlp.kill_sparse_swish_outputs = False
+                layer.mlp.regularization_threshold = copy.deepcopy(dead_threshold)
+                ds_print(f"Regularize Layer {i} : {dead_threshold}")
+            else:
+                layer.mlp.kill_sparse_swish_outputs = True
+                layer.mlp.regularization_threshold = 0.0
+
+
 def print_dead_neuron_stats(model):
     total_sparsity = 0
     counts = 0
+
     for i, layer in enumerate(model.model.layers):
         if isinstance(layer.mlp, MistralSparseSiluMLP):
             dead_percentage = layer.mlp.dead_percentage * 100
-            print(f"{i} : {dead_percentage:.3f}%")
+            ds_print(f"{i} : {dead_percentage:.3f}%")
             total_sparsity += dead_percentage
             counts += 1
 
-    print(f"Total sparsity: {total_sparsity / counts: .3f}%")
+    ds_print(f"Total sparsity: {total_sparsity / counts: .3f}%")
     return total_sparsity / counts
 
 
 def get_sparse_layers(model: MistralModel):
-    sparse_layers = [
-        m.mlp for m in model.layers() if isinstance(m.mlp, MistralSparseSiluMLP)
-    ]
+    sparse_layers = [m.mlp for m in model.layers() if isinstance(m.mlp, MistralSparseSiluMLP)]
     return sparse_layers
 
 
@@ -441,18 +504,22 @@ def get_threshold(
     histogram_counts: torch.tensor,
     sparsity_level: float,
 ):  # Only for L1 Regularization
-    assert (
-        len(bin_edges.shape) == len(histogram_counts.shape) == 1
-    ), "bin_edges and histogram are expected to be 1-dimensional."
+    assert len(bin_edges.shape) == len(histogram_counts.shape) == 1, "bin_edges and histogram are expected to be 1-dimensional."
     histogram_counts /= histogram_counts.sum()
-    threshold_idx = torch.searchsorted(
-        histogram_counts.cumsum(0), sparsity_level, side="right"
-    )
+    threshold_idx = torch.searchsorted(histogram_counts.cumsum(0), sparsity_level, side="right")
 
     return bin_edges[threshold_idx]
 
 
-def set_sparse_threshold(model, sparsity_level: float):
+def set_regularization_threshold(model, threshold: float = 0.1):
+    for i, layer in enumerate(model.model.layers):
+        if (
+            isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
+            layer.mlp.regularization_threshold = threshold  # TODO: find better param
+
+
+def set_sparse_threshold(model, sparsity_level: float, use_from_graceful_reg: bool = False):
     for i, layer in enumerate(model.model.layers):
         if (
             isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
@@ -462,9 +529,10 @@ def set_sparse_threshold(model, sparsity_level: float):
                 layer.mlp.post_act_hist_counts,
                 sparsity_level,
             )
-            layer.mlp.regularization_threshold = (
-                layer.mlp.dead_threshold
-            )  # TODO: find better param
+            if use_from_graceful_reg:
+                layer.mlp.current_dead_threshold = layer.mlp.dead_threshold
+            layer.mlp.regularization_threshold = layer.mlp.dead_threshold
+            ds_print("THRESHOLD: ", layer.mlp.dead_threshold)
 
 
 def plot_histogram(
@@ -507,9 +575,7 @@ def plot_act(model):
             )
 
 
-def save_act_hist(
-    model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"
-):
+def save_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"):
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     act_dict = {}
     for i, layer in enumerate(model.model.layers):
@@ -521,17 +587,13 @@ def save_act_hist(
                 layer.mlp.pre_act_hist_counts,
                 layer.mlp.post_act_hist_counts,
             )
-    print("Saving activation histograms...\n\n\n")
+    ds_print("Saving activation histograms...\n\n\n")
     torch.save(act_dict, filename)
 
 
-def load_act_hist(
-    model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"
-):
-    assert os.path.exists(
-        filename
-    ), f"{filename} does not exist when loading pre/post-activation histogram of SparseMistralSiluMLP."
-    print("Loading activation histograms...\n\n\n")
+def load_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"):
+    assert os.path.exists(filename), f"{filename} does not exist when loading pre/post-activation histogram of SparseMistralSiluMLP."
+    ds_print("Loading activation histograms...\n\n\n")
 
     act_dict = torch.load(filename)
     for i, layer in enumerate(model.model.layers):

@@ -1,40 +1,92 @@
 #!/bin/bash
-# dataset=("sst2")
-# seeds=(1 2 3)
 
-# for data in "${dataset[@]}"; do
-#     for seed in "${seeds[@]}"; do
-#         # Sparse Mistral Pretrained with 10K Steps
-#         deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --targeted_sparsity 0.8 \
-#         --is_plot --set_sparsity_aware_threshold --print_sparsity --num_epochs 15 --max_steps 1  \
-#         --train_batch_size 4 --test_batch_size 8 --dataset_type $data \
-#         --gradient_checkpointing True --push_to_hub False --model_name "mistral_sparse_80_percent_$data_1000" \
-#         --pretrained_model_to_load "Mistral_Sparse_pretraining_80_percent_10000" --seed $seed
-
-#         # Original Mistral
-#         deepspeed experiments/mistral_instruct_tuning.py --use_wandb  --num_epochs 15  \
-#         --train_batch_size 4 --test_batch_size 8 --dataset_type $data \
-#         --gradient_checkpointing True --push_to_hub False --model_name "original_glue_$data" --seed $seed
-#     done
-# done
-
-dataset=("cola" "wic" "boolq" "qnli")
+dataset=(cola wic sst2)
 seeds=(1)
 
 for data in "${dataset[@]}"; do
-    for seed in "${seeds[@]}"; do
-        # # Original Mistral
-        # deepspeed experiments/mistral_instruct_tuning.py --do_evaluate \
-        # --train_batch_size 4 --test_batch_size 64 --dataset_type $data \
-        # --gradient_checkpointing True --model_name "original_glue_$data" --seed $seed
+  for seed in "${seeds[@]}"; do
 
-        # --use_wandb 
+    # Sparse Mistral with Graceful Reg
+    deepspeed --master_port 30001 experiments/mistral_instruct_tuning.py \
+    --use_wandb \
+    --use_sparse_model \
+    --targeted_sparsity 0.8 \
+    --is_plot \
+    --set_sparsity_aware_threshold \
+    --print_sparsity \
+    --num_epochs 10 \
+    --train_batch_size 8 \
+    --test_batch_size 64 \
+    --dataset_type "$data" \
+    --model_name "mistral_sparse_80_percent_\"$data\"_graceful_reg_300steps " \
+    --seed "$seed" \
+    --use_sparse_regularization \
+    --use_graceful_regularization \
+    --num_warmup_steps 300 \
 
-        # Sparse Mistral Pretrained with 10K Steps
-        deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --targeted_sparsity 0.8 \
-        --is_plot --set_sparsity_aware_threshold --print_sparsity --do_evaluate \
-        --train_batch_size 4 --test_batch_size 32 --dataset_type $data \
-        --gradient_checkpointing True --model_name "mistral_sparse_80_percent_10000_zero_shot_$data" \
-        --pretrained_model_to_load "Mistral_Sparse_pretraining_80_percent_10000" --seed $seed
-    done
+#    # Sparse Mistral with Graceful Reg & Keep Reg
+#    deepspeed --master_port 30001 experiments/mistral_instruct_tuning.py \
+#    --use_wandb \
+#    --use_sparse_model \
+#    --targeted_sparsity 0.8 \
+#    --is_plot \
+#    --set_sparsity_aware_threshold \
+#    --print_sparsity \
+#    --num_epochs 10 \
+#    --train_batch_size 8 \
+#    --test_batch_size 32 \
+#    --dataset_type "$data" \
+#    --model_name "mistral_sparse_80_percent_\"$data\"_graceful_reg_keep_reg" \
+#    --seed "$seed" \
+#    --use_sparse_regularization \
+#    --use_graceful_regularization \
+#    --keep_regularization_with_kill \
+#    --num_warmup_steps 100 \
+#
+#    # Sparse Mistral with Graceful Reg & Keep Reg & Distillation
+#    deepspeed --master_port 30001 experiments/mistral_instruct_tuning.py \
+#    --use_wandb \
+#    --use_sparse_model \
+#    --targeted_sparsity 0.8 \
+#    --is_plot \
+#    --set_sparsity_aware_threshold \
+#    --print_sparsity \
+#    --num_epochs 10 \
+#    --train_batch_size 8 \
+#    --test_batch_size 32 \
+#    --dataset_type "$data" \
+#    --model_name "mistral_sparse_80_percent_\"$data\"_graceful_reg_distill" \
+#    --seed "$seed" \
+#    --use_sparse_regularization \
+#    --use_graceful_regularization \
+#    --keep_regularization_with_kill \
+#    --num_warmup_steps 100 \
+#    --use_distillation \
+
+#    deepspeed  --master_port 30002  experiments/mistral_instruct_tuning.py \
+#    --use_wandb \
+#    --use_sparse_model \
+#    --targeted_sparsity 0.8 \
+#    --is_plot \
+#    --set_sparsity_aware_threshold \
+#    --print_sparsity \
+#    --num_epochs 10 \
+#    --train_batch_size 8 \
+#    --test_batch_size 32 \
+#    --dataset_type "$data" \
+#    --gradient_checkpointing True \
+#    --model_name "mistral_sparse_80_percent_\"$data\"_no_gradual_sparsification" \
+#    --seed "$seed" \
+
+    deepspeed  --master_port 30002  experiments/mistral_instruct_tuning.py \
+    --use_wandb \
+    --num_epochs 10 \
+    --train_batch_size 8 \
+    --test_batch_size 32 \
+    --dataset_type "$data" \
+    --gradient_checkpointing True \
+    --model_name "mistral_original_\"$data\"" \
+    --seed "$seed"
+  done
 done
+
