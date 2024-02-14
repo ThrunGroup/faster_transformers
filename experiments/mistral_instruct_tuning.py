@@ -20,6 +20,9 @@ from peft import (
 )
 from evaluate import load
 from transformers.utils import is_sagemaker_mp_enabled, is_sagemaker_dp_enabled
+from deepspeed.runtime.zero.stage_1_and_2 import (
+    estimate_zero2_model_states_mem_needs_all_live,
+)
 
 
 import torch
@@ -254,7 +257,7 @@ def compute_metrics(eval_preds):
 
 
 def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
-    print(f"Using wandb: {use_wandb}")
+    print(f"Config: {exp_config}")
     if use_wandb:
         if is_running_deepspeed():
             if int(os.environ["LOCAL_RANK"]) == 0:
@@ -288,14 +291,17 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             exp_config.print_sparsity
         ) = exp_config.print_act_stats = exp_config.set_sparsity_aware_threshold = False
         exp_config.targeted_sparsity = 0
-        exp_config.sparse_model_dir = None
+        # exp_config.sparse_model_dir = None
+
+    if exp_config.use_relu:
+        exp_config.targeted_sparsity = "ReLU"
 
     run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
 
     # Load dataset
     dataset = get_dataset_for_instruction_tuning(dataset_type, seed=seed)
     formatting_func = get_formatting_func(dataset_type)
-    max_seq_length = 1024
+    max_seq_length = 2048
 
     if is_debugging:
         output_dir = "debugging_output"
@@ -313,7 +319,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         exp_config.use_spm,
         exp_config.sparse_model_dir,
         exp_config.use_lora,
+        exp_config.use_flash_attn,
     )
+    print(estimate_zero2_model_states_mem_needs_all_live(model))
 
     def tokenize(element):
         outputs = tokenizer(
@@ -389,11 +397,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         logging_dir="exp_logs",
         save_total_limit=1,
         load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",
+        metric_for_best_model="eval_accuracy",
         greater_is_better=False,
         # report_to="wandb" if use_wandb else None,
-        gradient_accumulation_steps=2,
-        deepspeed="mistral_ds_config.json" if not is_debugging else None,
+        gradient_accumulation_steps=exp_config.gradient_accumulation_steps,
+        deepspeed=exp_config.ds_config_path if not is_debugging else None,
         per_device_train_batch_size=train_batch_size,
         per_device_eval_batch_size=test_batch_size,
         gradient_checkpointing=gradient_checkpointing,
@@ -405,7 +413,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         data_seed=seed,
     )
 
-    early_stopping = EarlyStoppingCallback(early_stopping_patience=3)
+    early_stopping = EarlyStoppingCallback(
+        early_stopping_patience=3, early_stopping_threshold=0.002
+    )
     trainer = SparseSFTTTrainer(
         model=model,
         # peft_config=peft_config,
@@ -421,6 +431,12 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         callbacks=[early_stopping],
         use_sparse_regularization=exp_config.use_sparse_regularization,
     )
+
+    if gradient_checkpointing:
+        model.gradient_checkpointing_enable(
+            gradient_checkpointing_kwargs={"use_reentrant": False}
+        )
+        model.enable_input_require_grads()  # See https://github.com/huggingface/transformers/issues/23170
 
     if exp_config.use_lora:
         base_model = model.get_base_model()
@@ -445,8 +461,10 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             trainer.evaluate(sampled_train_dataset)
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(base_model, act_hist_path)
-
-        set_sparse_threshold(base_model, exp_config.targeted_sparsity)
+        if exp_config.use_relu:
+            set_sparse_threshold(base_model, 0, True)
+        else:
+            set_sparse_threshold(base_model, exp_config.targeted_sparsity)
 
     # Plot activation histograms
     if is_plot:
@@ -568,9 +586,15 @@ def prepare_sparse_model(
     use_sparse_predictor: bool = False,
     sparse_model_dir: str = None,
     use_lora: bool = True,
+    use_flash_attn: bool = False,
+    base_model_name: str = "mistralai/Mistral-7B-Instruct-v0.1",
+    gradient_checkpointing: bool = False,
 ):
-    print(use_sparse_predictor, sparse_model_dir)
-    if (sparse_model_dir is None) or is_debugging:
+    if use_flash_attn:
+        attn_implementation = "flash_attention_2"
+    else:
+        attn_implementation = None
+    if sparse_model_dir is None:
         if is_debugging:
             config = MistralConfig(
                 hidden_size=64,
@@ -581,10 +605,14 @@ def prepare_sparse_model(
             config = get_sparse_mistral_config(config)
             model = SparseMistralforCausalLM(config=config)
         else:
-            config = MistralConfig.from_pretrained("mistralai/Mistral-7B-Instruct-v0.1")
+            config = MistralConfig.from_pretrained(base_model_name)
             config = get_sparse_mistral_config(config)
+            config.use_cache = False
             model = SparseMistralforCausalLM.from_pretrained(
-                "mistralai/Mistral-7B-Instruct-v0.1", config=config
+                base_model_name,
+                config=config,
+                torch_dtype=torch.bfloat16,
+                attn_implementation=attn_implementation,
             )
 
         if use_sparse_model:
@@ -606,6 +634,8 @@ def prepare_sparse_model(
         model = SparseMistralforCausalLM.from_pretrained(
             sparse_model_dir,
             config=config,
+            torch_dtype=torch.bfloat16,
+            attn_implementation=attn_implementation,
         )
         if use_sparse_predictor:
             svd_model_dir = sparse_model_dir + "_svd"
@@ -635,11 +665,16 @@ def prepare_sparse_model(
     #             for name, params in module.named_parameters():
     #                 params.requires_grad = True
 
-    tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
 
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
+    if gradient_checkpointing:
+        model.gradient_checkpointing_enable(
+            gradient_checkpointing_kwargs={"use_reentrant": False}
+        )
+        model.enable_input_require_grads()  # See https://github.com/huggingface/transformers/issues/23170
     if use_lora:
         peft_config = LoraConfig(
             lora_alpha=16,
@@ -650,7 +685,7 @@ def prepare_sparse_model(
             target_modules=["q_proj", "v_proj", "gate_proj", "up_proj", "down_proj"],
         )
         model = get_peft_model(model, peft_config)
-    print(model.print_trainable_parameters())
+        print(model.print_trainable_parameters())
 
     return model, tokenizer, model.config
 
@@ -677,6 +712,15 @@ def parse_args():
         "--num_epochs", type=int, default=7, help="Number of training epochs"
     )
     parser.add_argument(
+        "--max_steps", type=int, default=-1, help="Number of maximum training steps"
+    )
+    parser.add_argument(
+        "--gradient_accumulation_steps",
+        type=int,
+        default=4,
+        help="Gradient Accumulation Steps",
+    )
+    parser.add_argument(
         "--push_to_hub",
         type=bool,
         default=False,
@@ -691,7 +735,7 @@ def parse_args():
     )
     parser.add_argument(
         "--gradient_checkpointing",
-        type=bool,
+        action="store_true",
         default=False,
         help="Use gradient checkpointing",
     )
@@ -747,10 +791,34 @@ def parse_args():
         help="Whether to use in sparse predictor mask",
     )
     parser.add_argument(
+        "--use_relu",
+        action="store_true",
+        default=False,
+        help="Whether to use ReLU as non-linear activation function",
+    )
+    parser.add_argument(
+        "--use_flash_attn",
+        action="store_true",
+        default=False,
+        help="Whether to use ReLU as non-linear activation function",
+    )
+    parser.add_argument(
+        "--resume_from_checkpoint",
+        action="store_true",
+        default=False,
+        help="Whether to resume training from checkpoint",
+    )
+    parser.add_argument(
         "--sparse_model_dir",
         type=str,
         default=None,
         help="Whether to load fine-tuned sparse model from given directory",
+    )
+    parser.add_argument(
+        "--ds_config_path",
+        type=str,
+        default="mistral_ds_config.json",
+        help="Deepspeed config file path",
     )
     parser.add_argument("--use_lora", action=argparse.BooleanOptionalAction)
     parser.set_defaults(use_lora=True)

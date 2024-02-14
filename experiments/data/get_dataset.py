@@ -5,6 +5,7 @@ from .get_squad_dataset import SQuAD
 from .get_openwebtext_dataset import OpenWebText
 from .get_samsum_dataset_ import Samsum
 from .get_glue_dataset_classification import GLUEDataset
+from .get_refindweb_dataset import RefinedWeb
 
 from utils.constants import (
     COLA,
@@ -14,6 +15,7 @@ from utils.constants import (
     SAMSUM,
     GLUE,
     SUPERGLUE,
+    REFINED_WEB,
     MISTRAL_7B,
 )
 
@@ -32,12 +34,15 @@ def get_dataset(
     :param model: Model to finetune / evaluate
     :return: tokenized dataset, data collator, and compute_metrics function
     """
+    print("DATASET NAME: ", dataset_name)
     if dataset_name == BILLSUM:
         dataset = Billsum(tokenizer, model_type)
     elif dataset_name == SQUAD:
         dataset = SQuAD(tokenizer, model_type)
     elif dataset_name == OPENWEBTEXT:
         dataset = OpenWebText(tokenizer, model_type)
+    elif dataset_name == REFINED_WEB:
+        dataset = RefinedWeb(tokenizer, model_type)
     elif dataset_name == SAMSUM:
         dataset = Samsum(tokenizer, model_type)
     elif dataset_name in GLUE + SUPERGLUE:

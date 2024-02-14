@@ -162,6 +162,103 @@ class SparseSFTTTrainer(SFTTrainer):
     #     return (loss, outputs) if return_outputs else loss
 
 
+class SparseTrainer(Trainer):
+    def __init__(self, *args, **kwargs):
+        self.regularization_coefficient = kwargs.pop("regularization_coefficient", 10)
+        self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", False)
+        self.use_spm_loss = False
+        self.freeze_original_weights = False
+        self.regularization_type = kwargs.pop(
+            "regularization_type", "L1 positive activation"
+        )
+        assert self.regularization_type in [
+            "L2 activation",
+            "L1 positive activation",
+        ], f"Invalid regularization type: {self.regularization_type}"
+        self.sparse_layers = []
+        self.sparse_decoder_layers = []
+        super(SparseTrainer, self).__init__(*args, **kwargs)
+
+    def initialize_sparse_silu_layers(self, model):
+        self.sparse_layers = [
+            m for m in model.modules() if isinstance(m, MistralSparseSiluMLP)
+        ]
+
+    def initialize_sparse_decoder_layers(self, model):
+        self.sparse_decoder_layers = [
+            m for m in model.modules() if isinstance(m, SparseMistralDecoderLayer)
+        ]
+
+    def training_step(
+        self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
+    ) -> torch.Tensor:
+        """
+        Override the huggingface's training_step function to add a regularization term.
+        A regularization term is computed with intermediate values, which are freed after "backward()."
+        You need to set `retain_graph=True` inside `backward` function to keep the values.
+        """
+        model.train()
+        inputs = self._prepare_inputs(inputs)
+
+        with self.compute_loss_context_manager():
+            loss = self.compute_loss(model, inputs)
+
+        if self.args.n_gpu > 1:
+            loss = loss.mean()  # mean() to average on multi-gpu parallel training
+        if not self.freeze_original_weights:
+            if loss is not None:
+                self.accelerator.backward(loss, retain_graph=False)
+
+        if self.use_sparse_regularization:
+            regularization_loss = self.compute_regularization(model)
+            if self.args.n_gpu > 1:
+                regularization_loss = regularization_loss.mean()
+            if regularization_loss is not None:
+                self.accelerator.backward(regularization_loss, retain_graph=True)
+            loss += regularization_loss
+
+        if self.use_spm_loss:
+            spm_loss = self.compute_spm_loss(model)
+            if self.args.n_gpu > 1:
+                spm_loss = spm_loss.mean()
+            if spm_loss is not None:
+                self.accelerator.backward(spm_loss, retain_graph=False)
+            loss += spm_loss
+
+        return loss.detach() / self.args.gradient_accumulation_steps
+
+    def compute_regularization(self, model):
+        """
+        Compute a sparse regularization loss for SiLU
+        """
+        loss = 0
+        if len(self.sparse_layers) == 0:
+            self.initialize_sparse_silu_layers(model)
+        num_layers = len(self.sparse_layers)
+
+        for module in self.sparse_layers:
+            if module.activation_norm is not None:
+                loss += module.activation_norm
+
+        loss /= num_layers
+        loss *= self.regularization_coefficient
+
+        if self.state.global_step % 20 == 0 and loss != 0:
+            print("Negative relularizer loss: ", loss.item())
+        return loss
+
+    def compute_spm_loss(self, model):
+        loss = 0
+        if len(self.sparse_decoder_layers) == 0:
+            self.initialize_sparse_decoder_layers(model)
+        for module in self.sparse_decoder_layers:
+            if module.distill_loss != None:
+                loss += module.distill_loss
+        if self.state.global_step % 20 == 0 and loss != 0:
+            print("Sparse Predictor Distillation loss: ", loss.item())
+        return loss
+
+
 class SparseSiLU(nn.SiLU):
     def __init__(self, threshold):
         super(SparseSiLU, self).__init__()
@@ -195,6 +292,7 @@ class MistralSparseSiluMLP(MistralMLP):
             "regularization_type", "L1 regularization"
         )
         self.regularization_threshold = kwargs.pop("regularization_threshold", 0.5)
+        self.use_relu = kwargs.pop("use_relu", False)
         self.activation_norm = None
 
         # Activation Histograms
@@ -254,7 +352,11 @@ class MistralSparseSiluMLP(MistralMLP):
             post_act = self.act_fn(pre_act)
 
             if self.kill_sparse_swish_outputs:
-                dead_neurons = post_act.abs() <= self.dead_threshold
+                if self.use_relu:
+                    dead_neurons = post_act <= 0
+                else:
+                    dead_neurons = post_act.abs() <= self.dead_threshold
+
                 dead_percentage = dead_neurons.float().mean()
                 agg_sparsity = dead_neurons.all(dim=0).float().mean()
 
@@ -399,8 +501,15 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
 
         return outputs
 
+class SparseMistralConfig(MistralConfig):
+    model_type = "sparse_mistral"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
 class SparseMistralforCausalLM(MistralForCausalLM):
+    config_class = SparseMistralConfig
+
     def __init__(self, config):
         super().__init__(config)
         self.config = config
@@ -423,6 +532,8 @@ class SparseMistralforCausalLM(MistralForCausalLM):
 
     def apply_sparse_predictor(self, init_svd: bool = True):
         apply_mistral_sparse_decoder_layer(self, config=self.config, init_svd=init_svd)
+
+
 
 
 def get_sparse_mistral_config(
@@ -555,18 +666,24 @@ def get_threshold(
     return bin_edges[threshold_idx]
 
 
-def set_sparse_threshold(model, sparsity_level: float):
+def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
     for i, layer in enumerate(model.model.layers):
         if (
             isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
         ):  # Can set the threshold only the relevant statistics is collected.
-            layer.mlp.dead_threshold = get_threshold(
-                layer.mlp.histogram_bins, layer.mlp.post_act_hist_counts, sparsity_level
-            )
-            layer.mlp.sparse_act_fn.set_new_threshold(layer.mlp.dead_threshold)
-            layer.mlp.regularization_threshold = (
-                layer.mlp.dead_threshold * 1.2
-            )  # TODO: find better param
+            if use_relu:
+                layer.mlp.sparse_act_fn = nn.ReLU()
+                layer.use_relu = True
+            else:
+                layer.mlp.dead_threshold = get_threshold(
+                    layer.mlp.histogram_bins,
+                    layer.mlp.post_act_hist_counts,
+                    sparsity_level,
+                )
+                layer.mlp.sparse_act_fn.set_new_threshold(layer.mlp.dead_threshold)
+                layer.mlp.regularization_threshold = (
+                    layer.mlp.dead_threshold * 1.2
+                )  # TODO: find better param
 
 
 def plot_histogram(
