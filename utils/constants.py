@@ -43,6 +43,7 @@ BILLSUM = "billsum"
 WIKITEXT2 = "wikitext-2-raw-v1"
 SQUAD = "squad"
 OPENWEBTEXT = "openwebtext"
+REFINEDWEB = "refined_web"
 SAMSUM = "samsum"
 
 # GLUE
