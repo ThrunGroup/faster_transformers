@@ -41,6 +41,8 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     SparseSFTTTrainer,
     SparseTrainer,
     SparseMistralforCausalLM,
+    GradualSparsificationScheduler,
+    GracefulRegularizationScheduler,
     apply_mistral_sparse_silu_mlp,
     apply_mistral_sparse_decoder_layer,
     activate_stats,
@@ -115,6 +117,15 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     is_plot = exp_config.is_plot
     seed = exp_config.seed
 
+    # Gradual Sparsification
+    use_gradual_sparsification = exp_config.use_gradual_sparsification
+    num_warmup_steps = exp_config.num_warmup_steps
+    increment_ratio = exp_config.increment_ratio
+
+    # Graceful Regularization
+    use_graceful_regularization = exp_config.use_graceful_regularization
+    keep_regularization_with_kill = exp_config.keep_regularization_with_kill
+
     # If not using sparse Mistral model, all flags related to sparse model should be set as zero or false.
     if not exp_config.use_sparse_model:
         exp_config.use_sparse_regularization = (
@@ -142,7 +153,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     )
 
     # Load dataset
-    dataset = get_dataset(dataset_type, tokenizer, MISTRAL_7B)
+    dataset = get_dataset(
+        dataset_type, tokenizer, MISTRAL_7B, max_seq_length=exp_config.max_seq_length
+    )
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
     print(train_dataset, val_dataset, test_dataset)
     data_collator = dataset.get_data_collator()
@@ -194,8 +207,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
         save_total_limit=1,
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",
+        # load_best_model_at_end=True,
+        # metric_for_best_model="eval_loss",
         greater_is_better=False,
         # report_to="wandb" if use_wandb else None,
         gradient_accumulation_steps=exp_config.gradient_accumulation_steps,
@@ -213,7 +226,21 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     )
 
     early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=5, early_stopping_threshold=0.002
+        early_stopping_patience=1000, early_stopping_threshold=0.002
+    )
+    sparsification_scheduler = GradualSparsificationScheduler(
+        num_warmup_steps=num_warmup_steps,
+        increment_ratio=increment_ratio,
+        is_enabled=use_gradual_sparsification,
+        model_name=model_name,
+    )
+    graceful_regularization_scheduler = GracefulRegularizationScheduler(
+        num_warmup_steps=num_warmup_steps,
+        is_enabled=use_graceful_regularization,
+        model_name=model_name,
+        test_dataset=test_dataset,
+        targeted_sparsity=exp_config.targeted_sparsity,
+        keep_regularization_with_kill=keep_regularization_with_kill,
     )
 
     # See https://discuss.huggingface.co/t/using-iterabledataset-with-trainer-iterabledataset-has-no-len/15790/2
@@ -229,7 +256,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         eval_dataset=val_dataset.with_format("torch"),
         # compute_metrics=dataset.compute_metrics,
         # preprocess_logits_for_metrics=dataset.preprocess_logits_for_metrics,
-        callbacks=[early_stopping],
+        callbacks=[],
         use_sparse_regularization=exp_config.use_sparse_regularization,
     )
 
@@ -247,7 +274,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         base_model = model
 
     # Collect statistics and find the threshold for given sparsity
-    if exp_config.set_sparsity_aware_threshold:
+    if not use_graceful_regularization and exp_config.set_sparsity_aware_threshold:
         if is_debugging:
             act_hist_path = "/tmp/pre_finetune__act_hist.pt"
         else:

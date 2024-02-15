@@ -24,6 +24,14 @@ def is_running_deepspeed():
     return "LOCAL_RANK" in os.environ
 
 
+def ds_print(*args, **kwargs):
+    if is_running_deepspeed():
+        if is_mainprocess():
+            print(*args, **kwargs)
+    else:
+        print(*args, **kwargs)
+
+
 def is_mainprocess():
     return int(os.environ["LOCAL_RANK"]) == 0
 

@@ -267,7 +267,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
                 exp_config = wandb.config
             else:
                 wandb.config = exp_config
-            time.sleep(15)
+            time.sleep(10)
         else:
             wandb.init()
             if use_sweep:
@@ -321,7 +321,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         exp_config.sparse_model_dir,
         exp_config.use_lora,
         exp_config.use_flash_attn,
-        base_model_name="mistralai/Mistral-7B-v0.1"
+        base_model_name="mistralai/Mistral-7B-v0.1",
     )
     print(estimate_zero2_model_states_mem_needs_all_live(model))
 
@@ -695,9 +695,7 @@ def prepare_sparse_model(
 
     # Register for AutoConfig and AutoModelforCausalLM
     SparseMistralConfig.register_for_auto_class()
-    SparseMistralforCausalLM.register_for_auto_class(
-        "AutoModelForCausalLM"
-    )
+    SparseMistralforCausalLM.register_for_auto_class("AutoModelForCausalLM")
 
     return model, tokenizer, model.config
 
@@ -759,6 +757,43 @@ def parse_args():
         action="store_true",
         default=False,
         help="Set sparsity aware threshold",
+    )
+    parser.add_argument(
+        "--use_graceful_regularization",
+        action="store_true",
+        default=False,
+        help="Whether to do apply regularization before killing activations",
+    )
+    parser.add_argument(
+        "--use_distillation",
+        action="store_true",
+        default=False,
+        help="Whether to do apply distillation",
+    )
+    parser.add_argument(
+        "--keep_regularization_with_kill",
+        action="store_true",
+        default=False,
+        help="Whether to keep regularization after beginning killing activations",
+    )
+
+    parser.add_argument(
+        "--use_gradual_sparsification",
+        action="store_true",
+        default=False,
+        help="Whether to do gradually increase the threshold for killing neurons",
+    )
+    parser.add_argument(
+        "--num_warmup_steps",
+        type=int,
+        default=40,
+        help="Number of training steps required to reach the dead threshold",
+    )
+    parser.add_argument(
+        "--increment_ratio",
+        type=float,
+        default=0.5,
+        help="By how much to increase the dead threshold",
     )
     parser.add_argument(
         "--print_act_stats",
@@ -831,6 +866,12 @@ def parse_args():
         type=str,
         default="mistral_ds_config.json",
         help="Deepspeed config file path",
+    )
+    parser.add_argument(
+        "--max_seq_length",
+        type=int,
+        default=8096,
+        help="maximum seq length of an input sequence",
     )
     parser.add_argument("--use_lora", action=argparse.BooleanOptionalAction)
     parser.set_defaults(use_lora=True)

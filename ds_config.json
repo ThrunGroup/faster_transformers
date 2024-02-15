@@ -41,7 +41,7 @@
   "load_from_fp32_weights": false,
   "activation_checkpointing": {
     "partition_activations": true,
-    "cpu_checkpointing": true,
+    "cpu_checkpointing": false,
     "contiguous_memory_optimization": true,
     "synchronize_checkpoint_boundary": true,
     "profile": false

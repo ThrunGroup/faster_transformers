@@ -24,6 +24,7 @@ def get_dataset(
     dataset_name: str,
     tokenizer,
     model_type: str,
+    max_seq_length: int = 1024,
 ):
     """
     Tokenize a dataset and get additional data collator and metrics necessary for training the models
@@ -42,7 +43,7 @@ def get_dataset(
     elif dataset_name == OPENWEBTEXT:
         dataset = OpenWebText(tokenizer, model_type)
     elif dataset_name == REFINED_WEB:
-        dataset = RefinedWeb(tokenizer, model_type)
+        dataset = RefinedWeb(tokenizer, model_type, max_seq_length=max_seq_length,)
     elif dataset_name == SAMSUM:
         dataset = Samsum(tokenizer, model_type)
     elif dataset_name in GLUE + SUPERGLUE:
