@@ -524,6 +524,7 @@ class SparseMistralforCausalLM(MistralForCausalLM):
                     if isinstance(m.mlp, MistralSparseSiluMLP):
                         m.mlp.dead_threshold = config.thresholds[idx]
                         m.mlp.sparse_act_fn.set_new_threshold(m.mlp.dead_threshold)
+                        m.mlp.kill_sparse_swish_outputs = True
         if config.use_sparse_predictor:
             self.apply_sparse_predictor(init_svd=config.init_svd)
 
@@ -678,7 +679,7 @@ def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
         ):  # Can set the threshold only the relevant statistics is collected.
             if use_relu:
                 layer.mlp.sparse_act_fn = nn.ReLU()
-                layer.use_relu = True
+                layer.mlp.use_relu = True
             else:
                 layer.mlp.dead_threshold = get_threshold(
                     layer.mlp.histogram_bins,

@@ -76,7 +76,7 @@ from utils.constants import (
     SST2,
     WIC,
 )
-from format_dataset_for_instruction_tuning import (
+from experiments.format_dataset_for_instruction_tuning import (
     get_formatting_func,
     get_dataset_for_instruction_tuning,
 )
@@ -321,6 +321,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         exp_config.sparse_model_dir,
         exp_config.use_lora,
         exp_config.use_flash_attn,
+        base_model_name="mistralai/Mistral-7B-v0.1"
     )
     print(estimate_zero2_model_states_mem_needs_all_live(model))
 
@@ -529,7 +530,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             act_hist_path = "/tmp/post_finetune__act_hist.pt"
         else:
             act_hist_path = (
-                "/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
+                f"/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
             )
         save_act_hist(model, act_hist_path)
         plot_act(model)

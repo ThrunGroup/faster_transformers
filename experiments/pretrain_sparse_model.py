@@ -125,7 +125,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if exp_config.use_relu:
         exp_config.targeted_sparsity = "ReLU"
 
-    run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
+    run_name = f"{model_name}_{dataset_type}_{int(exp_config.targeted_sparsity * 100)}p"
 
     # Load model
     model, tokenizer, config = prepare_sparse_model(
@@ -156,7 +156,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     # Use only 1000 samples of training dataset to collect statistics
     if exp_config.set_sparsity_aware_threshold:
-        sampled_train_dataset = train_dataset.select(range(10))
+        sampled_train_dataset = test_dataset
 
     if use_wandb:
         if is_debugging:
@@ -184,8 +184,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         output_dir=output_dir,
         evaluation_strategy="steps",
         eval_steps=25,  # early stopping counts only when eval step and save step match
-        max_steps=-1 if is_debugging else exp_config.max_steps,
-        # save_steps=50,
+        max_steps=10 if is_debugging else exp_config.max_steps,
+        save_steps=50,
         logging_steps=5,
         save_strategy="steps",
         learning_rate=1e-5,
@@ -204,7 +204,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         gradient_checkpointing=gradient_checkpointing,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         bf16=True if not is_debugging else False,
-        ddp_find_unused_parameters=True,
+        # ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{run_name}",
         push_to_hub=push_to_hub,
         seed=seed,
@@ -223,7 +223,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         tokenizer=tokenizer,
         data_collator=data_collator,
         args=trainer_config,
-        train_dataset=train_dataset.with_format("torch"),
+        train_dataset=train_dataset.with_format("torch"), #train_dataset.with_format("torch"),
         eval_dataset=val_dataset.with_format("torch"),
         # compute_metrics=dataset.compute_metrics,
         # preprocess_logits_for_metrics=dataset.preprocess_logits_for_metrics,
@@ -235,6 +235,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         model.gradient_checkpointing_enable(
             gradient_checkpointing_kwargs={"use_reentrant": False}
         )
+        config.use_cache = False
+        model.config.use_cache = False
         # model.enable_input_require_grads()  # See https://github.com/huggingface/transformers/issues/23170
 
     if exp_config.use_lora:
@@ -337,8 +339,10 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             model.config.thresholds = thresholds
         model.config.save_pretrained(output_dir)
         model.save_pretrained(output_dir)
+        tokenizer.save_pretrained(output_dir)
 
     if push_to_hub:
+        trainer.model = model
         trainer.push_to_hub()
 
     # Early Exit/ Early Entry experiments
