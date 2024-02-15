@@ -415,6 +415,45 @@ __global__ void fuse_gemv_flag_mem128_kernel(half* input, half* weight, half* ou
     }
 }
 
+__global__ void fuse_gemv_flag_mem256_kernel(half* input, half* weight, half* output, bool* flag, float threshold) {
+    int m = blockIdx.x;
+    int warp_id = threadIdx.y;
+    int lane_id = threadIdx.x;
+    __shared__ half2 temp_result[8];
+    half2* local_weight_ptr = (half2*)(weight + m * N + 512 * warp_id + 2 * lane_id);
+    half2* local_input_ptr = (half2*)(input + 512 * warp_id + 2 * lane_id);
+
+    thread_block_tile<32, thread_block> group = tiled_partition<32>(this_thread_block());
+    // Accumulate to local (first land)
+    // First lane stores the accumulated result to the shared memory
+    // First warp reduces the shared memory, and atomically add to the global memory
+    const half2 zerohf2 = __float2half2_rn(0.0f);
+    half2 sum = zerohf2;
+#pragma unroll
+    for (int i = 0; i < 256; i+=32) {
+        half2 w = local_weight_ptr[i];
+        half2 x = local_input_ptr[i];
+        sum = __hfma2(w, x, sum);
+    }
+    for (int i = 16; i > 0; i /= 2) {
+        sum = __hadd2(sum, group.shfl_down(sum, i));
+    }
+    if (lane_id == 0) {
+        temp_result[warp_id] = sum;
+    }
+    __syncthreads();
+    if (warp_id == 0 and lane_id == 0) {
+        #pragma unroll
+        for (int i = 1; i < 8; i++) {
+            sum = __hadd2(sum, temp_result[i]);
+        }
+        float sum_f = __half2float(__hadd(sum.x, sum.y));
+        sum_f = sum_f / (1 + ptx_exp2(-sum_f * log2e)); // x * sigmoid(x)
+        flag[m] = fabsf(sum_f) > threshold;
+        output[m] = __float2half_rn(sum_f);
+    }
+}
+
 __global__ void fuse_gemv_flag_mem256_2_kernel(half* input, half* weight, half* output, bool* flag, float threshold) {
     int mz = threadIdx.z;
     int m = blockIdx.x * 2 + mz;
@@ -518,12 +557,12 @@ void fuse_gemv_flag_dispatch(const at::Tensor &input, const at::Tensor &weight, 
     half* output_data = reinterpret_cast<half*>(output.data_ptr());
     bool* flag_data = reinterpret_cast<bool*>(flag.data_ptr());
 
-    // dim3 gridDim(M,1,1);
+    dim3 gridDim(M,1,1);
     // dim3 blockDim(32,4,1);
     // fuse_gemv_flag_mem128_kernel<<<gridDim, blockDim>>>(input_data, weight_data, output_data, flag_data, static_cast<float>(threshold));
-    // dim3 blockDim(32,8,1);
+    dim3 blockDim(32,8,1);
     // fuse_gemv_flag_mem_kernel<<<gridDim, blockDim>>>(input_data, weight_data, output_data, flag_data, static_cast<float>(threshold));
-    // fuse_gemv_flag_mem256_kernel<<<gridDim, blockDim>>>(input_data, weight_data, output_data, flag_data, static_cast<float>(threshold));
+    fuse_gemv_flag_mem256_kernel<<<gridDim, blockDim>>>(input_data, weight_data, output_data, flag_data, static_cast<float>(threshold));
     // dim3 blockDim(32,32,1);
     // fuse_gemv_flag_kernel<<<gridDim, blockDim>>>(input_data, weight_data, output_data, flag_data, static_cast<float>(threshold));
     // fuse_gemv_flag_opt_kernel<<<gridDim, blockDim>>>(input_data, weight_data, output_data, flag_data, static_cast<float>(threshold));
@@ -534,9 +573,9 @@ void fuse_gemv_flag_dispatch(const at::Tensor &input, const at::Tensor &weight, 
     // dim3 gridDim(M/2,1,1);
     // dim3 blockDim(32,8,2);
     // fuse_gemv_flag_mem256_2_kernel<<<gridDim, blockDim>>>(input_data, weight_data, output_data, flag_data, static_cast<float>(threshold));
-    dim3 gridDim(M/4,1,1);
-    dim3 blockDim(32,8,4);
-    fuse_gemv_flag_mem256_4_kernel<<<gridDim, blockDim>>>(input_data, weight_data, output_data, flag_data, static_cast<float>(threshold));
+    // dim3 gridDim(M/4,1,1);
+    // dim3 blockDim(32,8,4);
+    // fuse_gemv_flag_mem256_4_kernel<<<gridDim, blockDim>>>(input_data, weight_data, output_data, flag_data, static_cast<float>(threshold));
     // cudaDeviceSynchronize();
     // gpuErrchk(cudaGetLastError());
 }

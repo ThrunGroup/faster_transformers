@@ -61,7 +61,11 @@ def bench_flag():
     flag = torch.zeros(14336, dtype=torch.bool).cuda()
     flash_gemv.fuse_gemv_flag(input, weight_t, value, flag, threshold)
     torch.cuda.synchronize()
+    act_fn = nn.SiLU()
+    golden_value = torch.abs(act_fn(torch.matmul(input, weight)))
+    golden_flag = (golden_value > threshold)
+    print(golden_flag.shape)
 
 if __name__ == '__main__':
-    bench_flag()
-    # test_flag()
+    # bench_flag()
+    test_flag()

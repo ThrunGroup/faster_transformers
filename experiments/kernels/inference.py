@@ -114,35 +114,36 @@ class FusePrunedMistralMLP(MistralMLP):
     ):
         super().__init__(config)
         self.fc2_weight_t = self.register_buffer("fc2_weigth_t", None)
+        self.value = torch.zeros(1, 1, 14336).half().cuda()
+        self.flag = torch.zeros(14336, dtype=torch.bool).cuda()
 
 
-    def forward(self, x):
-        if (x.shape[1] != 1): # batch size > 1
-            return super().forward(x)
-        idx = torch.zeros(self.config.intermediate_size, dtype=torch.int64).cuda()
-        value = torch.zeros(1, 1, self.config.intermediate_size).half().cuda()
-        # print(x.shape, idx.shape, value.shape, self.gate_proj.weight.shape, self.up_proj.weight.shape, self.fc2_weight_t.shape)
-        nnz = flash_gemv.fuse_gemv_cmp(x, self.gate_proj.weight, value, idx, self.threshold)
-        # print(nnz)
-        idx_sorted, indices = torch.sort(idx[:nnz])
-        value_sorted = value[0][0][indices]
-        x_2 = mistral_mlp_sparse_direct_index_3d(x, value_sorted, self.up_proj.weight, self.fc2_weight_t, idx_sorted, nnz)
-        return x_2
-        
     # def forward(self, x):
-    #     if (x.shape[1] != 1):
+    #     if (x.shape[1] != 1): # batch size > 1
     #         return super().forward(x)
-    #     value = torch.zeros(1, 1, 14336).half().cuda()
-    #     flag = torch.zeros(14336, dtype=torch.bool).cuda()
-    #     flash_gemv.fuse_gemv_flag(x, self.gate_proj.weight, value, flag, self.threshold)
-    #     x_2 = mistral_mlp_sparse_direct_flag_3d(
-    #         x, # 0 is the beam dimension
-    #         value,
-    #         self.up_proj.weight,
-    #         self.fc2_weight_t,
-    #         flag,
-    #     )
+    #     idx = torch.zeros(self.config.intermediate_size, dtype=torch.int64).cuda()
+    #     value = torch.zeros(1, 1, self.config.intermediate_size).half().cuda()
+    #     # print(x.shape, idx.shape, value.shape, self.gate_proj.weight.shape, self.up_proj.weight.shape, self.fc2_weight_t.shape)
+    #     nnz = flash_gemv.fuse_gemv_cmp(x, self.gate_proj.weight, value, idx, self.threshold)
+    #     # print(nnz)
+    #     idx_sorted, indices = torch.sort(idx[:nnz])
+    #     value_sorted = value[0][0][indices]
+    #     x_2 = mistral_mlp_sparse_direct_index_3d(x, value_sorted, self.up_proj.weight, self.fc2_weight_t, idx_sorted, nnz)
     #     return x_2
+        
+    def forward(self, x):
+        if (x.shape[1] != 1):
+            return super().forward(x)
+
+        flash_gemv.fuse_gemv_flag(x, self.gate_proj.weight, self.value, self.flag, self.threshold)
+        x_2 = mistral_mlp_sparse_direct_flag_3d(
+            x, # 0 is the beam dimension
+            self.value,
+            self.up_proj.weight,
+            self.fc2_weight_t,
+            self.flag,
+        )
+        return x_2
 
 
 class AsyncMistralFlashAttention2(MistralAttention):
