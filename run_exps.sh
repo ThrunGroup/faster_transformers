@@ -4,12 +4,10 @@
 # deepspeed experiments/mistral_instruct_tuning.py --use_wandb --use_sparse_model --targeted_sparsity 0.99 \
 # --set_sparsity_aware_threshold --print_sparsity --train_batch_size 2 --test_batch_size 2 --use_sparse_regularization
 
-source /sailhome/vxbrando/.bashrc
-conda activate mistral
-
 deepspeed experiments/pretrain_sparse_model.py --use_sparse_model --targeted_sparsity 0.70 \
 --set_sparsity_aware_threshold --print_sparsity --use_wandb --num_epochs 1 --gradient_checkpointing --model_save \
---train_batch_size 1 --test_batch_size 1 --use_flash_attn --max_steps 20000 --gradient_accumulation_steps 8
+--train_batch_size 1 --test_batch_size 1 --use_flash_attn --max_steps 2000 --gradient_accumulation_steps 8 \
+--push_to_hub  --is_debugging
 
 ## Define an array of targeted sparsity values
 #targeted_sparsity_values=(0.5 0.7 0.8 0.9)

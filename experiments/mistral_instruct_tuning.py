@@ -56,6 +56,7 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     enable_sparse_predictor,
     disable_sparse_predictor,
     get_sparse_mistral_config,
+    GracefulRegularizationScheduler,
 )
 from experiments.models.sparse_mistral.svd_router import SparsePredictor
 from utils.mistral_utils import compress_mistral
@@ -237,9 +238,7 @@ def preprocess_logits_for_metrics(logits, labels):
 
     # Compare and get the index where the value is larger
     # If the value at c1 is greater, return c1; otherwise, return c2
-    max_value_indices = torch.where(
-        values_at_yes > values_at_no, MISTRAL_YES_ID, MISTRAL_NO_ID
-    )
+    max_value_indices = torch.where(values_at_yes > values_at_no, MISTRAL_YES_ID, MISTRAL_NO_ID)
 
     return max_value_indices
 
@@ -285,6 +284,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     dataset_type = exp_config.dataset_type
     is_plot = exp_config.is_plot
     seed = exp_config.seed
+    use_graceful_regularization = exp_config.use_graceful_regularization
 
     # If not using sparse Mistral model, all flags related to sparse model should be set as zero or false.
     if not exp_config.use_sparse_model:
@@ -321,7 +321,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         exp_config.sparse_model_dir,
         exp_config.use_lora,
         exp_config.use_flash_attn,
-        base_model_name="mistralai/Mistral-7B-v0.1"
+        base_model_name="mistralai/Mistral-7B-v0.1",
     )
     print(estimate_zero2_model_states_mem_needs_all_live(model))
 
@@ -388,10 +388,10 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     trainer_config = TrainingArguments(
         output_dir=output_dir,
         evaluation_strategy="steps",
-        eval_steps=50,  # early stopping counts only when eval step and save step match
+        eval_steps=100,  # early stopping counts only when eval step and save step match
         max_steps=10 if is_debugging else -1,
         # save_steps=50,
-        logging_steps=5,
+        logging_steps=10,
         save_strategy="steps",
         learning_rate=1e-5,
         weight_decay=0.01,
@@ -415,9 +415,15 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         data_seed=seed,
     )
 
-    early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=3, early_stopping_threshold=0.002
+    early_stopping = EarlyStoppingCallback(early_stopping_patience=3, early_stopping_threshold=0.002)
+    graceful_regularization_scheduler = GracefulRegularizationScheduler(
+        num_warmup_steps=100,
+        is_enabled=use_graceful_regularization,
+        model_name=model_name,
+        test_dataset=test_dataset,
+        targeted_sparsity=exp_config.targeted_sparsity,
     )
+
     trainer = SparseSFTTTrainer(
         model=model,
         # peft_config=peft_config,
@@ -430,14 +436,13 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         eval_dataset=Dataset.from_dict(dataset["validation"][:]),
         compute_metrics=compute_metrics,
         preprocess_logits_for_metrics=preprocess_logits_for_metrics,
-        callbacks=[early_stopping],
+        callbacks=[early_stopping, graceful_regularization_scheduler],
         use_sparse_regularization=exp_config.use_sparse_regularization,
     )
+    graceful_regularization_scheduler.set_trainer(trainer)
 
     if gradient_checkpointing:
-        model.gradient_checkpointing_enable(
-            gradient_checkpointing_kwargs={"use_reentrant": False}
-        )
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
         model.enable_input_require_grads()  # See https://github.com/huggingface/transformers/issues/23170
 
     if exp_config.use_lora:
@@ -446,13 +451,12 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         base_model = model
 
     # Collect statistics and find the threshold for given sparsity
-    if exp_config.set_sparsity_aware_threshold:
+    if not use_graceful_regularization and exp_config.set_sparsity_aware_threshold:
         if is_debugging:
             act_hist_path = "/tmp/pre_finetune__act_hist.pt"
         else:
-            act_hist_path = (
-                f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist.pt"
-            )
+            # act_hist_path = f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist.pt"
+            act_hist_path = f"/matx/u/lukeai/histograms/{exp_config.targeted_sparsity}/act_hist.pt"
 
         activate_stats(base_model)
         if os.path.exists(act_hist_path):
@@ -468,16 +472,16 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         else:
             set_sparse_threshold(base_model, exp_config.targeted_sparsity)
 
-    # Plot activation histograms
-    if is_plot:
-        if is_running_deepspeed():
-            if is_mainprocess():
+        # Plot activation histograms
+        if is_plot:
+            if is_running_deepspeed():
+                if is_mainprocess():
+                    plot_act(base_model)
+            else:
                 plot_act(base_model)
-        else:
-            plot_act(base_model)
 
-    # Train Model after deactivating collecting statistics
-    deactivate_stats(base_model)
+        # Train Model after deactivating collecting statistics
+        deactivate_stats(base_model)
 
     # Only use distillation loss if training sparse predictor
     if exp_config.use_spm:
@@ -494,9 +498,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
             enable_sparse_predictor(base_model)
         else:
-            warnings.warn(
-                "use_spm arg is ignored as use_spare_model arg is not activated."
-            )
+            warnings.warn("use_spm arg is ignored as use_spare_model arg is not activated.")
     trainer.train()
 
     # Evaluate on test dataset
@@ -508,9 +510,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         if exp_config.use_sparse_model:
             enable_sparse_predictor(model)
         else:
-            warnings.warn(
-                "use_spm arg is ignored as use_spare_model arg is not activated."
-            )
+            warnings.warn("use_spm arg is ignored as use_spare_model arg is not activated.")
 
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
@@ -529,9 +529,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         if is_debugging:
             act_hist_path = "/tmp/post_finetune__act_hist.pt"
         else:
-            act_hist_path = (
-                f"/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
-            )
+            # act_hist_path = f"/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
+            act_hist_path = f"histograms/{model_name}/{dataset_type}_act_hist.pt"
         save_act_hist(model, act_hist_path)
         plot_act(model)
 
@@ -623,15 +622,11 @@ def prepare_sparse_model(
 
         if use_sparse_model:
             model.config.use_sparse_model = use_sparse_model
-            apply_mistral_sparse_silu_mlp(
-                model, model.config, use_sparse_regularization=use_sparse_regularization
-            )
+            apply_mistral_sparse_silu_mlp(model, model.config, use_sparse_regularization=use_sparse_regularization)
             enable_sparse_silu(model)
         if use_sparse_predictor:
             model.config.use_sparse_predictor = use_sparse_predictor
-            apply_mistral_sparse_decoder_layer(
-                model, model.config, init_svd=not is_debugging
-            )
+            apply_mistral_sparse_decoder_layer(model, model.config, init_svd=not is_debugging)
         if use_sparse_regularization:
             model.config.us_sparse_regularization = use_sparse_regularization
     else:
@@ -677,9 +672,7 @@ def prepare_sparse_model(
     tokenizer.padding_side = "right"
 
     if gradient_checkpointing:
-        model.gradient_checkpointing_enable(
-            gradient_checkpointing_kwargs={"use_reentrant": False}
-        )
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
         model.enable_input_require_grads()  # See https://github.com/huggingface/transformers/issues/23170
     if use_lora:
         peft_config = LoraConfig(
@@ -695,17 +688,13 @@ def prepare_sparse_model(
 
     # Register for AutoConfig and AutoModelforCausalLM
     SparseMistralConfig.register_for_auto_class()
-    SparseMistralforCausalLM.register_for_auto_class(
-        "AutoModelForCausalLM"
-    )
+    SparseMistralforCausalLM.register_for_auto_class("AutoModelForCausalLM")
 
     return model, tokenizer, model.config
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Training script for text classification"
-    )
+    parser = argparse.ArgumentParser(description="Training script for text classification")
 
     parser.add_argument(
         "--seed",
@@ -713,19 +702,11 @@ def parse_args():
         default=0,
         help="Random Seed",
     )
-    parser.add_argument(
-        "--model_name", type=str, default="Mistral_Sparse", help="Name of the model"
-    )
+    parser.add_argument("--model_name", type=str, default="Mistral_Sparse", help="Name of the model")
     parser.add_argument("--dataset_type", type=str, default="cola", help="Dataset Type")
-    parser.add_argument(
-        "--output_dir", type=str, default="/scr/jay/ckpt", help="Output Directory"
-    )
-    parser.add_argument(
-        "--num_epochs", type=float, default=7, help="Number of training epochs"
-    )
-    parser.add_argument(
-        "--max_steps", type=int, default=-1, help="Number of maximum training steps"
-    )
+    parser.add_argument("--output_dir", type=str, default="/scr/jay/ckpt", help="Output Directory")
+    parser.add_argument("--num_epochs", type=float, default=7, help="Number of training epochs")
+    parser.add_argument("--max_steps", type=int, default=-1, help="Number of maximum training steps")
     parser.add_argument(
         "--gradient_accumulation_steps",
         type=int,
@@ -739,12 +720,8 @@ def parse_args():
         help="Whether to push the model to Hugging Face Hub",
     )
     parser.add_argument("--model_save", action="store_true", default=False)
-    parser.add_argument(
-        "--train_batch_size", type=int, default=8, help="Training batch size"
-    )
-    parser.add_argument(
-        "--test_batch_size", type=int, default=8, help="Testing batch size"
-    )
+    parser.add_argument("--train_batch_size", type=int, default=8, help="Training batch size")
+    parser.add_argument("--test_batch_size", type=int, default=8, help="Testing batch size")
     parser.add_argument(
         "--gradient_checkpointing",
         action="store_true",
@@ -831,6 +808,12 @@ def parse_args():
         type=str,
         default="mistral_ds_config.json",
         help="Deepspeed config file path",
+    )
+    parser.add_argument(
+        "--use_graceful_regularization",
+        action="store_true",
+        default=False,
+        help="Whether to do apply regularization before killing activations",
     )
     parser.add_argument("--use_lora", action=argparse.BooleanOptionalAction)
     parser.set_defaults(use_lora=True)
