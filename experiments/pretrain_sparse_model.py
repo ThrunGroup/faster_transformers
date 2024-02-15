@@ -96,6 +96,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
                 exp_config = wandb.config
             else:
                 wandb.config = exp_config
+            time.sleep(15)
         else:
             wandb.init()
             if use_sweep:
@@ -209,7 +210,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         push_to_hub=push_to_hub,
         seed=seed,
         data_seed=seed,
-
     )
 
     early_stopping = EarlyStoppingCallback(
@@ -223,7 +223,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         tokenizer=tokenizer,
         data_collator=data_collator,
         args=trainer_config,
-        train_dataset=train_dataset.with_format("torch"), #train_dataset.with_format("torch"),
+        train_dataset=train_dataset.with_format(
+            "torch"
+        ),  # train_dataset.with_format("torch"),
         eval_dataset=val_dataset.with_format("torch"),
         # compute_metrics=dataset.compute_metrics,
         # preprocess_logits_for_metrics=dataset.preprocess_logits_for_metrics,
