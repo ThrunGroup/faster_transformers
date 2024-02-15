@@ -31,5 +31,37 @@ def test():
 
     # assert torch.allclose(value[0][0][idx_sorted], golden)
 
+def test_flag():
+    torch.manual_seed(0)
+    input = torch.randn(1, 1, 4096).half().cuda()
+    weight = torch.randn(4096, 14336).half().cuda()
+    weight_t = weight.t().contiguous()
+    threshold = 0.1
+    value = torch.zeros(1, 1, 14336).half().cuda()
+    flag = torch.zeros(14336, dtype=torch.bool).cuda()
+    flash_gemv.fuse_gemv_flag(input, weight_t, value, flag, threshold)
+    torch.cuda.synchronize()
+    indices = torch.nonzero(flag, as_tuple=True)
+    act_fn = nn.SiLU()
+    golden_value = torch.abs(act_fn(torch.matmul(input, weight)))
+    golden_flag = (golden_value > threshold).squeeze(0).squeeze(0)
+    golden_indices = torch.nonzero(golden_flag, as_tuple=True)
+
+    print(torch.nonzero(torch.logical_xor(flag, golden_flag)))
+    print(value[0][0][indices])
+    print(golden_value[0][0][golden_indices])
+
+def bench_flag():
+    torch.manual_seed(0)
+    input = torch.randn(1, 1, 4096).half().cuda()
+    weight = torch.randn(4096, 14336).half().cuda()
+    weight_t = weight.t().contiguous()
+    threshold = 0.1
+    value = torch.zeros(1, 1, 14336).half().cuda()
+    flag = torch.zeros(14336, dtype=torch.bool).cuda()
+    flash_gemv.fuse_gemv_flag(input, weight_t, value, flag, threshold)
+    torch.cuda.synchronize()
+
 if __name__ == '__main__':
-    test()
+    bench_flag()
+    # test_flag()

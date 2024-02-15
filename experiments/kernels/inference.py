@@ -13,8 +13,9 @@ import inspect
 import os
 import json
 import argparse
-from kernels import mistral_mlp_sparse_direct_flag, gather_gemv2_flag, gather_transposed_gemv_flag, mistral_mlp_sparse_direct_flag_3d, mistral_mlp_sparse_direct_flag_beam
+from kernels import mistral_mlp_sparse_direct_flag, gather_gemv2_flag, gather_transposed_gemv_flag, mistral_mlp_sparse_direct_flag_3d, mistral_mlp_sparse_direct_flag_beam, mistral_mlp_sparse_direct_index_3d 
 
+import flash_gemv
 import scipy.stats.mstats as mstats
 from transformers.activations import ACT2FN
 from transformers.models.mistral.modeling_mistral import (
@@ -96,6 +97,7 @@ class PrunedMistralMLP(MistralMLP):
         #     self.fc2_weight_t,
         #     torch.abs(x_1) > self.threshold,
         # )
+        # print(torch.nonzero(torch.abs(x_1[0]) > self.threshold).shape)
         x_2 = mistral_mlp_sparse_direct_flag_beam(
             x, # 0 is the beam dimension
             x_1,
@@ -104,6 +106,44 @@ class PrunedMistralMLP(MistralMLP):
             torch.abs(x_1[0]) > self.threshold,
         )
         return x_2
+
+class FusePrunedMistralMLP(MistralMLP):
+    def __init__(
+            self,
+            config,
+    ):
+        super().__init__(config)
+        self.fc2_weight_t = self.register_buffer("fc2_weigth_t", None)
+
+
+    def forward(self, x):
+        if (x.shape[1] != 1): # batch size > 1
+            return super().forward(x)
+        idx = torch.zeros(self.config.intermediate_size, dtype=torch.int64).cuda()
+        value = torch.zeros(1, 1, self.config.intermediate_size).half().cuda()
+        # print(x.shape, idx.shape, value.shape, self.gate_proj.weight.shape, self.up_proj.weight.shape, self.fc2_weight_t.shape)
+        nnz = flash_gemv.fuse_gemv_cmp(x, self.gate_proj.weight, value, idx, self.threshold)
+        # print(nnz)
+        idx_sorted, indices = torch.sort(idx[:nnz])
+        value_sorted = value[0][0][indices]
+        x_2 = mistral_mlp_sparse_direct_index_3d(x, value_sorted, self.up_proj.weight, self.fc2_weight_t, idx_sorted, nnz)
+        return x_2
+        
+    # def forward(self, x):
+    #     if (x.shape[1] != 1):
+    #         return super().forward(x)
+    #     value = torch.zeros(1, 1, 14336).half().cuda()
+    #     flag = torch.zeros(14336, dtype=torch.bool).cuda()
+    #     flash_gemv.fuse_gemv_flag(x, self.gate_proj.weight, value, flag, self.threshold)
+    #     x_2 = mistral_mlp_sparse_direct_flag_3d(
+    #         x, # 0 is the beam dimension
+    #         value,
+    #         self.up_proj.weight,
+    #         self.fc2_weight_t,
+    #         flag,
+    #     )
+    #     return x_2
+
 
 class AsyncMistralFlashAttention2(MistralAttention):
     """
@@ -477,7 +517,7 @@ class AsyncSparseMistralDecoderLayer(MistralDecoderLayer):
         **kwargs,
     ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:        
         residual = hidden_states
-
+        
         hidden_states = self.input_layernorm(hidden_states)
 
         # Self Attention
@@ -610,14 +650,14 @@ def load_svd_weights_attn(model, path):
 
 def transpose_weights(model):
     for layer in model.model.layers:
-        assert isinstance(layer.mlp, PrunedMistralMLP) or isinstance(layer.mlp, FlagMistralMLP)
+        assert isinstance(layer.mlp, PrunedMistralMLP) or isinstance(layer.mlp, FlagMistralMLP) or isinstance(layer.mlp, FusePrunedMistralMLP)
         layer.mlp.fc2_weight_t = layer.mlp.down_proj.weight.t().contiguous()
 
 def load_thresholds(model, path):
     with open(path, "r") as f:
         thresholds = json.load(f)
     for i, layer in enumerate(model.model.layers):
-        assert isinstance(layer.mlp, PrunedMistralMLP)
+        assert isinstance(layer.mlp, PrunedMistralMLP) or isinstance(layer.mlp, FusePrunedMistralMLP)
         layer.mlp.threshold = thresholds[str(i)]
 
 def load_threshold_pred(model, ths_path):
@@ -656,6 +696,9 @@ def replace_decoder_layer_async_attn(model, config):
         new_layers.append(AsyncSparseAsyncAttnMistralDecoderLayer(config=config, layer_id=layer_id))
     model.model.layers = nn.ModuleList(new_layers)
 
+def replace_fuse_mlp(model, config):
+    for layer in model.model.layers:
+        layer.mlp = FusePrunedMistralMLP(config).to(torch.float16).to("cuda").eval()
 
 # https://github.com/huggingface/transformers/issues/22222
 def generate_sentence(tokenizer, model, prompt: str, prompt_tokens: int = 64, max_tokens: int = 128, num_return_sequences: int = 3, num_beams: int = 4):
@@ -691,8 +734,8 @@ def benchmark_sentence(tokenizer, model, prompt: str, prompt_tokens: int = 64, m
         torch.cuda.synchronize()
         start_event.record()
         output_ids = model.generate(inputs, do_sample=True, max_new_tokens=max_new_tokens, pad_token_id=2, num_return_sequences=num_return_sequences, temperature=0.7, num_beams=num_beams)
-        torch.cuda.synchronize()
         end_event.record()
+        torch.cuda.synchronize()
         elapsed_time_ms = start_event.elapsed_time(end_event)
         gen_length = output_ids.shape[-1] - inputs.shape[1]
         elapsed_times.append(elapsed_time_ms)
@@ -774,6 +817,10 @@ def benchmark_generation(context_length, generation_length, prompt_path="text.tx
         load_threshold_pred_attn(model, ths_path)
         load_svd_weights_attn(model, svd_path)
         model = model.to(torch.float16).to("cuda").eval()
+    elif sparse_mode == 4:
+        replace_fuse_mlp(model, config)
+        load_thresholds(model, ths_path)
+        transpose_weights(model)
 
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
@@ -783,7 +830,7 @@ def benchmark_generation(context_length, generation_length, prompt_path="text.tx
     f.close()
 
 
-    benchmark_decoding(tokenizer, model, full_string, context_length, generation_length, num_beams=num_beams)
+    benchmark_sentence(tokenizer, model, full_string, prompt_tokens=context_length, max_tokens=generation_length, num_return_sequences=1, num_beams=num_beams)
     # throughputs, elapsed_times, gen_lengths = benchmark_sentence(tokenizer, model, full_string, prompt_tokens=context_length, max_tokens=generation_length, num_return_sequences=1, num_beams=num_beams)
     # for (tp, et, gl) in zip(throughputs, elapsed_times, gen_lengths):
     #     print("Throughput: {:.2f} tokens/s; Elapsed time: {} ms; Generation Length: {}".format(tp, et, gl))
