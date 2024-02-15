@@ -48,8 +48,34 @@ def test_flag():
     golden_indices = torch.nonzero(golden_flag, as_tuple=True)
 
     print(torch.nonzero(torch.logical_xor(flag, golden_flag)))
-    print(value[0][0][indices])
-    print(golden_value[0][0][golden_indices])
+    print(value[:][:][indices])
+    print(golden_value[:][:][golden_indices])
+
+def test_flag_gemv():
+    torch.manual_seed(0)
+    input = torch.randn(1, 1, 4096).half().cuda()
+    wgate = torch.randn(4096, 14336).half().cuda()
+    wgate_t = wgate.t().contiguous()
+    wup = torch.randn(4096, 14336).half().cuda()
+    wup_t = wup.t().contiguous()
+    threshold = 0.1
+    value = torch.zeros(1, 1, 14336).half().cuda()
+    flag = torch.zeros(14336, dtype=torch.bool).cuda()
+    flash_gemv.fuse_gemv_flag_gemv(input, wgate_t, wup_t, value, flag, threshold)
+    torch.cuda.synchronize()
+    indices = torch.nonzero(flag, as_tuple=True)
+    act_fn = nn.SiLU()
+    golden_inter = torch.abs(act_fn(torch.matmul(input, wgate)))
+    golden_inter = golden_inter.squeeze(0).squeeze(0)
+    golden_flag = (golden_inter > threshold)
+    golden_flag_not = ~golden_flag
+    input[golden_flag_not] = 0
+    golden_value = torch.matmul(input, wup) * golden_inter
+    golden_value = golden_value.unsqueeze(0).unsqueeze(0)
+    golden_indices = torch.nonzero(golden_flag, as_tuple=True)
+    print(indices)
+    print(golden_indices)
+
 
 def bench_flag():
     torch.manual_seed(0)
@@ -67,5 +93,5 @@ def bench_flag():
     print(golden_flag.shape)
 
 if __name__ == '__main__':
-    # bench_flag()
-    test_flag()
+    bench_flag()
+    # test_flag()

@@ -5,3 +5,6 @@ def fuse_gemv_cmp(input, weight, output, idx, threshold):
 
 def fuse_gemv_flag(input, weight, output, flag, threshold):
     return torch.ops.flash_gemv.fuse_gemv_flag(input, weight, output, flag, threshold)
+
+def fuse_gemv_flag_gemv(input, wgate, wup, output, flag, threshold):
+    return torch.ops.flash_gemv.fuse_gemv_flag_gemv(input, wgate, wup, output, flag, threshold)
