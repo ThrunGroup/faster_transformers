@@ -96,7 +96,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
                 exp_config = wandb.config
             else:
                 wandb.config = exp_config
-            time.sleep(15)
         else:
             wandb.init()
             if use_sweep:
@@ -185,7 +184,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         output_dir=output_dir,
         evaluation_strategy="steps",
         eval_steps=25,  # early stopping counts only when eval step and save step match
-        max_steps=exp_config.max_steps if is_debugging else -1,
+        max_steps=-1 if is_debugging else exp_config.max_steps,
         # save_steps=50,
         logging_steps=5,
         save_strategy="steps",
@@ -206,7 +205,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         gradient_checkpointing_kwargs={"use_reentrant": False},
         bf16=True if not is_debugging else False,
         ddp_find_unused_parameters=True,
-        hub_model_id=f"thrunlab/{model_name}",
+        hub_model_id=f"thrunlab/{run_name}",
         push_to_hub=push_to_hub,
         seed=seed,
         data_seed=seed,

@@ -25,11 +25,11 @@ class RefinedWeb(Dataset):
         Load and build the openwebtext dataset which is already preprocessed.
         :return: dataset
         """
-        train_path = f"/scr/jay/datasets/{self.model_type}_{self.dataset_type}_train_10k_small.pkl"
+        train_path = f"/scr/jay/datasets/{self.model_type}_{self.dataset_type}_train_100k_small.pkl"
         test_path = (
-            f"/scr/jay/datasets/{self.model_type}_{self.dataset_type}_test_10_small.pkl"
+            f"/scr/jay/datasets/{self.model_type}_{self.dataset_type}_test_100_small.pkl"
         )
-        validation_path = f"/scr/jay/datasets/{self.model_type}_{self.dataset_type}_validation_10_small.pkl"
+        validation_path = f"/scr/jay/datasets/{self.model_type}_{self.dataset_type}_validation_100_small.pkl"
         random_path = f"asd/sad/a/a/a/ads/"
 
         for path in [train_path, test_path, validation_path]:
@@ -37,7 +37,7 @@ class RefinedWeb(Dataset):
 
         try:
             # Try to load preprocessed data
-            open(random_path, "rb")
+            # open(random_path, "rb")
             with open(train_path, "rb") as f:
                 train_dataset = pickle.load(f)
             with open(test_path, "rb") as f:
@@ -70,9 +70,9 @@ class RefinedWeb(Dataset):
             )["train"]
             print(tokenized_dataset)
 
-            train_dataset = D.from_list(list(tokenized_dataset.skip(2000).take(10000)))
-            val_dataset = D.from_list(list(tokenized_dataset.take(10)))
-            test_dataset = D.from_list(list(tokenized_dataset.skip(1000).take(10)))
+            train_dataset = D.from_list(list(tokenized_dataset.skip(2000).take(100000)))
+            val_dataset = D.from_list(list(tokenized_dataset.take(100)))
+            test_dataset = D.from_list(list(tokenized_dataset.skip(1000).take(100)))
 
             print(train_dataset)
             print(val_dataset)

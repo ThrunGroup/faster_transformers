@@ -40,6 +40,7 @@ import warnings
 from experiments.models.sparse_mistral.sparsification_sftt import (
     SparseSFTTTrainer,
     SparseMistralforCausalLM,
+    SparseMistralConfig,
     apply_mistral_sparse_silu_mlp,
     apply_mistral_sparse_decoder_layer,
     activate_stats,
@@ -387,7 +388,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         output_dir=output_dir,
         evaluation_strategy="steps",
         eval_steps=50,  # early stopping counts only when eval step and save step match
-        max_steps=100 if is_debugging else -1,
+        max_steps=10 if is_debugging else -1,
         # save_steps=50,
         logging_steps=5,
         save_strategy="steps",
@@ -542,6 +543,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         model.save_pretrained(output_dir)
 
     if push_to_hub:
+        trainer.model = model
         trainer.push_to_hub()
 
     # Early Exit/ Early Entry experiments
@@ -602,8 +604,11 @@ def prepare_sparse_model(
                 num_hidden_layers=4,
                 # num_attention_heads=4,
             )
-            config = get_sparse_mistral_config(config)
-            model = SparseMistralforCausalLM(config=config)
+            if use_sparse_model:
+                config = get_sparse_mistral_config(config)
+                model = SparseMistralforCausalLM(config=config)
+            else:
+                model = MistralForCausalLM(config=config)
         else:
             config = MistralConfig.from_pretrained(base_model_name)
             config = get_sparse_mistral_config(config)
@@ -629,7 +634,7 @@ def prepare_sparse_model(
         if use_sparse_regularization:
             model.config.us_sparse_regularization = use_sparse_regularization
     else:
-        config = MistralConfig.from_pretrained(sparse_model_dir)
+        config = SparseMistralConfig.from_pretrained(sparse_model_dir)
         print(config)
         model = SparseMistralforCausalLM.from_pretrained(
             sparse_model_dir,
@@ -651,7 +656,7 @@ def prepare_sparse_model(
                 model.config.init_svd = False
                 model.save_pretrained(svd_model_dir)
             else:
-                config = MistralConfig.from_pretrained(svd_model_dir)
+                config = SparseMistralConfig.from_pretrained(svd_model_dir)
                 model = SparseMistralforCausalLM.from_pretrained(
                     svd_model_dir,
                     config=config,
@@ -687,6 +692,12 @@ def prepare_sparse_model(
         model = get_peft_model(model, peft_config)
         print(model.print_trainable_parameters())
 
+    # Register for AutoConfig and AutoModelforCausalLM
+    SparseMistralConfig.register_for_auto_class()
+    SparseMistralforCausalLM.register_for_auto_class(
+        "AutoModelForCausalLM"
+    )
+
     return model, tokenizer, model.config
 
 
@@ -709,7 +720,7 @@ def parse_args():
         "--output_dir", type=str, default="/scr/jay/ckpt", help="Output Directory"
     )
     parser.add_argument(
-        "--num_epochs", type=int, default=7, help="Number of training epochs"
+        "--num_epochs", type=float, default=7, help="Number of training epochs"
     )
     parser.add_argument(
         "--max_steps", type=int, default=-1, help="Number of maximum training steps"
@@ -722,7 +733,7 @@ def parse_args():
     )
     parser.add_argument(
         "--push_to_hub",
-        type=bool,
+        action="store_true",
         default=False,
         help="Whether to push the model to Hugging Face Hub",
     )

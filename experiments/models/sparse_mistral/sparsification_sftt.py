@@ -347,15 +347,17 @@ class MistralSparseSiluMLP(MistralMLP):
             return self.down_proj(
                 self.sparse_act_fn(self.gate_proj(x) * sp_mask) * self.up_proj(x)
             )  # Todo: This doesn't accelerate runtime (instead slowing down)
+
+        elif self.use_relu:
+            return self.down_proj(
+                self.relu(self.gate_proj(x)) * self.up_proj(x)
+            )
+
         else:
             pre_act = self.gate_proj(x)
             post_act = self.act_fn(pre_act)
-
             if self.kill_sparse_swish_outputs:
-                if self.use_relu:
-                    dead_neurons = post_act <= 0
-                else:
-                    dead_neurons = post_act.abs() <= self.dead_threshold
+                dead_neurons = post_act.abs() <= self.dead_threshold
 
                 dead_percentage = dead_neurons.float().mean()
                 agg_sparsity = dead_neurons.all(dim=0).float().mean()
@@ -501,11 +503,13 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
 
         return outputs
 
+
 class SparseMistralConfig(MistralConfig):
     model_type = "sparse_mistral"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
 
 class SparseMistralforCausalLM(MistralForCausalLM):
     config_class = SparseMistralConfig
@@ -534,8 +538,6 @@ class SparseMistralforCausalLM(MistralForCausalLM):
         apply_mistral_sparse_decoder_layer(self, config=self.config, init_svd=init_svd)
 
 
-
-
 def get_sparse_mistral_config(
     config: MistralConfig,
     use_sparse_model=False,
@@ -543,6 +545,9 @@ def get_sparse_mistral_config(
     use_sparse_regularization=False,
     thresholds=None,
 ):
+    new_config = SparseMistralConfig()
+    new_config.__dict__.update(config.__dict__)
+    config = new_config
     config.use_sparse_model = use_sparse_model
     config.use_sparse_predictor = use_sparse_predictor
     config.use_sparse_regularization = use_sparse_regularization
