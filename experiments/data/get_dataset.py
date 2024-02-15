@@ -5,7 +5,7 @@ from .get_squad_dataset import SQuAD
 from .get_openwebtext_dataset import OpenWebText
 from .get_samsum_dataset_ import Samsum
 from .get_glue_dataset_classification import GLUEDataset
-from .get_refindweb_dataset import RefinedWeb
+from .get_refinedweb_dataset import RefinedWeb
 
 from utils.constants import (
     COLA,
