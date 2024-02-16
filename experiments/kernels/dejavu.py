@@ -862,3 +862,8 @@ def mistral_mlp_pred_sparse(x, Wu, Wsv, Bsv, svd_activation, Wgate, Wup, Wdownt,
     x = x1 * x2
     x = gather_transposed_gemv(x, Wdownt, idx)
     return x
+
+def mistral_mlp_partial_sparse(x, x_1, Wup, Wdownt, idx):
+    x = gather_gemv(x, Wup, idx) * x_1
+    x = gather_transposed_gemv(x, Wdownt, idx)
+    return x
