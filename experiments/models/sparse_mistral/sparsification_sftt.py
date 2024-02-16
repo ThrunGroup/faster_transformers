@@ -551,6 +551,7 @@ class SparseMistralforCausalLM(MistralForCausalLM):
                         m.mlp.dead_threshold = config.thresholds[idx]
                         m.mlp.sparse_act_fn.set_new_threshold(m.mlp.dead_threshold)
                         m.mlp.kill_sparse_swish_outputs = True
+                        m.mlp.use_relu = config.use_relu
         if config.use_sparse_predictor:
             self.apply_sparse_predictor(init_svd=config.init_svd)
 
@@ -862,7 +863,7 @@ def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
 
 
 def plot_histogram(
-    bin_edges, histogram_counts: torch.tensor, title: str = "Activation Distribution"
+    bin_edges, histogram_counts: torch.tensor, title: str = "Activation Distribution", fig_dir: str = "figures"
 ):
     plt.bar(
         bin_edges[:-1], histogram_counts, width=np.diff(bin_edges), edgecolor="black"
@@ -870,13 +871,13 @@ def plot_histogram(
     plt.title(title)
     plt.xlabel("Activation Value")
     plt.ylabel("Frequency")
-    os.makedirs("figures", exist_ok=True)
-    plt.savefig(f"figures/{title}.png")
+    os.makedirs(fig_dir, exist_ok=True)
+    plt.savefig(f"{fig_dir}/{title}.png")
     # plt.show()
     plt.clf()
 
 
-def plot_act(model):
+def plot_act(model, fig_dir: str = "figures"):
     for i, layer in enumerate(model.model.layers):
         if (
             isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats

@@ -172,9 +172,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     else:
         output_dir = os.path.join(exp_config.output_dir, run_name)
 
-    # Use only 1000 samples of training dataset to collect statistics
-    if exp_config.set_sparsity_aware_threshold:
-        sampled_train_dataset = test_dataset
+    # Use only 500 samples of training dataset to collect statistics
+    sampled_train_dataset = train_dataset.select(range(500))
 
     if use_wandb:
         if is_debugging:
@@ -293,12 +292,13 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         activate_stats(base_model)
         if os.path.exists(act_hist_path):
             load_act_hist(base_model, act_hist_path)
-        else:
+        elif not exp_config.use_relu:
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
             trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
             trainer.evaluate(sampled_train_dataset)
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(base_model, act_hist_path)
+
         if exp_config.use_relu:
             set_sparse_threshold(base_model, 0, True)
         else:
@@ -313,7 +313,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
         is_deepspeed_enabled = trainer.is_deepspeed_enabled
         trainer.is_deepspeed_enabled = False
-        eval_result = trainer.evaluate(test_dataset)
+        eval_result = trainer.evaluate(sampled_train_dataset)
         trainer.is_deepspeed_enabled = is_deepspeed_enabled
 
         print("===Pre-training test Result==")
@@ -323,11 +323,12 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     # Plot activation histograms
     if is_plot:
+        fig_dir = f"figures/{run_name}"
         if is_running_deepspeed():
             if is_mainprocess():
-                plot_act(base_model)
+                plot_act(base_model, fig_dir=fig_dir)
         else:
-            plot_act(base_model)
+            plot_act(base_model, fig_dir=fig_dir)
 
     # Train Model after deactivating collecting statistics
     deactivate_stats(base_model)
@@ -367,7 +368,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
-    eval_result = trainer.evaluate(test_dataset)
+    eval_result = trainer.evaluate(sampled_train_dataset)
     print("===Test Result==")
     print(eval_result)
     log_dict = {}

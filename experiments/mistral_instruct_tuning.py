@@ -592,6 +592,7 @@ def prepare_sparse_model(
     use_flash_attn: bool = False,
     base_model_name: str = "mistralai/Mistral-7B-Instruct-v0.1",
     gradient_checkpointing: bool = False,
+    use_relu: bool = False,
 ):
     if use_flash_attn:
         attn_implementation = "flash_attention_2"
@@ -662,6 +663,10 @@ def prepare_sparse_model(
                     svd_model_dir,
                     config=config,
                 )
+    if use_relu:
+        model.config.use_relu = True
+    else:
+        model.config.use_relu = False
     # if use_sparse_predictor:
     #     # Freeze original params
     #     for params in model.parameters():
@@ -675,7 +680,6 @@ def prepare_sparse_model(
 
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
-
     if gradient_checkpointing:
         model.gradient_checkpointing_enable(
             gradient_checkpointing_kwargs={"use_reentrant": False}
@@ -864,7 +868,7 @@ def parse_args():
     parser.add_argument(
         "--ds_config_path",
         type=str,
-        default="mistral_ds_config.json",
+        default="ds_config.json",
         help="Deepspeed config file path",
     )
     parser.add_argument(
