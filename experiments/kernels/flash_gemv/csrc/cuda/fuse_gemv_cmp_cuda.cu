@@ -538,7 +538,7 @@ __global__ void fuse_gemv_flag_gemv_mem256_kernel(half* input, half* wgate, half
     int warp_id = threadIdx.y;
     int lane_id = threadIdx.x;
     __shared__ half2 temp_result[8];
-    half2* local_weight_ptr = (half2*)(wgate + m * N + 512 * warp_id + 2 * lane_id);
+    half2* local_weight_ptr = (half2*)(wgate + blockIdx.x * N + 512 * warp_id + 2 * lane_id);
     half2* local_input_ptr = (half2*)(input + 512 * warp_id + 2 * lane_id);
 
     thread_block_tile<32, thread_block> group = tiled_partition<32>(this_thread_block());
@@ -574,7 +574,7 @@ __global__ void fuse_gemv_flag_gemv_mem256_kernel(half* input, half* wgate, half
     if (!flag_local) return;
     warp_id = threadIdx.y;
     lane_id = threadIdx.x;
-    half2* local_weight_ptr_up = (half2*)(wup + m * N + 512 * warp_id + 2 * lane_id);
+    half2* local_weight_ptr_up = (half2*)(wup + blockIdx.x * N + 512 * warp_id + 2 * lane_id);
     half2* local_input_ptr_up = (half2*)(input + 512 * warp_id + 2 * lane_id);
     half2 sum_up = __float2half2_rn(0.0f);
 #pragma unroll

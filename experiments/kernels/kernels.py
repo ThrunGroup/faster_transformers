@@ -1313,6 +1313,425 @@ def gather_gemv_elemul_flag_beam(
 
     return output
 
+@triton.autotune(
+    configs=[
+        triton.Config({"BLOCK_M": 4, "BLOCK_N": 256}, num_warps=4),
+        triton.Config({"BLOCK_M": 4, "BLOCK_N": 512}, num_warps=4),
+        triton.Config({"BLOCK_M": 4, "BLOCK_N": 1024}, num_warps=4),
+        triton.Config({"BLOCK_M": 8, "BLOCK_N": 256}, num_warps=4),
+        triton.Config({"BLOCK_M": 8, "BLOCK_N": 512}, num_warps=4),
+        triton.Config({"BLOCK_M": 8, "BLOCK_N": 1024}, num_warps=4),
+        triton.Config({"BLOCK_M": 16, "BLOCK_N": 256}, num_warps=4),
+        triton.Config({"BLOCK_M": 16, "BLOCK_N": 512}, num_warps=4),
+        triton.Config({"BLOCK_M": 16, "BLOCK_N": 1024}, num_warps=4),
+    ],
+    key=["CACHE_KEY_M", "CACHE_KEY_N", "BEAMSIZE"],
+)
+
+@triton.jit
+def gather_gemv_elemul_index_3d_kernel(
+    Y,
+    A,
+    X,
+    X_1,
+    IDX,
+    M,
+    N,
+    CACHE_KEY_M,
+    CACHE_KEY_N,
+    stride_am,
+    BEAMSIZE: tl.constexpr,
+    BLOCK_M: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+):
+    start_m = tl.program_id(0)
+    rm = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    rn = tl.arange(0, BLOCK_N)
+
+    IDX = IDX + rm
+    idx = tl.load(IDX, mask=rm < M, other=0)
+    A = A + (idx[:, None] * stride_am + rn[None, :])
+    X_1 = X_1 + rm
+    X = X + rn
+
+    if BEAMSIZE == 1:
+        x1 = tl.load(X_1, mask=rm < M, other=0.0).to(tl.float32)
+        acc0 = tl.zeros((BLOCK_M,), dtype=tl.float32)
+        for n in range(N, 0, -BLOCK_N):
+            a = tl.load(A)
+            x0 = tl.load(X)
+            acc0 += tl.sum(a.to(tl.float32) * x0.to(tl.float32)[None, :], 1)
+            A += BLOCK_N
+            X += BLOCK_N
+        acc0 = acc0 * x1
+    
+    rm = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    Y = Y + rm
+    tl.store(Y, acc0, mask=rm < M)
+
+def gather_gemv_elemul_index_3d(
+        x: torch.Tensor, 
+        x_1: torch.Tensor,
+        Wup: torch.Tensor,  
+        idx: torch.Tensor,
+        M,
+    ) -> torch.Tensor:
+    """
+    Compute y = x_1 * (x @ Wup[idx, :].T)
+    :param x: input tensor, (beam_width, batch, N)
+    :param x_1: wgate activation, (beam_width, batch, M)
+    :param Wup: up weigth matrix, (Z, N)
+    :param idx: live indices, (M,)
+    :return: result tensor, (beam_width, batch, M)
+    """
+    _, N = Wup.shape
+    beam_width, batch, _ = x.shape
+    assert x.shape[2] == N
+    assert beam_width == 1, batch == 1
+
+    output = torch.empty(beam_width, batch, M, device=x.device, dtype=x.dtype)
+
+    grid = lambda META: (triton.cdiv(M, META["BLOCK_M"]),)  # noqa
+
+    gather_gemv_elemul_index_3d_kernel[grid](
+        output,  # data ptrs
+        Wup,
+        x,
+        x_1,
+        idx,
+        M,  # shapes
+        N,
+        M // 256,  # key for triton cache (limit number of compilations)
+        N // 1024,  # key for triton cache (limit number of compilations)
+        Wup.stride(0),  # strides
+        beam_width,
+    )
+
+    return output
+
+def gather_gemv_elemul_indirect_index_2d(
+        x: torch.Tensor, 
+        x_1: torch.Tensor,
+        Wup: torch.Tensor,  
+        idx: torch.Tensor,
+    ) -> torch.Tensor:
+    """
+    Compute y = x_1 * (x @ Wup[idx, :].T)
+    :param x: input tensor, (batch, N)
+    :param x_1: wgate activation, (beam_width, batch, M)
+    :param Wup: up weigth matrix, (Z, N)
+    :param idx: live indices, (M,)
+    :return: result tensor, (beam_width, batch, M)
+    """
+    _, N = Wup.shape
+    beam_width,  _ = x.shape
+    (M,) = idx.shape
+    assert x.shape[1] == N
+    assert beam_width == 1
+
+    output = torch.empty(beam_width, M, device=x.device, dtype=x.dtype)
+
+    grid = lambda META: (triton.cdiv(M, META["BLOCK_M"]),)  # noqa
+
+    gather_gemv_elemul_index_3d_kernel[grid](
+        output,  # data ptrs
+        Wup,
+        x,
+        x_1,
+        idx,
+        M,  # shapes
+        N,
+        M // 512,  # key for triton cache (limit number of compilations)
+        N // 1024,  # key for triton cache (limit number of compilations)
+        Wup.stride(0),  # strides
+        beam_width,
+    )
+
+    return output
+
+def gather_gemv_elemul_indirect_index_3d(
+        x: torch.Tensor, 
+        x_1: torch.Tensor,
+        Wup: torch.Tensor,  
+        idx: torch.Tensor,
+    ) -> torch.Tensor:
+    """
+    Compute y = x_1 * (x @ Wup[idx, :].T)
+    :param x: input tensor, (beam_width, batch, N)
+    :param x_1: wgate activation, (beam_width, batch, M)
+    :param Wup: up weigth matrix, (Z, N)
+    :param idx: live indices, (M,)
+    :return: result tensor, (beam_width, batch, M)
+    """
+    _, N = Wup.shape
+    beam_width, batch, _ = x.shape
+    (M,) = idx.shape
+    assert x.shape[2] == N
+    assert beam_width == 1, batch == 1
+
+    output = torch.empty(beam_width, batch, M, device=x.device, dtype=x.dtype)
+
+    grid = lambda META: (triton.cdiv(M, META["BLOCK_M"]),)  # noqa
+
+    gather_gemv_elemul_index_3d_kernel[grid](
+        output,  # data ptrs
+        Wup,
+        x,
+        x_1,
+        idx,
+        M,  # shapes
+        N,
+        M // 256,  # key for triton cache (limit number of compilations)
+        N // 1024,  # key for triton cache (limit number of compilations)
+        Wup.stride(0),  # strides
+        beam_width,
+    )
+
+    return output
+
+def init_to_zero(name):
+    return lambda nargs: nargs[name].zero_()
+
+
+@triton.autotune(
+    configs=[
+        triton.Config(
+            {"BLOCK_M": 32, "BLOCK_N": 256}, num_warps=4, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 32, "BLOCK_N": 512}, num_warps=4, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 32, "BLOCK_N": 1024}, num_warps=4, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 32, "BLOCK_N": 2048}, num_warps=8, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 64, "BLOCK_N": 256}, num_warps=4, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 64, "BLOCK_N": 512}, num_warps=4, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 64, "BLOCK_N": 1024}, num_warps=4, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 64, "BLOCK_N": 2048}, num_warps=8, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 128, "BLOCK_N": 16}, num_warps=4, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 128, "BLOCK_N": 32}, num_warps=4, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 128, "BLOCK_N": 64}, num_warps=4, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 128, "BLOCK_N": 128}, num_warps=4, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 128, "BLOCK_N": 256}, num_warps=4, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 128, "BLOCK_N": 512}, num_warps=4, pre_hook=init_to_zero("Y")
+        ),
+        triton.Config(
+            {"BLOCK_M": 128, "BLOCK_N": 1024}, num_warps=4, pre_hook=init_to_zero("Y")
+        ),
+    ],
+    key=["CACHE_KEY_M", "CACHE_KEY_N", "BEAMSIZE"],
+)
+
+@triton.jit
+def gather_transposed_gemv_index_atomicadd_kernel(
+    Y,  # Pointers to matrices
+    A,
+    X,
+    IDX,
+    M,
+    N,
+    CACHE_KEY_M,
+    CACHE_KEY_N,
+    stride_am,
+    BEAMSIZE: tl.constexpr,
+    BLOCK_M: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+):
+    start_m = tl.program_id(0)
+    start_n = tl.program_id(1)
+    rm = start_m * BLOCK_M + tl.arange(0, BLOCK_M)
+    rn = start_n * BLOCK_N + tl.arange(0, BLOCK_N)
+
+    IDX = IDX + rm
+    idx = tl.load(IDX, mask=rm < M, other=0)
+    A = A + (idx[:, None] * stride_am + rn[None, :])
+    X = X + rm
+    Y = Y + rn
+    a = tl.load(A)
+    if BEAMSIZE == 1:
+        x0 = tl.load(X, mask=rm < M, other=0.0)
+        acc0 = tl.sum(a.to(tl.float32) * x0.to(tl.float32)[:, None], 0)
+
+    rn = start_n * BLOCK_N + tl.arange(0, BLOCK_N)
+    tl.atomic_add(Y, acc0, mask=rn < N)
+
+def gather_transposed_gemv_index_3d(
+    x: torch.Tensor,
+    weight: torch.Tensor,
+    idx: torch.Tensor,
+    M,
+) -> torch.Tensor:
+    """
+    Compute y = weight[idx, :]^T @ x.
+    :param x: input tensor, (beam_width, batch, M)
+    :param weight: weight matrix, (Z, N)
+    :param idx: indices, (M,)
+    :return: result tensor, (beam_width, batch, N)
+    """
+    _, N = weight.shape
+    beam_width, batch, _ = x.shape
+    assert x.shape[2] == M
+    x = x.contiguous()
+    if weight.stride(1) > 1:
+        weight = weight.contiguous()
+    assert (
+        x.dtype == weight.dtype
+    ), f"Input and weight must have the same dtype, got {x.dtype} and {weight.dtype}"
+
+    output = torch.empty(
+        beam_width,
+        batch,
+        N,
+        device=x.device,
+        dtype=x.dtype,
+    )
+
+    # 1D launch kernel where each block gets its own program.
+    grid = lambda META: (
+        triton.cdiv(M, META["BLOCK_M"]),
+        triton.cdiv(N, META["BLOCK_N"]),
+    )  # noqa
+
+    gather_transposed_gemv_index_atomicadd_kernel[grid](
+        output,  # data ptrs
+        weight,
+        x,
+        idx,
+        M,  # shapes
+        N,
+        M // 256,  # key for triton cache (limit number of compilations)
+        N // 1024,  # key for triton cache (limit number of compilations)
+        weight.stride(0),  # strides
+        beam_width,
+    )
+
+    return output
+
+def gather_transposed_gemv_indirect_index_2d(
+    x: torch.Tensor,
+    weight: torch.Tensor,
+    idx: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Compute y = weight[idx, :]^T @ x.
+    :param x: input tensor, (beam_width, batch, M)
+    :param weight: weight matrix, (Z, N)
+    :param idx: indices, (M,)
+    :return: result tensor, (beam_width, batch, N)
+    """
+    _, N = weight.shape
+    beam_width, _ = x.shape
+    (M,) = idx.shape
+    assert x.shape[1] == M
+    x = x.contiguous()
+    if weight.stride(1) > 1:
+        weight = weight.contiguous()
+    assert (
+        x.dtype == weight.dtype
+    ), f"Input and weight must have the same dtype, got {x.dtype} and {weight.dtype}"
+
+    output = torch.empty(
+        beam_width,
+        N,
+        device=x.device,
+        dtype=x.dtype,
+    )
+
+    # 1D launch kernel where each block gets its own program.
+    grid = lambda META: (
+        triton.cdiv(M, META["BLOCK_M"]),
+        triton.cdiv(N, META["BLOCK_N"]),
+    )  # noqa
+
+    gather_transposed_gemv_index_atomicadd_kernel[grid](
+        output,  # data ptrs
+        weight,
+        x,
+        idx,
+        M,  # shapes
+        N,
+        M // 512,  # key for triton cache (limit number of compilations)
+        N // 1024,  # key for triton cache (limit number of compilations)
+        weight.stride(0),  # strides
+        beam_width,
+    )
+
+    return output
+
+def gather_transposed_gemv_indirect_index_3d(
+    x: torch.Tensor,
+    weight: torch.Tensor,
+    idx: torch.Tensor,
+) -> torch.Tensor:
+    """
+    Compute y = weight[idx, :]^T @ x.
+    :param x: input tensor, (beam_width, batch, M)
+    :param weight: weight matrix, (Z, N)
+    :param idx: indices, (M,)
+    :return: result tensor, (beam_width, batch, N)
+    """
+    _, N = weight.shape
+    beam_width, batch, _ = x.shape
+    (M,) = idx.shape
+    assert x.shape[2] == M
+    x = x.contiguous()
+    if weight.stride(1) > 1:
+        weight = weight.contiguous()
+    assert (
+        x.dtype == weight.dtype
+    ), f"Input and weight must have the same dtype, got {x.dtype} and {weight.dtype}"
+
+    output = torch.empty(
+        beam_width,
+        batch,
+        N,
+        device=x.device,
+        dtype=x.dtype,
+    )
+
+    # 1D launch kernel where each block gets its own program.
+    grid = lambda META: (
+        triton.cdiv(M, META["BLOCK_M"]),
+        triton.cdiv(N, META["BLOCK_N"]),
+    )  # noqa
+
+    gather_transposed_gemv_index_atomicadd_kernel[grid](
+        output,  # data ptrs
+        weight,
+        x,
+        idx,
+        M,  # shapes
+        N,
+        M // 256,  # key for triton cache (limit number of compilations)
+        N // 1024,  # key for triton cache (limit number of compilations)
+        weight.stride(0),  # strides
+        beam_width,
+    )
+
+    return output
+
 def mistral_mlp_sparse_direct_flag(x, x_1, Wup, Wdownt, flags):
     x = gather_gemv_elemul_flag(x, x_1, Wup, flags)
     return gather_transposed_gemv_flag(x, Wdownt, flags)
@@ -1324,6 +1743,18 @@ def mistral_mlp_sparse_direct_flag_3d(x, x_1, Wup, Wdownt, flags):
 def mistral_mlp_sparse_direct_flag_beam(x, x_1, Wup, Wdownt, flags):
     x = gather_gemv_elemul_flag_beam(x, x_1, Wup, flags)
     return gather_transposed_gemv_flag_beam(x, Wdownt, flags)
+
+def mistral_mlp_sparse_direct_index_3d(x, x_1, Wup, Wdownt, idx, M):
+    x = gather_gemv_elemul_index_3d(x, x_1, Wup, idx, M)
+    return gather_transposed_gemv_index_3d(x, Wdownt, idx, M)
+
+def mistral_mlp_sparse_direct_index_2d(x, x_1, Wup, Wdownt, idx):
+    x_2 = gather_gemv_elemul_indirect_index_2d(x, x_1, Wup, idx)
+    return gather_transposed_gemv_indirect_index_2d(x_2, Wdownt, idx)
+
+def mistral_mlp_sparse_indirect_index_3d(x, x_1, Wup, Wdownt, idx):
+    x = gather_gemv_elemul_indirect_index_3d(x, x_1, Wup, idx)
+    return gather_transposed_gemv_indirect_index_3d(x, Wdownt, idx)
 
 # `triton.jit`'ed functions can be auto-tuned by using the `triton.autotune` decorator, which consumes:
 #   - A list of `triton.Config` objects that define different configurations of
