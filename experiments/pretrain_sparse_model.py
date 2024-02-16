@@ -137,7 +137,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if exp_config.use_relu:
         exp_config.targeted_sparsity = "ReLU"
 
-    run_name = f"{model_name}_{dataset_type}_{int(exp_config.targeted_sparsity * 100)}p"
+    run_name = f"{model_name}_{dataset_type}"
+    if exp_config.use_relu:
+        run_name += "_relu"
+    else:
+        run_name += f"_{int(exp_config.targeted_sparsity * 100)}p"
 
     # Load model
     model, tokenizer, config = prepare_sparse_model(
@@ -274,7 +278,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         base_model = model
 
     # Collect statistics and find the threshold for given sparsity
-    if not use_graceful_regularization and exp_config.set_sparsity_aware_threshold:
+    if (
+        not use_graceful_regularization
+        and exp_config.set_sparsity_aware_threshold
+        and (config.thresholds == None)
+    ):
         if is_debugging:
             act_hist_path = "/tmp/pre_finetune__act_hist.pt"
         else:
@@ -295,6 +303,23 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             set_sparse_threshold(base_model, 0, True)
         else:
             set_sparse_threshold(base_model, exp_config.targeted_sparsity)
+
+    if exp_config.print_sparsity:
+        if exp_config.use_lora:
+            base_model = model.get_base_model()
+        else:
+            base_model = model
+        activate_stats(base_model, exp_config.print_act_stats)
+
+        is_deepspeed_enabled = trainer.is_deepspeed_enabled
+        trainer.is_deepspeed_enabled = False
+        eval_result = trainer.evaluate(test_dataset)
+        trainer.is_deepspeed_enabled = is_deepspeed_enabled
+
+        print("===Pre-training test Result==")
+        print(eval_result)
+        total_sparsity = print_dead_neuron_stats(base_model)
+        print(f"pre-training sparsity: {total_sparsity}")
 
     # Plot activation histograms
     if is_plot:

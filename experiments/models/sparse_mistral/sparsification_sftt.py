@@ -358,7 +358,22 @@ class MistralSparseSiluMLP(MistralMLP):
             )  # Todo: This doesn't accelerate runtime (instead slowing down)
 
         elif self.use_relu:
-            return self.down_proj(self.relu(self.gate_proj(x)) * self.up_proj(x))
+            post_act = self.relu(self.gate_proj(x))
+
+            if self.is_stats:
+                dead_neurons = post_act == 0
+                dead_percentage = dead_neurons.float().mean()
+                agg_sparsity = dead_neurons.all(dim=0).float().mean()
+
+                self.dead_percentage = (
+                    self.dead_percentage * self.visit_counts + dead_percentage
+                ) / (self.visit_counts + 1)
+                self.agg_sparsity = (
+                    self.agg_sparsity * self.visit_counts + agg_sparsity
+                ) / (self.visit_counts + 1)
+                self.visit_counts += 1
+
+            return self.down_proj(post_act * self.up_proj(x))
 
         else:
             pre_act = self.gate_proj(x)

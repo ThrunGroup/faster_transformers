@@ -95,8 +95,6 @@ class RefinedWeb(Dataset):
             with open(validation_path, "wb") as f:
                 pickle.dump(val_dataset, f)
             print("Preprocessed and saved data to disk.")
-        for idx in range(5):
-            print(len(train_dataset["input_ids"][idx]))
         return train_dataset, val_dataset, test_dataset
 
     def preprocess(self, examples):
