@@ -14,7 +14,7 @@ for ((i=1; i<=max_iterations; i++)); do
     echo "Training for $current_steps steps..."
     deepspeed --master_port 12311 experiments/pretrain_sparse_model.py --use_sparse_model --targeted_sparsity 0.5 \
     --set_sparsity_aware_threshold --print_sparsity --use_wandb --num_epochs 1 --max_steps $current_steps --model_save \
-    --train_batch_size 1 --test_batch_size 1 --use_flash_attn --gradient_accumulation_steps 8 \
+    --train_batch_size 4 --test_batch_size 4 --use_flash_attn --gradient_accumulation_steps 2 --gradient_checkpointing \
     --ds_config_path ds_config.json --push_to_hub --resume_from_checkpoint
 
     echo "Evaluating after $current_steps steps..."

@@ -11,7 +11,7 @@ from utils.constants import REFINED_WEB, MISTRAL_CONTEXT_LENGTH
 
 
 class RefinedWeb(Dataset):
-    def __init__(self, tokenizer, model_type, max_seq_length:int=8096):
+    def __init__(self, tokenizer, model_type, max_seq_length: int = 8096):
         """
         :param tokenizer: Tokenizer to tokenize the inputs
         :param model: Model to finetune / evaluate
@@ -20,17 +20,21 @@ class RefinedWeb(Dataset):
         """
         super().__init__(tokenizer, model_type)
         self.dataset_type = REFINED_WEB
+        self.max_seq_length = max_seq_length
+        self.seed = 0
 
     def get_tokenized_dataset(self):
         """
         Load and build the openwebtext dataset which is already preprocessed.
         :return: dataset
         """
-        train_path = f"/scr/jay/datasets/{self.model_type}_{self.dataset_type}_train_100k_small.pkl"
-        test_path = (
-            f"/scr/jay/datasets/{self.model_type}_{self.dataset_type}_test_100_small.pkl"
-        )
-        validation_path = f"/scr/jay/datasets/{self.model_type}_{self.dataset_type}_validation_100_small.pkl"
+        if self.max_seq_length == 8096:
+            prefix = f"{self.model_type}_{self.dataset_type}"
+        else:
+            prefix = f"{self.model_type}_{self.dataset_type}_seq{self.max_seq_length}_seed{self.seed}"
+        train_path = f"/scr/jay/datasets/{prefix}_train_100k_small.pkl"
+        test_path = f"/scr/jay/datasets/{prefix}_test_100_small.pkl"
+        validation_path = f"/scr/jay/datasets/{prefix}_validation_100_small.pkl"
         random_path = f"asd/sad/a/a/a/ads/"
 
         for path in [train_path, test_path, validation_path]:
@@ -45,14 +49,14 @@ class RefinedWeb(Dataset):
                 test_dataset = pickle.load(f)
             with open(validation_path, "rb") as f:
                 val_dataset = pickle.load(f)
-            print("Loaded preprocessed data from disk.")
+            print(f"Loaded preprocessed data from disk. Prefix: {prefix}")
         except FileNotFoundError:
             dataset = load_dataset(
                 "tiiuae/falcon-refinedweb",
                 streaming=True,
                 # num_proc=5,
             )
-            dataset.shuffle(seed=42, buffer_size=1000000)
+            dataset.shuffle(buffer_size=1000000)  # seed = 42
             print("Downloaded preprocessed data from disk.")
 
             print("dataset: ", dataset)
@@ -73,7 +77,9 @@ class RefinedWeb(Dataset):
             )["train"]
             print(tokenized_dataset)
 
-            train_dataset = D.from_list(list(tokenized_dataset.skip(10000).take(100000)))
+            train_dataset = D.from_list(
+                list(tokenized_dataset.skip(10000).take(100000))
+            )
             val_dataset = D.from_list(list(tokenized_dataset.take(50)))
             test_dataset = D.from_list(list(tokenized_dataset.skip(1000).take(50)))
             # train_dataset = tokenized_dataset

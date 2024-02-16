@@ -38,6 +38,7 @@ from utils.utils import (
     ds_print,
 )
 
+
 class SparseSFTTTrainer(SFTTrainer):
     def __init__(self, *args, **kwargs):
         self.regularization_coefficient = kwargs.pop("regularization_coefficient", 10)
@@ -357,9 +358,7 @@ class MistralSparseSiluMLP(MistralMLP):
             )  # Todo: This doesn't accelerate runtime (instead slowing down)
 
         elif self.use_relu:
-            return self.down_proj(
-                self.relu(self.gate_proj(x)) * self.up_proj(x)
-            )
+            return self.down_proj(self.relu(self.gate_proj(x)) * self.up_proj(x))
 
         else:
             pre_act = self.gate_proj(x)
@@ -382,7 +381,10 @@ class MistralSparseSiluMLP(MistralMLP):
                     # print(self.agg_sparsity)
 
                     # Collect histogram stats
-                    if self.is_collect_histogram:
+                    if (
+                        self.is_collect_histogram
+                        and pre_act.eq(0).float().mean() < 0.99
+                    ):  # Padded dataset
                         self.collect_stats(pre_act, post_act)
 
                 post_act[dead_neurons] = 0
@@ -454,6 +456,7 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
     ) -> Tuple[
         torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]
     ]:
+        print("hidden_states shape: ", hidden_states.shape)
         if "padding_mask" in kwargs:
             warnings.warn(
                 "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
@@ -569,7 +572,9 @@ class GracefulRegularizationScheduler(TrainerCallback):
         self.test_dataset = test_dataset
         self.targeted_sparsity = targeted_sparsity
         self.keep_regularization_with_kill = keep_regularization_with_kill
-        self.act_hist_path = f"/matx/u/vxbrando/histograms/warm_up_reg_{targeted_sparsity}/act_hist.pt"
+        self.act_hist_path = (
+            f"/matx/u/vxbrando/histograms/warm_up_reg_{targeted_sparsity}/act_hist.pt"
+        )
         if self.is_enabled:
             print("GracefulRegularizationScheduler is enabled.")
         self.trainer = None
@@ -655,8 +660,12 @@ class GradualSparsificationScheduler(TrainerCallback):
                 if isinstance(module, MistralSparseSiluMLP):
                     desired_dead_threshold = copy.deepcopy(module.dead_threshold)
                     current_dead_threshold = module.current_dead_threshold
-                    current_dead_threshold += self.increment_ratio * desired_dead_threshold
-                    module.current_dead_threshold = min(desired_dead_threshold, current_dead_threshold)
+                    current_dead_threshold += (
+                        self.increment_ratio * desired_dead_threshold
+                    )
+                    module.current_dead_threshold = min(
+                        desired_dead_threshold, current_dead_threshold
+                    )
 
             if is_running_deepspeed and is_mainprocess():
                 ds_print(
@@ -674,6 +683,7 @@ class GradualSparsificationScheduler(TrainerCallback):
                     model.state_dict(),
                     f"/matx/u/lukeai/{self.model_name}_{state.global_step - 2}.pt",
                 )
+
 
 def get_sparse_mistral_config(
     config: MistralConfig,
@@ -807,12 +817,14 @@ def get_threshold(
 
     return bin_edges[threshold_idx]
 
+
 def set_regularization_threshold(model, threshold: float = 0.1):
     for i, layer in enumerate(model.model.layers):
         if (
             isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
         ):  # Can set the threshold only the relevant statistics is collected.
             layer.mlp.regularization_threshold = threshold  # TODO: find better param
+
 
 def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
     for i, layer in enumerate(model.model.layers):
