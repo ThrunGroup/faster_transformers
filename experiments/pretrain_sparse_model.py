@@ -154,6 +154,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         exp_config.use_flash_attn,
         base_model_name=MISTRAL_7B,
         gradient_checkpointing=gradient_checkpointing,
+        use_relu=exp_config.use_relu,
     )
 
     # Load dataset
@@ -202,7 +203,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         evaluation_strategy="steps",
         eval_steps=25,  # early stopping counts only when eval step and save step match
         max_steps=10 if is_debugging else exp_config.max_steps,
-        save_steps=50,
+        save_steps=250,
         logging_steps=5,
         save_strategy="steps",
         learning_rate=1e-5,
@@ -280,7 +281,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if (
         not use_graceful_regularization
         and exp_config.set_sparsity_aware_threshold
-        and (config.thresholds == None)
     ):
         if is_debugging:
             act_hist_path = "/tmp/pre_finetune__act_hist.pt"

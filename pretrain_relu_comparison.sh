@@ -17,7 +17,7 @@ for ((i=1; i<=max_iterations; i++)); do
     --set_sparsity_aware_threshold --print_sparsity --use_wandb --num_epochs 1 --max_steps $current_steps --model_save \
     --train_batch_size 4 --test_batch_size 4 --use_flash_attn --gradient_accumulation_steps 2 \
     --ds_config_path ds_config.json --push_to_hub --resume_from_checkpoint --max_seq_length 512
-
+p
     echo "Evaluating after $current_steps steps..."
     accelerate launch -m --main_process_port 31212 lm_eval --model hf \
         --model_args pretrained=/scr/jay/ckpt/Mistral_Sparse_refined_web_50p,trust_remote_code=True \
