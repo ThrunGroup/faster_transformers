@@ -277,7 +277,34 @@ def test_flag_gemv_gemv():
     np.savetxt('value.txt', output.squeeze(0).squeeze(0).cpu().numpy())
     np.savetxt('golden_value.txt', golden_output.cpu().numpy())
 
-
+def test_gemv_gemv_gemv():
+    torch.manual_seed(0)
+    input = torch.rand(1, 1, 4096).half().cuda() - 0.5
+    wgate = torch.rand(4096, 14336).half().cuda() - 0.5
+    wup = torch.rand(4096, 14336).half().cuda() - 0.5
+    wdown = torch.rand(14336, 4096).half().cuda() - 0.5
+    wgate_t = wgate.t().contiguous()
+    wup_t = wup.t().contiguous()
+    threshold = 0.1
+    output = torch.zeros(1, 1, 4096).cuda()
+    # print("Start")
+    flash_gemv.fuse_gemv_gemv_gemv(input, wgate_t, wup_t, wdown, output, threshold)
+    torch.cuda.synchronize()
+    output = output.half()
+    act_fn = nn.SiLU()
+    golden_inter = act_fn(torch.matmul(input, wgate))
+    golden_inter = golden_inter.squeeze(0).squeeze(0)
+    golden_flag = (torch.abs(golden_inter) > threshold)
+    golden_flag_not = ~golden_flag
+    golden_inter[golden_flag_not] = 0
+    golden_value = torch.matmul(input, wup) * golden_inter
+    golden_value = golden_value.squeeze(0).squeeze(0)
+    golden_value[golden_flag_not] = 0
+    golden_output = torch.matmul(golden_value, wdown)
+    print(output)
+    print(golden_output)
+    np.savetxt('value.txt', output.squeeze(0).squeeze(0).cpu().numpy())
+    np.savetxt('golden_value.txt', golden_output.cpu().numpy())
 
 def bench_flag():
     torch.manual_seed(0)
@@ -316,4 +343,5 @@ if __name__ == '__main__':
     # test_flag()
     # bench_flag_gemv()
     # test_flag_gemv()
-    test_flag_gemv_gemv()
+    # test_flag_gemv_gemv()
+    test_gemv_gemv_gemv()

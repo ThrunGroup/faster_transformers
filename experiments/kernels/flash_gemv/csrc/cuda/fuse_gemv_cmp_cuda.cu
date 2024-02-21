@@ -960,6 +960,100 @@ __global__ void fuse_gemv_gemv_gemv_mem256_kernel(half* input, half* wgate, half
     
 }
 
+__global__ void fuse_gemv_gemv_gemv_mem256_fp32_kernel(half* input, half* wgate, half* wup, half* wdown, float* output, float threshold) {
+    int warp_id = threadIdx.y;
+    int lane_id = threadIdx.x;
+    __shared__ float temp_result[8];
+    __shared__ bool flag_shared[1];
+    __shared__ float value_shared[1];
+    half2* local_weight_ptr = (half2*)(wgate + blockIdx.x * N + 512 * warp_id + 2 * lane_id);
+    half2* local_input_ptr = (half2*)(input + 512 * warp_id + 2 * lane_id);
+
+    thread_block_tile<32, thread_block> group = tiled_partition<32>(this_thread_block());
+    // Accumulate to local (first land)
+    // First lane stores the accumulated result to the shared memory
+    // First warp reduces the shared memory, and atomically add to the global memory
+    float sum = 0.0f;
+#pragma unroll
+    for (int i = 0; i < 256; i+=32) {
+        // float2 w = __half22float2(local_weight_ptr[i]);
+        // float2 x = __half22float2(local_input_ptr[i]);
+        // sum = fmaf(w.x, x.x, sum);
+        // sum = fmaf(w.y, x.y, sum);
+        half2 w = local_weight_ptr[i];
+        half2 x = local_input_ptr[i];
+        float2 tmp = __half22float2(__hmul2(w, x));
+        sum += (tmp.x + tmp.y);
+    }
+    for (int i = 16; i > 0; i /= 2) {
+        sum += group.shfl_down(sum, i);
+    }
+    if (lane_id == 0) {
+        temp_result[warp_id] = sum;
+    }
+    __syncthreads();
+    if (warp_id == 0 && lane_id == 0) {
+        #pragma unroll
+        for (int i = 1; i < 8; i++) {
+            sum += temp_result[i];
+        }
+        sum = sum / (1 + ptx_exp2(-sum * log2e)); // x * sigmoid(x)
+        flag_shared[0] = fabsf(sum) > threshold;
+    }
+    __syncthreads();
+    bool flag_local = flag_shared[0];
+    if (!flag_local) return;
+
+    warp_id = threadIdx.y;
+    lane_id = threadIdx.x;
+    half2* local_weight_ptr_up = (half2*)(wup + blockIdx.x * N + 512 * warp_id + 2 * lane_id);
+    half2* local_input_ptr_up = (half2*)(input + 512 * warp_id + 2 * lane_id);
+    float sum_up = 0.0f;
+#pragma unroll
+    for (int i = 0; i < 256; i+=32) {
+        // float2 w = __half22float2(local_weight_ptr_up[i]);
+        // float2 x = __half22float2(local_input_ptr_up[i]);
+        // sum_up = fmaf(w.x, x.x, sum_up);
+        // sum_up = fmaf(w.y, x.y, sum_up);
+        half2 w = local_weight_ptr_up[i];
+        half2 x = local_input_ptr_up[i];
+        float2 tmp = __half22float2(__hmul2(w, x));
+        sum_up += (tmp.x + tmp.y);
+    }
+    for (int i = 16; i > 0; i /= 2) {
+        sum_up += group.shfl_down(sum_up, i);
+    }
+    if (lane_id == 0) {
+        temp_result[warp_id] = sum_up;
+    }
+    __syncthreads();
+    if (warp_id == 0 && lane_id == 0) {
+        #pragma unroll
+        for (int i = 1; i < 8; i++) {
+            sum_up += temp_result[i];
+        }
+        // sum *= sum_up;
+        // value_shared[0] = __hmul(__float2half(sum), __float2half(sum_up));
+        value_shared[0] = sum * sum_up;
+    }
+    __syncthreads();
+    warp_id = threadIdx.y;
+    lane_id = threadIdx.x;
+    half2* local_weight_ptr_down = (half2*)(wdown + blockIdx.x * N + 512 * warp_id + 2 * lane_id);
+    float* global_output_ptr = output + 512 * warp_id + 2 * lane_id;
+    float sum_down = value_shared[0];
+#pragma unroll
+    for (int i = 0; i < 256; i+=32) {
+        // half2 w = local_weight_ptr_down[i];
+        // atomicAdd(global_output_ptr + i * 2, __half2float(__hmul(w.x, sum_down)));
+        // atomicAdd(global_output_ptr + i * 2 + 1, __half2float(__hmul(w.y, sum_down)));
+        float2 w = __half22float2(local_weight_ptr_down[i]);
+        atomicAdd(global_output_ptr + i * 2, w.x * sum_down);
+        atomicAdd(global_output_ptr + i * 2 + 1, w.y * sum_down);
+    }
+    
+}
+
 int64_t fuse_gemv_cmp_dispatch(const at::Tensor &input, const at::Tensor &weight, at::Tensor &output, at::Tensor &idx, const double threshold) {
     length = 0;
     // printf("threshold: %f\n", threshold);
@@ -1036,4 +1130,18 @@ void fuse_gemv_flag_gemv_gemv_dispatch(const at::Tensor &input, const at::Tensor
     fuse_gemv_flag_gemv_gemv_mem256_kernel<<<gridDim, blockDim>>>(input_data, wgate_data, wup_data, wdown_data, output_data, flag_data, static_cast<float>(threshold));
     cudaDeviceSynchronize();
     gpuErrchk(cudaGetLastError());
+}
+
+void fuse_gemv_gemv_gemv_dispatch(const at::Tensor &input, const at::Tensor &wgate, const at::Tensor &wup, const at::Tensor &wdown, at::Tensor &output, const double threshold) {
+    half* input_data = reinterpret_cast<half*>(input.data_ptr());
+    half* wgate_data = reinterpret_cast<half*>(wgate.data_ptr());
+    half* wup_data = reinterpret_cast<half*>(wup.data_ptr());
+    half* wdown_data = reinterpret_cast<half*>(wdown.data_ptr());
+    float* output_data = reinterpret_cast<float*>(output.data_ptr());
+
+    dim3 gridDim(M,1,1);
+    dim3 blockDim(32,8,1);
+    fuse_gemv_gemv_gemv_mem256_fp32_kernel<<<gridDim, blockDim>>>(input_data, wgate_data, wup_data, wdown_data, output_data, static_cast<float>(threshold));
+    // cudaDeviceSynchronize();
+    // gpuErrchk(cudaGetLastError());
 }
