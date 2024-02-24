@@ -1,3 +1,7 @@
 .idea/
 experiments/checkpoints
 wandb
+**/__pycache__/
+thrunlab/*
+ckpt/*
+scores/

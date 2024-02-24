@@ -5,14 +5,14 @@ from .dataset import Dataset
 
 
 class OpenWebText(Dataset):
-    def __init__(self, tokenizer, model):
+    def __init__(self, tokenizer, model_type):
         """
         :param tokenizer: Tokenizer to tokenize the inputs
         :param model: Model to finetune / evaluate
         :param metrics: Metrics to evaluate the model
         :param prefix: Prefix to the inputs to start the summarization task
         """
-        super().__init__(tokenizer, model)
+        super().__init__(tokenizer,model_type)
         # self.tokenizer.pad_token = tokenizer.mask_toke
         self.tokenizer.pad_token = tokenizer.eos_token
 
@@ -32,9 +32,14 @@ class OpenWebText(Dataset):
         return tokenized_dataset["train"], tokenized_dataset["test"]
 
     def preprocess(self, examples):
-        inputs = self.tokenizer(examples["text"], max_length=1024, truncation=True)
+        inputs = self.tokenizer(
+            examples["text"], max_length=1024, truncation=True
+        )
 
-        return {"input_ids": inputs["input_ids"], "attention_mask": inputs["attention_mask"]}
+        return {
+            "input_ids": inputs["input_ids"],
+            "attention_mask": inputs["attention_mask"],
+        }
 
     def get_data_collator(self):
         """

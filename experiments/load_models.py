@@ -1,9 +1,15 @@
-from transformers import AutoTokenizer, TransfoXLLMHeadModel, GPT2LMHeadModel, GPT2Tokenizer
+from transformers import (
+    AutoTokenizer,
+    TransfoXLLMHeadModel,
+    GPT2LMHeadModel,
+    GPT2Tokenizer,
+)
 import torch
 import os
 
-from utils.constants import TRANSFORMER_XL, GPT2, GPT2_LARGE, NUM_BLOCKS_GPT2, SVD
+from utils.constants import GPT2, GPT2_LARGE
 from utils.parse_string import get_model_type, parse_string, string_to_dict
+
 # from accelerators.apply_accelerator import apply_accelerator
 
 
@@ -14,19 +20,17 @@ def get_naive_model_and_tokenizer(model_name: str):
     :param model_name: Name of the model to get
     :return: Model and tokenizer
     """
-    if model_name == TRANSFORMER_XL:
-        pretrained_model = "transfo-xl-wt103"
-        model = TransfoXLLMHeadModel.from_pretrained(pretrained_model)
-        tokenizer = AutoTokenizer.from_pretrained(pretrained_model)
-    elif GPT2 in model_name:
+    if GPT2 in model_name:
         tokenizer = AutoTokenizer.from_pretrained(model_name)
-        pad_token = '<PAD>'
+        pad_token = "<PAD>"
         # tokenizer.add_special_tokens({'pad_token': pad_token})
-        tokenizer.add_tokens('[PAD]')
+        tokenizer.add_tokens("[PAD]")
         tokenizer.pad_token = pad_token
         # tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
-        model = GPT2LMHeadModel.from_pretrained(model_name, pad_token_id=tokenizer.eos_token_id)
+        model = GPT2LMHeadModel.from_pretrained(
+            model_name, pad_token_id=tokenizer.eos_token_id
+        )
 
     else:
         assert False, "No such model"
@@ -52,9 +56,9 @@ def load_model(model_name: str):
     # Load the model
     if model_type == GPT2:
         tokenizer = GPT2Tokenizer.from_pretrained(GPT2)
-        model = GPT2LMHeadModel.from_pretrained(model_path, pad_token_id=tokenizer.eos_token_id)
-    elif model_type == TRANSFORMER_XL:
-        model = TransfoXLLMHeadModel.from_pretrained(model_path)
+        model = GPT2LMHeadModel.from_pretrained(
+            model_path, pad_token_id=tokenizer.eos_token_id
+        )
     else:
         assert False, f"{model_name} is not valid"
 
@@ -72,8 +76,13 @@ def load_model(model_name: str):
     if str_layers_to_accelerate != "None":
         layers_to_accelerate = parse_string(str_layers_to_accelerate)
 
-        apply_accelerator(model_type, model, layers_to_accelerate, accelerator_type,
-                          **accelerator_args)
+        apply_accelerator(
+            model_type,
+            model,
+            layers_to_accelerate,
+            accelerator_type,
+            **accelerator_args,
+        )
 
     # Load the checkpoint
     checkpoint_path = os.path.join(model_path, "pytorch_model.bin")
@@ -81,7 +90,9 @@ def load_model(model_name: str):
         checkpoint = torch.load(checkpoint_path)
         model.load_state_dict(checkpoint)
     else:
-        assert False, f"{model_name} could not be found in the checkpoint folder"
+        assert (
+            False
+        ), f"{model_name} could not be found in the checkpoint folder"
 
     print(f"Successfully loaded {model_name}")
 
@@ -97,6 +108,6 @@ def list_checkpoint_models():
     return os.listdir(checkpoint_path)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     model_name = "gpt2_SVD_{'k': 10}_accelerated_11_froze_0-10_dataset_billsum_trained_accelerated_layers"
     new_model = load_model(model_name)

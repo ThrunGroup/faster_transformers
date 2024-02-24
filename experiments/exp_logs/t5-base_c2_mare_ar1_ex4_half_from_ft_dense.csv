@@ -1,0 +1,2 @@
+eval_loss,eval_rouge1,eval_rouge2,eval_rougeL,eval_rougeLsum,eval_gen_len,eval_runtime,eval_samples_per_second,eval_steps_per_second,epoch,inference_time
+0.7947950959205627,0.6971,0.4227,0.6098,0.6102,228.3282,73.1547,25.904,0.41,6.99,73.16208672523499
