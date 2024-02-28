@@ -380,6 +380,7 @@ class MistralSparseSiluMLP(MistralMLP):
             post_act = self.act_fn(pre_act)
             if self.kill_sparse_swish_outputs:
                 dead_neurons = post_act.abs() <= self.dead_threshold
+                # print("pre act sparsity: ", (pre_act==0).float().mean())
 
                 dead_percentage = dead_neurons.float().mean()
                 agg_sparsity = dead_neurons.all(dim=0).float().mean()

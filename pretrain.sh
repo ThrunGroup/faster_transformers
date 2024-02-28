@@ -6,7 +6,8 @@ conda activate mistral
 # Initial steps and increment
 initial_steps=100
 step_increment=500
-max_iterations=4  # This will train up to 2000 steps in increments of 500
+max_iterations=10  # This will train up to 2000 steps in increments of 500
+date = "27th Feb"
 
 echo "Training for $initial_steps steps..."
 deepspeed --master_port 12311 experiments/pretrain_sparse_model.py --use_sparse_model --targeted_sparsity 0.5 \
@@ -18,8 +19,9 @@ echo "Evaluating after $initial_steps steps..."
 accelerate launch -m --main_process_port 12311 lm_eval --model hf \
 --model_args pretrained=/scr/jay/ckpt/submission/Mistral_Sparse_refined_web_50p,trust_remote_code=True \
 --tasks openbookqa,arc_easy,winogrande,hellaswag,arc_challenge,piqa,boolq,sciq \
---batch_size 16 \
+--batch_size auto \
 --log_samples \
+--num_fewshot 5 \
 --output_path output/mistral_sparse_refined_50p_${initial_steps}steps
 
 for ((i=1; i<=max_iterations; i++)); do
@@ -38,6 +40,7 @@ for ((i=1; i<=max_iterations; i++)); do
         --batch_size 16 \
         --log_samples \
         --output_path output/mistral_sparse_refined_50p_${current_steps}steps
+        --num_fewshot 5 \
 done
 
 
