@@ -21,7 +21,7 @@ class OpenWebText(Dataset):
         Load and build the openwebtext dataset which is already preprocessed.
         :return: dataset
         """
-        dataset = load_dataset("stas/openwebtext-10k", split="train[:10]")
+        dataset = load_dataset("stas/openwebtext-10k", split="train[:50]")
         dataset = dataset.train_test_split(test_size=0.2)
         tokenized_dataset = dataset.map(self.preprocess, batched=True)
         print(tokenized_dataset)

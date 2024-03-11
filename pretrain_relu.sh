@@ -5,8 +5,8 @@ conda activate mistral
 
 # Initial steps and increment
 initial_steps=100
-step_increment=500
-max_iterations=10  # This will train up to 2000 steps in increments of 500
+step_increment=250
+max_iterations=10  # This will train up to 5000 steps in increments of 500
 date=$(date +%Y-%m-%d)
 
 echo "Training for $initial_steps steps..."
@@ -18,12 +18,11 @@ deepspeed --master_port 12327 experiments/pretrain_sparse_model.py --use_sparse_
 
 
 echo "Evaluating after $initial_steps steps..."
-lm_eval --model hf \
---model_args pretrained=/scr/jay/ckpt/$date/Mistral_Sparse_refined_web_relu,trust_remote_code=True \
+accelerate launch -m --main_process_port 12327 lm_eval --model hf \
+--model_args pretrained=/scr/jay/ckpt/$date/Mistral_Sparse_refined_web_relu_no_adapter,trust_remote_code=True \
 --tasks openbookqa,arc_easy,winogrande,hellaswag,arc_challenge,piqa,boolq,sciq \
 --batch_size auto \
 --log_samples \
---num_fewshot 5 \
 --output_path /scr/jay/output/$date/mistral_sparse_refined_relu_${initial_steps}steps
 
 #
@@ -38,13 +37,12 @@ for ((i=1; i<=max_iterations; i++)); do
     --output_dir /scr/jay/ckpt/$date
 
     echo "Evaluating after $current_steps steps..."
-    lm_eval --model hf \
-        --model_args pretrained=/scr/jay/ckpt/$date/Mistral_Sparse_refined_web_relu,trust_remote_code=True \
+    accelerate launch -m --main_process_port 12327 lm_eval --model hf \
+        --model_args pretrained=/scr/jay/ckpt/$date/Mistral_Sparse_refined_web_relu_no_adapter,trust_remote_code=True \
         --tasks openbookqa,arc_easy,winogrande,hellaswag,arc_challenge,piqa,boolq,sciq \
         --batch_size auto \
         --log_samples \
-        --num_fewshot 5 \
-        --output_path /scr/jay/output/$date/mistral_sparse_refined_relu_${initial_steps}steps
+        --output_path /scr/jay/output/$date/mistral_sparse_refined_relu_${current_steps}steps
 done
 #
 #

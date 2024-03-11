@@ -593,7 +593,12 @@ def prepare_sparse_model(
     base_model_name: str = "mistralai/Mistral-7B-Instruct-v0.1",
     gradient_checkpointing: bool = False,
     use_relu: bool = False,
+    cutoff_large: bool = False,
 ):
+    # Register for AutoConfig and AutoModelforCausalLM
+    SparseMistralConfig.register_for_auto_class()
+    SparseMistralforCausalLM.register_for_auto_class("AutoModelForCausalLM")
+
     if use_flash_attn:
         attn_implementation = "flash_attention_2"
     else:
@@ -614,13 +619,14 @@ def prepare_sparse_model(
         else:
             config = MistralConfig.from_pretrained(base_model_name)
             config = get_sparse_mistral_config(config)
-            config.use_cache = False
+            config.use_cache = True
             model = SparseMistralforCausalLM.from_pretrained(
                 base_model_name,
                 config=config,
                 torch_dtype=torch.bfloat16,
                 attn_implementation=attn_implementation,
             )
+            model.config_class = SparseMistralConfig
 
         if use_sparse_model:
             model.config.use_sparse_model = use_sparse_model
@@ -698,8 +704,10 @@ def prepare_sparse_model(
         print(model.print_trainable_parameters())
 
     # Register for AutoConfig and AutoModelforCausalLM
-    SparseMistralConfig.register_for_auto_class()
-    SparseMistralforCausalLM.register_for_auto_class("AutoModelForCausalLM")
+    # SparseMistralConfig.register_for_auto_class()
+    # SparseMistralforCausalLM.register_for_auto_class("AutoModelForCausalLM")
+    # model.config.register_for_auto_class()
+    # model.register_for_auto_class("AutoModelForCausalLM")
 
     return model, tokenizer, model.config
 

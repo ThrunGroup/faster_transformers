@@ -203,7 +203,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         evaluation_strategy="steps",
         eval_steps=25,  # early stopping counts only when eval step and save step match
         max_steps=10 if is_debugging else exp_config.max_steps,
-        save_steps=250,
+        save_steps=min(250, exp_config.max_steps),
         logging_steps=5,
         save_strategy="steps",
         learning_rate=1e-5,
@@ -392,12 +392,13 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         if exp_config.use_sparse_model:
             thresholds = [float(m.mlp.dead_threshold) for m in model.model.layers]
             model.config.thresholds = thresholds
-        model.config.save_pretrained(output_dir)
-        model.save_pretrained(output_dir)
-        tokenizer.save_pretrained(output_dir)
+        # model.config.save_pretrained(output_dir)
+        model.save_pretrained(output_dir + "_no_adapter")
+        tokenizer.save_pretrained(output_dir + "_no_adapter")
 
     if push_to_hub:
         trainer.model = model
+        trainer.deepspeed = model
         trainer.push_to_hub()
 
     # Early Exit/ Early Entry experiments

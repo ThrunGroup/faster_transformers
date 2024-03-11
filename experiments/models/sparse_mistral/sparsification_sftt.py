@@ -314,6 +314,7 @@ class MistralSparseSiluMLP(MistralMLP):
         self.pre_act_hist_counts = torch.zeros(num_bins - 1)
         self.post_act_hist_counts = torch.zeros(num_bins - 1)
         self.t = 0
+        self.count = 0
         self.agg_sparsity = 0
 
         # Sparse activation function
@@ -359,6 +360,9 @@ class MistralSparseSiluMLP(MistralMLP):
 
         elif self.use_relu:
             post_act = self.relu(self.gate_proj(x))
+            self.count += 1
+            if self.count <= 1:
+                print("USING RELU!!!!")
 
             if self.is_stats:
                 dead_neurons = post_act == 0
@@ -376,6 +380,9 @@ class MistralSparseSiluMLP(MistralMLP):
             return self.down_proj(post_act * self.up_proj(x))
 
         else:
+            self.count += 1
+            if self.count <= 1:
+                print("USING SparseSILU!!!!")
             pre_act = self.gate_proj(x)
             post_act = self.act_fn(pre_act)
             if self.kill_sparse_swish_outputs:
@@ -393,6 +400,8 @@ class MistralSparseSiluMLP(MistralMLP):
                         self.agg_sparsity * self.visit_counts + agg_sparsity
                     ) / (self.visit_counts + 1)
                     self.visit_counts += 1
+
+                    self.a = dead_percentage
 
                     # print(self.agg_sparsity)
 
@@ -864,7 +873,10 @@ def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
 
 
 def plot_histogram(
-    bin_edges, histogram_counts: torch.tensor, title: str = "Activation Distribution", fig_dir: str = "figures"
+    bin_edges,
+    histogram_counts: torch.tensor,
+    title: str = "Activation Distribution",
+    fig_dir: str = "figures",
 ):
     plt.bar(
         bin_edges[:-1], histogram_counts, width=np.diff(bin_edges), edgecolor="black"
