@@ -1,7 +1,4 @@
 from datasets import load_dataset, Dataset
-from datasets.utils.logging import disable_progress_bar
-
-# disable_progress_bar()
 
 from utils.constants import (
     COLA,
@@ -78,16 +75,16 @@ def get_dataset_for_instruction_tuning(
 def get_instruction_and_keys(dataset_type):
     if dataset_type == COLA:
         keys = ["sentence"]
-        instruction = "Is 'sentence' grammatically correct? Respond in 'yes' or 'no'."
+        instruction = f"Is the following 'sentence' grammatically correct? Respond in 'yes' or 'no'."
     elif dataset_type == SST2:
         keys = ["sentence"]
-        instruction = "Is the sentiment of 'sentence' positive? Respond in 'yes' or 'no'."
+        instruction = "Is the sentiment of following 'sentence' positive? Respond in 'yes' or 'no'."
     elif dataset_type == QNLI:
         keys = ["sentence", "question"]
         instruction = "Does the 'sentence' contain the answer to the 'question'? Respond in 'yes' or 'no'."
     elif dataset_type == BOOLQ:
         keys = ["passage", "question"]
-        instruction = "Based on the 'passage', is the answer of the 'question' true? Respond in 'yes' or 'no'."
+        instruction = "Based on the following 'passage', is the answer of the 'question' true? Respond in 'yes' or 'no'."
     elif dataset_type == WIC:
         keys = ["sentence1", "sentence2", "word"]
         instruction = "Is the 'word' used as a similar meaning in each 'sentence1' and 'sentence2'? Respond in 'yes' or 'no'."

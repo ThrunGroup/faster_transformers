@@ -1,18 +1,6 @@
 from transformers import TrainerCallback, Trainer
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 from datasets import Dataset
-import math
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    Union,
-)
-
 
 import torch
 import torch.nn as nn
@@ -23,10 +11,7 @@ from typing import (
     Union,
 )
 
-from transformers.models.mistral.modeling_mistral import (
-    MistralMLP,
-    MistralAttention,
-)
+from transformers.models.mistral.modeling_mistral import MistralMLP, MistralAttention
 
 
 class SparseShared:
@@ -73,24 +58,19 @@ class SparseShared:
             loss = self.compute_loss(model, inputs)
 
         if self.args.n_gpu > 1:
-            loss = (
-                loss.mean()
-            )  # mean() to average on multi-gpu parallel training
+            loss = loss.mean()  # mean() to average on multi-gpu parallel training
 
         # important for a regularization loss
-        self.accelerator.backward(
-            loss, retain_graph=self.use_sparse_regularization
-        )
+        self.accelerator.backward(loss, retain_graph=self.use_sparse_regularization)
 
         return loss.detach() / self.args.gradient_accumulation_steps
+
 
 
 class SparseSiLUTrainer(Trainer):
     def __init__(self, *args, **kwargs):
         self.regularization_coefficient = 1
-        self.use_sparse_regularization = kwargs.pop(
-            "use_sparse_regularization", False
-        )
+        self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", False)
         super(SparseSiLUTrainer, self).__init__(*args, **kwargs)
 
     def training_step(
@@ -108,14 +88,10 @@ class SparseSiLUTrainer(Trainer):
             loss = self.compute_loss(model, inputs)
 
         if self.args.n_gpu > 1:
-            loss = (
-                loss.mean()
-            )  # mean() to average on multi-gpu parallel training
+            loss = loss.mean()  # mean() to average on multi-gpu parallel training
 
         # important for a regularization loss
-        self.accelerator.backward(
-            loss, retain_graph=self.use_sparse_regularization
-        )
+        self.accelerator.backward(loss, retain_graph=self.use_sparse_regularization)
 
         return loss.detach() / self.args.gradient_accumulation_steps
 
@@ -153,18 +129,6 @@ class SparseSiLUTrainer(Trainer):
             loss += self.regularization_coefficient * regularization_loss
 
         return (loss, outputs) if return_outputs else loss
-
-    def evaluate(
-        self,
-        eval_dataset: Optional[Dataset] = None,
-        ignore_keys: Optional[List[str]] = None,
-        metric_key_prefix: str = "eval",
-    ):
-        eval_results = super().evaluate(
-            eval_dataset, ignore_keys, metric_key_prefix
-        )
-        eval_results["perplexity"] = math.exp(eval_results["eval_loss"])
-        return eval_results
 
 
 class MistralDistributionCheck(MistralMLP):

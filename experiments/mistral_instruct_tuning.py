@@ -1,10 +1,8 @@
-import os
-
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
     AutoTokenizer,
-    Trainer,
+    BitsAndBytesConfig,
     TrainingArguments,
     EarlyStoppingCallback,
     MistralForCausalLM,
@@ -14,64 +12,173 @@ from transformers.integrations.deepspeed import deepspeed_init
 from trl import SFTTrainer, DataCollatorForCompletionOnlyLM
 from datasets import Dataset, load_dataset, load_metric
 from peft import (
+    AutoPeftModelForCausalLM,
     LoraConfig,
     get_peft_model,
     prepare_model_for_kbit_training,
+    PeftModel,
 )
 from evaluate import load
 from transformers.utils import is_sagemaker_mp_enabled, is_sagemaker_dp_enabled
+from deepspeed.runtime.zero.stage_1_and_2 import (
+    estimate_zero2_model_states_mem_needs_all_live,
+)
+from utils.utils import ds_print
+
+
 import torch
+import deepspeed
+import torch.nn as nn
 import os
 import gc
 import wandb
 import numpy as np
+import sys
 import argparse
-
-from experiments.data.get_dataset import get_dataset
+import time
+import warnings
 
 from experiments.models.sparse_mistral.sparsification_sftt import (
     SparseSFTTTrainer,
-    SparseTrainer,
+    SparseMistralforCausalLM,
+    SparseMistralConfig,
     apply_mistral_sparse_silu_mlp,
+    apply_mistral_sparse_decoder_layer,
     activate_stats,
     enable_sparse_silu,
-    enable_relu,
     print_dead_neuron_stats,
     set_sparse_threshold,
     plot_act,
     deactivate_stats,
     load_act_hist,
     save_act_hist,
-    GradualSparsificationScheduler,
-    GracefulRegularizationScheduler,
-    SparseMistral,
+    enable_last_k_modules,
+    enable_first_k_modules,
+    enable_sparse_predictor,
+    disable_sparse_predictor,
     get_sparse_mistral_config,
-    enable_distillation,
+    GracefulRegularizationScheduler,
 )
+from experiments.models.sparse_mistral.svd_router import SparsePredictor
 from utils.mistral_utils import compress_mistral
 from utils.utils import (
     print_size_of_model,
     is_running_deepspeed,
     is_mainprocess,
     get_datetime,
-    ds_print,
 )
 from utils.constants import (
     MISTRAL_YES_ID,
     MISTRAL_NO_ID,
     MISTRAL_7B,
     OPENWEBTEXT,
-    REFINEDWEB,
     COLA,
     BOOLQ,
     QNLI,
     SST2,
     WIC,
 )
-from format_dataset_for_instruction_tuning import (
+from experiments.format_dataset_for_instruction_tuning import (
     get_formatting_func,
     get_dataset_for_instruction_tuning,
 )
+
+
+def load_glue(data_type: str, seed: int = 0):
+    # Load = dataset
+    if data_type == "cola":
+        dataset = load_dataset("glue", data_type)
+    elif data_type == "boolq":
+        dataset = load_dataset("super_glue", data_type)
+    else:
+        raise NotImplementedError(f"{data_type} is not implemented.")
+
+    # Split the training dataset into 85% train and 15% new validation
+    train_dataset = dataset["train"].train_test_split(test_size=0.15, seed=seed)
+
+    # Set the new splits
+    dataset["train"] = train_dataset["train"]
+    dataset["validation"] = train_dataset["test"]
+    dataset["test"] = dataset["validation"]  # Set original validation
+    return dataset
+
+
+def create_cola_prompt(sample):
+    bos_token = "<s>"
+    instruction = "Is the following 'input' sentence is grammatically correct? Respond in 'yes' or 'no'."
+    input = sample["sentence"]
+    response = "yes" if sample["label"] == 1 else "no"
+    eos_token = "</s>"
+
+    full_prompt = ""
+    full_prompt += bos_token
+    full_prompt += f"[INST]### Instruction: {instruction}"
+    full_prompt += f"### Input: {input}[/INST]"
+    full_prompt += f"### Response: {response}"
+    full_prompt += eos_token
+
+    return full_prompt
+
+
+def create_boolq_prompt(sample):
+    bos_token = "<s>"
+    instruction = "Based on the following 'passage', determine if the 'question' is true or false. Respond in 'yes' or 'no'."
+    passage = sample["passage"]
+    question = sample["question"]
+    response = "yes" if sample["label"] == 1 else "no"
+    eos_token = "</s>"
+
+    full_prompt = ""
+    full_prompt += bos_token
+    full_prompt += f"[INST]### Instruction: {instruction}"
+    full_prompt += f"### Passage: {passage}"
+    full_prompt += f"### Question: {question}[/INST]"
+    full_prompt += f"### Response: {response}"
+    full_prompt += eos_token
+
+    return full_prompt
+
+
+def formatting_func_cola(samples):
+    formatted_prompts = []
+    bos_token = "<s>"
+    instruction = "Is the following 'input' sentence is grammatically correct? Respond in 'yes' or 'no'."
+    eos_token = "</s>"
+    for idx in range(len(samples["sentence"])):
+        input = samples["sentence"][idx]
+        response = "yes" if samples["label"][idx] == 1 else "no"
+
+        full_prompt = ""
+        full_prompt += bos_token
+        full_prompt += f"[INST]### Instruction: {instruction}"
+        full_prompt += f"### Input: {input}[/INST]"
+        full_prompt += f"### Response: {response}"
+        full_prompt += eos_token
+        formatted_prompts.append(full_prompt)
+    return formatted_prompts
+
+
+def formatting_func_boolq(samples):
+    formatted_prompts = []
+    bos_token = "<s>"
+    instruction = "Based on the following 'passage', is the 'question' true or false? Respond in 'yes' or 'no'."
+    eos_token = "</s>"
+
+    for idx in range(len(samples["question"])):
+        passage = samples["passage"][idx]
+        question = samples["question"][idx]
+        response = "yes" if samples["label"][idx] == 1 else "no"
+
+        full_prompt = ""
+        full_prompt += bos_token
+        full_prompt += f"[INST]### Instruction: {instruction}"
+        full_prompt += f"### Passage: {passage}"
+        full_prompt += f"### Question: {question}[/INST]"
+        full_prompt += f"### Response: {response}"
+        full_prompt += eos_token
+        formatted_prompts.append(full_prompt)
+
+    return formatted_prompts
 
 
 def find_left_of_a(np_array, a):
@@ -88,7 +195,7 @@ def find_left_of_a(np_array, a):
                 result.append(row[index - 1])
         except IndexError:
             # This occurs if 'a' is not found in the row
-            ds_print("ERROR: No EOS Token is found in the prompt when evaluating.")
+            print("ERROR: No EOS Token is found in the prompt when evaluating.")
             pass
     return np.array(result)
 
@@ -122,7 +229,7 @@ def extract_response(logits, labels):
     return np.array(new_logits, dtype=int), np.array(new_labels, dtype=int)
 
 
-def classification_preprocess_logits_for_metrics(logits, labels):
+def preprocess_logits_for_metrics(logits, labels):
     if isinstance(logits, tuple):
         logits = logits[0]
 
@@ -137,7 +244,7 @@ def classification_preprocess_logits_for_metrics(logits, labels):
     return max_value_indices
 
 
-def classification_compute_metrics(eval_preds):
+def compute_metrics(eval_preds):
     preds, labels = eval_preds
 
     if isinstance(preds, tuple):
@@ -150,58 +257,25 @@ def classification_compute_metrics(eval_preds):
     return results
 
 
-def evaluate_zero_shot(
-    trainer: Trainer,
-    dataset_types: list = None,
-    tokenizer=None,
-    train_batch_size=32,
-    test_batch_size=32,
-    max_seq_length=1024,
-    return_sample_dataset=False,
-):
-    ds_print("Datasets: ", dataset_types)
-    ds_print("==Test set evaluation==")
-    for dataset_type in dataset_types:
-        ds_print(f"Evaluating on {dataset_type} dataset...")
-        formatting_func = get_formatting_func(dataset_type)
-        eval_accuracy_list = []
-        for seed in range(3):
-            _, _, test_dataset, _ = get_dataset_for_instruction_tuning(
-                dataset_type,
-                seed=seed,
-                tokenizer=tokenizer,
-                formatting_func=formatting_func,
-                max_seq_length=max_seq_length,
-                train_batch_size=train_batch_size,
-                test_batch_size=test_batch_size,
-                return_sample_dataset=return_sample_dataset,
-            )
-            eval_result = trainer.evaluate(test_dataset)
-            eval_accuracy_list += (eval_result["eval_accuracy"],)
-
-        if is_mainprocess():
-            ds_print(f"Mean accuracy: {np.mean(eval_accuracy_list)}")
-
-
 def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
+    print(f"Config: {exp_config}")
     if use_wandb:
         if is_running_deepspeed():
             if int(os.environ["LOCAL_RANK"]) == 0:
-                wandb_run = wandb.init()
+                wandb.init()
             if use_sweep:
                 exp_config = wandb.config
             else:
                 wandb.config = exp_config
+            time.sleep(10)
         else:
-            wandb_run = wandb.init()
+            wandb.init()
             if use_sweep:
                 exp_config = wandb.config
             else:
                 wandb.config = exp_config
 
-    pretrained_model_to_load = exp_config.pretrained_model_to_load
     model_name = exp_config.model_name
-    max_steps = exp_config.max_steps
     num_epochs = exp_config.num_epochs
     train_batch_size = exp_config.train_batch_size
     test_batch_size = exp_config.test_batch_size
@@ -211,152 +285,130 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     dataset_type = exp_config.dataset_type
     is_plot = exp_config.is_plot
     seed = exp_config.seed
-    use_sparse_model = exp_config.use_sparse_model
-    use_relu = exp_config.use_relu
-    do_pretraining = exp_config.do_pretraining
-    eval_steps = exp_config.eval_steps
-    do_evaluate = exp_config.do_evaluate
-    learning_rate = 1e-5
 
-    # Gradual Sparsification
-    use_gradual_sparsification = exp_config.use_gradual_sparsification
-    num_warmup_steps = exp_config.num_warmup_steps
-    increment_ratio = exp_config.increment_ratio
-
-    # Graceful Regularization
-    use_graceful_regularization = exp_config.use_graceful_regularization
-    keep_regularization_with_kill = exp_config.keep_regularization_with_kill
-
-    # Distillation
-    use_distillation = exp_config.use_distillation
-
-    ds_print("==========")
-    ds_print(model_name)
-    ds_print("==========")
-
-    if do_evaluate:
-        ds_print("Evaluating without training...")
-        max_steps = 1
-        learning_rate = 0.0
-
-    if not use_sparse_model:
+    # If not using sparse Mistral model, all flags related to sparse model should be set as zero or false.
+    if not exp_config.use_sparse_model:
         exp_config.use_sparse_regularization = (
             exp_config.print_sparsity
         ) = exp_config.print_act_stats = exp_config.set_sparsity_aware_threshold = False
+        exp_config.targeted_sparsity = 0
+        # exp_config.sparse_model_dir = None
+
+    if exp_config.use_relu:
+        exp_config.targeted_sparsity = "ReLU"
+
+    run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}_graceful_{exp_config.use_graceful_regularization}"
+    print("RUN: ", run_name)
+
+    # Load dataset
+    dataset = get_dataset_for_instruction_tuning(dataset_type, seed=seed)
+    formatting_func = get_formatting_func(dataset_type)
+    max_seq_length = 2048
+
+    if is_debugging:
+        output_dir = os.path.join(exp_config.output_dir, run_name + "_debugging")
+        dataset["train"] = Dataset.from_dict(dataset["train"][:300])
+        dataset["validation"] = Dataset.from_dict(dataset["validation"][:300])
+        dataset["test"] = Dataset.from_dict(dataset["test"][:])
+    else:
+        output_dir = os.path.join(exp_config.output_dir, run_name)
+    print("OUTPUT DIR: ", output_dir)
+
+    # Load model
+    model, tokenizer, config = prepare_sparse_model(
+        is_debugging,
+        exp_config.use_sparse_model,
+        exp_config.use_sparse_regularization,
+        exp_config.use_spm,
+        exp_config.sparse_model_dir,
+        exp_config.use_lora,
+        exp_config.use_flash_attn,
+        base_model_name="mistralai/Mistral-7B-v0.1",
+    )
+    print(estimate_zero2_model_states_mem_needs_all_live(model))
+
+    def tokenize(element):
+        outputs = tokenizer(
+            formatting_func(element),
+            add_special_tokens=True,
+            truncation=True,
+            padding=False,
+            max_length=max_seq_length,
+            return_overflowing_tokens=False,
+            return_length=False,
+        )
+        return {
+            "input_ids": outputs["input_ids"],
+            "attention_mask": outputs["attention_mask"],
+        }
+
+    # Roundabout way to avoid error
+    test_dataset = dataset["test"].map(
+        tokenize,
+        batched=True,
+        remove_columns=dataset["test"].column_names,
+        num_proc=None,
+        batch_size=test_batch_size,
+    )
+
+    # Use only 1000 samples of training dataset to collect statistics
+    if exp_config.set_sparsity_aware_threshold:
+        sampled_train_dataset = Dataset.from_dict(dataset["train"][:1000])
+        sampled_train_dataset = sampled_train_dataset.map(
+            tokenize,
+            batched=True,
+            remove_columns=sampled_train_dataset.column_names,
+            num_proc=None,
+            batch_size=train_batch_size,
+        )
 
     if use_wandb:
-        run_name = f"{model_name}_{dataset_type}"
-        if use_sparse_model:
-            run_name += f"_{exp_config.targeted_sparsity}"
         if is_debugging:
             run_name += "_debugging"
-        if use_gradual_sparsification:
-            run_name += "_warmup"
-        if use_relu:
-            run_name += "_relu"
         run_name += "_" + get_datetime(True)
         wandb.name = run_name
 
         if is_running_deepspeed():
             if is_mainprocess():
                 wandb_run = wandb.init(
-                    project=f"MISTRAL_{dataset_type}",
+                    project=f"{model_name}_{dataset_type}",
                     name=run_name,
                     reinit=True,
                     config=exp_config,
                 )
         else:
             wandb_run = wandb.init(
-                project=f"MISTRAL_{dataset_type}",
+                project=f"{model_name}_{dataset_type}",
                 name=run_name,
                 reinit=True,
                 config=exp_config,
             )
 
-    debugging_output_dir = ""
-
-    model, tokenizer = prepare_sparse_model(
-        is_debugging,
-        use_sparse_model,
-        exp_config.use_sparse_regularization,
-        use_relu,
-        model_name,
-        pretrained_model_to_load,
-        use_distillation,
-    )
-
-    ds_print("Loading a dataset...")
-    ds_print("============")
-    ds_print("SEED: ", seed)
-    ds_print("============")
-    if do_pretraining:
-        ds_print("DO pretraining")
-        # dataset_type = OPENWEBTEXT
-        dataset_type = REFINEDWEB
-        dataset = get_dataset(dataset_type, tokenizer, MISTRAL_7B)
-        train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-        ds_print(train_dataset, val_dataset, test_dataset)
-        sample_dataset = test_dataset
-        max_seq_length = 1024
-        data_collator = dataset.get_data_collator()
-        trainer_func = SparseTrainer
-    else:
-        formatting_func = get_formatting_func(dataset_type)
-        max_seq_length = 2048
-        (
-            train_dataset,
-            val_dataset,
-            test_dataset,
-            sample_dataset,
-        ) = get_dataset_for_instruction_tuning(
-            dataset_type,
-            seed,
-            tokenizer,
-            formatting_func,
-            max_seq_length,
-            train_batch_size,
-            test_batch_size,
-            return_sample_dataset=exp_config.set_sparsity_aware_threshold,
-        )
-        response_template = "Response:"
-        data_collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
-        trainer_func = SparseSFTTTrainer
-        compute_metrics = classification_compute_metrics
-        preprocess_logits_for_metrics = classification_preprocess_logits_for_metrics
-
-    if is_debugging:
-        debugging_output_dir = "debugging_output"
-        os.makedirs(debugging_output_dir, exist_ok=True)
-        train_dataset = train_dataset.select(range(64))
-        val_dataset = val_dataset.select(range(64))
-        test_dataset = test_dataset.select(range(64))
-        output_dir = debugging_output_dir
-    else:
-        output_dir = os.path.join(exp_config.output_dir, model_name)
+    response_template = "Response:"
+    collator = DataCollatorForCompletionOnlyLM(response_template, tokenizer=tokenizer)
 
     trainer_config = TrainingArguments(
         output_dir=output_dir,
         evaluation_strategy="steps",
-        eval_steps=eval_steps,
-        # early stopping counts only when eval step and save step match
-        save_steps=1000,
+        eval_steps=50,  # early stopping counts only when eval step and save step match
+        max_steps=10 if is_debugging else -1,
         logging_steps=5,
         save_strategy="steps",
-        learning_rate=learning_rate,
+        learning_rate=1e-5,
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
-        max_steps=max_steps,
         save_total_limit=1,
         load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",
+        metric_for_best_model="eval_accuracy",
         greater_is_better=False,
-        gradient_accumulation_steps=2,
-        deepspeed="mistral_ds_config.json",
+        # report_to="wandb" if use_wandb else None,
+        gradient_accumulation_steps=exp_config.gradient_accumulation_steps,
+        deepspeed=exp_config.ds_config_path if not is_debugging else None,
         per_device_train_batch_size=train_batch_size,
         per_device_eval_batch_size=test_batch_size,
         gradient_checkpointing=gradient_checkpointing,
-        bf16=True,
+        bf16=True if not is_debugging else False,
         ddp_find_unused_parameters=True,
         hub_model_id=f"thrunlab/{model_name}",
         push_to_hub=push_to_hub,
@@ -364,234 +416,313 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         data_seed=seed,
     )
 
-    early_stopping = EarlyStoppingCallback(early_stopping_patience=3)
-    sparsification_scheduler = GradualSparsificationScheduler(
-        num_warmup_steps=num_warmup_steps,
-        increment_ratio=increment_ratio,
-        is_enabled=use_gradual_sparsification,
-        model_name=model_name,
-    )
+    early_stopping = EarlyStoppingCallback(early_stopping_patience=3, early_stopping_threshold=0.002)
     graceful_regularization_scheduler = GracefulRegularizationScheduler(
-        num_warmup_steps=num_warmup_steps,
-        is_enabled=use_graceful_regularization,
+        num_warmup_steps=50,
+        is_enabled=exp_config.use_graceful_regularization,
         model_name=model_name,
         test_dataset=test_dataset,
         targeted_sparsity=exp_config.targeted_sparsity,
-        keep_regularization_with_kill=keep_regularization_with_kill,
     )
-
-    ds_print("Use sparse reg: ", exp_config.use_sparse_regularization)
-    ds_print("Use graceful reg: ", use_graceful_regularization)
-
-    trainer_args = {
-        "model": model,
-        "tokenizer": tokenizer,
-        "data_collator": data_collator,
-        "args": trainer_config,
-        "train_dataset": train_dataset,
-        "eval_dataset": val_dataset,
-        "callbacks": [early_stopping, sparsification_scheduler, graceful_regularization_scheduler],
-        "use_sparse_regularization": exp_config.use_sparse_regularization,
-        "use_distillation": use_distillation,
-    }
-
-    ds_print("Do pretraining: ", do_pretraining)
-    if not do_pretraining:
-        trainer_args["formatting_func"] = formatting_func
-        trainer_args["max_seq_length"] = max_seq_length
-        trainer_args["compute_metrics"] = compute_metrics
-        trainer_args["preprocess_logits_for_metrics"] = preprocess_logits_for_metrics
-
-    trainer = trainer_func(**trainer_args)
+    trainer = SparseSFTTTrainer(
+        model=model,
+        # peft_config=peft_config,
+        max_seq_length=max_seq_length,
+        tokenizer=tokenizer,
+        data_collator=collator,
+        formatting_func=formatting_func,
+        args=trainer_config,
+        train_dataset=Dataset.from_dict(dataset["train"][:]),
+        eval_dataset=Dataset.from_dict(dataset["validation"][:]),
+        compute_metrics=compute_metrics,
+        preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        callbacks=[early_stopping, graceful_regularization_scheduler],
+        use_sparse_regularization=exp_config.use_sparse_regularization,
+    )
     graceful_regularization_scheduler.set_trainer(trainer)
 
+    if gradient_checkpointing:
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        model.enable_input_require_grads()  # See https://github.com/huggingface/transformers/issues/23170
+
+    if exp_config.use_lora and not is_debugging:
+        base_model = model.get_base_model()
+    else:
+        base_model = model
+
     # Collect statistics and find the threshold for given sparsity
-    if not use_graceful_regularization and exp_config.set_sparsity_aware_threshold:
-        ds_print("Setting Sparsity-Aware Threshold...")
+    if not exp_config.use_graceful_regularization and exp_config.set_sparsity_aware_threshold:
         if is_debugging:
-            act_hist_path = f"histograms/debugging/{exp_config.targeted_sparsity}/act_hist.pt"
+            act_hist_path = "/tmp/pre_finetune__act_hist.pt"
         else:
-            act_hist_path = f"/matx/u/lukeai/histograms/{exp_config.targeted_sparsity}/act_hist.pt"
-        ds_print("histogram: ", act_hist_path)
+            act_hist_path = f"/matx/u/lukeai/histograms/{model_name}_{dataset_type}_act_hist.pt"
 
-        activate_stats(model.get_base_model())
+        activate_stats(base_model)
         if os.path.exists(act_hist_path):
-            load_act_hist(model.get_base_model(), act_hist_path)
+            load_act_hist(base_model, act_hist_path)
         else:
-            trainer.evaluate(test_dataset)
-            save_act_hist(model.get_base_model(), act_hist_path)
-
-        set_sparse_threshold(model.get_base_model(), exp_config.targeted_sparsity)
+            is_deepspeed_enabled = trainer.is_deepspeed_enabled
+            trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
+            trainer.evaluate(sampled_train_dataset)
+            trainer.is_deepspeed_enabled = is_deepspeed_enabled
+            save_act_hist(base_model, act_hist_path)
+        if exp_config.use_relu:
+            set_sparse_threshold(base_model, 0, True)
+        else:
+            set_sparse_threshold(base_model, exp_config.targeted_sparsity)
 
         # Plot activation histograms
         if is_plot:
             if is_running_deepspeed():
                 if is_mainprocess():
-                    plot_act(model.get_base_model())
+                    plot_act(base_model)
             else:
-                plot_act(model.get_base_model())
+                plot_act(base_model)
 
         # Train Model after deactivating collecting statistics
-        deactivate_stats(model.get_base_model())
+        deactivate_stats(base_model)
 
-    ds_print("Training...")
+    # Only use distillation loss if training sparse predictor
+    if exp_config.use_spm:
+        if exp_config.use_sparse_model:
+            trainer.freeze_original_weights = False
+            trainer.initialize_sparse_decoder_layers(base_model)
+            trainer.use_spm_loss = True
+            disable_sparse_predictor(base_model)
+
+            is_deepspeed_enabled = trainer.is_deepspeed_enabled
+            trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
+            print(trainer.evaluate(test_dataset))
+            trainer.is_deepspeed_enabled = is_deepspeed_enabled
+
+            enable_sparse_predictor(base_model)
+        else:
+            warnings.warn("use_spm arg is ignored as use_spare_model arg is not activated.")
     trainer.train()
 
-    print(f"====TRAINER USE_SPARSE_REG: {trainer.use_sparse_regularization}===")
-
     # Evaluate on test dataset
-    model = model.merge_and_unload()
-    trainer.model = model
+    if exp_config.use_lora:
+        model = model.merge_and_unload()
+
+    # Enable sparse predictor in inference stage
+    if exp_config.use_spm:
+        if exp_config.use_sparse_model:
+            enable_sparse_predictor(model)
+        else:
+            warnings.warn("use_spm arg is ignored as use_spare_model arg is not activated.")
 
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
+    eval_result = trainer.evaluate(test_dataset)
+    print("===Test Result==")
+    print(eval_result)
+    log_dict = {
+        "test_accuracy": eval_result["eval_accuracy"],
+    }
+
+    if exp_config.print_sparsity:
+        total_sparsity = print_dead_neuron_stats(model)
+        log_dict.update({"total_sparsity": total_sparsity})
+
+    if exp_config.print_act_stats:
+        if is_debugging:
+            act_hist_path = "/tmp/post_finetune__act_hist.pt"
+        else:
+            act_hist_path = f"/matx/u/lukeai/histograms/{model_name}_{dataset_type}_act_hist.pt"
+        save_act_hist(model, act_hist_path)
+        plot_act(model)
 
     if exp_config.model_save:
-        trainer.save_model()
+        # Save thresholds
+        if exp_config.use_sparse_model:
+            thresholds = [float(m.mlp.dead_threshold) for m in model.model.layers]
+            model.config.thresholds = thresholds
+        model.config.save_pretrained(output_dir)
+        model.save_pretrained(output_dir)
+        print("Model saved to ", output_dir)
 
-    if push_to_hub and is_mainprocess():
-        ds_print("Pushing to hub")
-        ds_print("model: ", model)
-        torch.save(model.state_dict(), f"/matx/u/lukeai/{model_name}.pt")
+    if push_to_hub:
+        trainer.model = model
         trainer.push_to_hub()
-        ds_print(f"Pushed to hub: thrunlab/{model_name}")
 
-    if do_evaluate:
-        dataset_types = exp_config.dataset_types.split(",")
-        evaluate_zero_shot(
-            trainer,
-            dataset_types,
-            tokenizer,
-            train_batch_size,
-            test_batch_size,
-            max_seq_length,
-        )
-    else:
-        eval_result = trainer.evaluate(test_dataset)
-        ds_print("===Test Result==")
-        ds_print(eval_result)
+    # Early Exit/ Early Entry experiments
+    # model.model.original_layers = nn.ModuleList([layer for layer in model.model.layers])
+    # for idx in range(len(model.model.original_layers)):
+    #     enable_last_k_modules(model, idx)
+    #     print(f"Early Start: layer {idx}!!!!")
+    #     eval_result = trainer.evaluate(test_dataset)
+    #     print(eval_result)
+    #     log_dict[f"early start-{idx} accuracy"] = eval_result["eval_accuracy"]
+    #
+    # for idx in range(len(model.model.original_layers)):
+    #     enable_first_k_modules(model, idx)
+    #     print(f"Early Exit: layer {idx}!!!!")
+    #     eval_result = trainer.evaluate(test_dataset)
+    #     print(eval_result)
+    #     log_dict[f"early exit-{idx} accuracy"] = eval_result["eval_accuracy"]
 
-        log_dict = {"test_loss": eval_result["eval_loss"]}
-        if "eval_accuracy" in eval_result.keys():
-            log_dict["test_accuracy"] = eval_result["eval_accuracy"]
-
-        if exp_config.print_sparsity:
-            total_sparsity = print_dead_neuron_stats(model)
-            log_dict.update({"total_sparsity": total_sparsity})
-
-        if exp_config.print_act_stats:
-            if is_debugging:
-                act_hist_path = f"histograms/debugging/{model_name}/{dataset_type}_act_hist.pt"
-            else:
-                act_hist_path = f"histograms/{model_name}/{dataset_type}_act_hist.pt"
-            save_act_hist(model, act_hist_path)
-            plot_act(model)
-
-        if use_wandb and is_mainprocess():
+    if use_wandb:
+        if is_running_deepspeed():
+            if is_mainprocess():
+                wandb.log(log_dict)
+        else:
             wandb.log(log_dict)
 
     # Empty out gpu memory
     del trainer
+    del model
     gc.collect()
     torch.cuda.empty_cache()
     gc.collect()
+    torch.cuda.empty_cache()
+
+    if use_wandb:
+        wandb.finish()
 
 
 def prepare_sparse_model(
     is_debugging=False,
     use_sparse_model: bool = True,
     use_sparse_regularization: bool = False,
-    use_relu: bool = False,
-    model_name: str = None,
-    pretrained_model_to_load: str = None,
-    use_distillation: bool = False,
+    use_sparse_predictor: bool = False,
+    sparse_model_dir: str = None,
+    use_lora: bool = True,
+    use_flash_attn: bool = False,
+    base_model_name: str = "mistralai/Mistral-7B-Instruct-v0.1",
+    gradient_checkpointing: bool = False,
+    start_steps: int = 0,
 ):
-    ds_print("Loading a model...")
-    if is_debugging:
-        config = MistralConfig(
-            hidden_size=64,
-            intermediate_size=64,
-            num_hidden_layers=2,
-        )
-        model = MistralForCausalLM(config=config)
+    if use_flash_attn:
+        attn_implementation = "flash_attention_2"
     else:
-        config = MistralConfig()
-        if pretrained_model_to_load == "mistralai/Mistral-7B-v0.1":
-            sparse_config = get_sparse_mistral_config(config, use_sparse_model=False, use_sparse_regularization=False)
-            # model = SparseMistral.from_pretrained(
-            #     pretrained_model_to_load,
-            #     config=sparse_config,
-            #     use_flash_attention_2=True,
-            # )
-            model = AutoModelForCausalLM.from_pretrained(
-                pretrained_model_to_load,
-                use_flash_attention_2=True,
-            )
-        else:
-            sparse_config = get_sparse_mistral_config(config)
-            model = SparseMistral(sparse_config)
-            original_state_dict = torch.load(
-                f"/matx/u/lukeai/auto.pt",
-                map_location="cpu",
-            )
-            model.load_state_dict(original_state_dict, strict=False)
-            if is_mainprocess():
-                ds_print("model1: ", model)
+        attn_implementation = None
 
-            # ds_print(f"Loading from /matx/u/lukeai/{pretrained_model_to_load}.pt")
-            # ds_print(
-            #     os.path.exists(f"/matx/u/lukeai/{pretrained_model_to_load}.pt")
-            # )
-            # state_dict = torch.load(
-            #     f"/matx/u/lukeai/{pretrained_model_to_load}.pt",
-            #     map_location="cpu",
-            # )
-            # model.load_state_dict(state_dict)
+    print(base_model_name)
 
-    if use_sparse_model:
-        ds_print("Enabling Sparse SiLU...")
-        apply_mistral_sparse_silu_mlp(
-            model,
-            model.config,
-            use_sparse_regularization=use_sparse_regularization,
-        )
-        if use_relu:
-            enable_relu(model)
+    if sparse_model_dir is None:
+        if is_debugging:
+            config = MistralConfig(
+                hidden_size=64,
+                intermediate_size=64,
+                num_hidden_layers=2,
+                # num_attention_heads=4,
+            )
+            if base_model_name == MISTRAL_7B:
+                if use_sparse_model:
+                    config = get_sparse_mistral_config(config)
+                    model = SparseMistralforCausalLM(config=config)
+                else:
+                    model = MistralForCausalLM(config=config)
+            else:
+                config = get_sparse_mistral_config(config)
+                model = SparseMistralforCausalLM(config)
+                state_dict = torch.load(
+                    f"/scr/lukeai/{base_model_name}.pt",
+                    map_location="cpu",
+                )
+                model.load_state_dict(state_dict, strict=False)
+                if is_mainprocess():
+                    ds_print("model: ", model)
+
         else:
+            config = MistralConfig.from_pretrained(MISTRAL_7B)
+            config = get_sparse_mistral_config(config)
+            config.use_cache = False
+
+            if start_steps == 0:
+                model = SparseMistralforCausalLM.from_pretrained(
+                    base_model_name,
+                    config=config,
+                    torch_dtype=torch.bfloat16,
+                    attn_implementation=attn_implementation,
+                )
+            else:
+                sparse_config = get_sparse_mistral_config(config)
+                model = SparseMistralforCausalLM(sparse_config)
+                state_dict = torch.load(
+                    f"/scr/lukeai/Mistral_Sparse_{start_steps}.pt",
+                    map_location="cpu",
+                )
+                model.load_state_dict(state_dict, strict=False)
+                if is_mainprocess():
+                    ds_print("model: ", model)
+
+        if use_sparse_model:
+            model.config.use_sparse_model = use_sparse_model
+            apply_mistral_sparse_silu_mlp(model, model.config, use_sparse_regularization=use_sparse_regularization)
             enable_sparse_silu(model)
-        if use_distillation:
-            enable_distillation(model)
+        if use_sparse_predictor:
+            model.config.use_sparse_predictor = use_sparse_predictor
+            apply_mistral_sparse_decoder_layer(model, model.config, init_svd=not is_debugging)
+        if use_sparse_regularization:
+            model.config.us_sparse_regularization = use_sparse_regularization
+    else:
+        config = SparseMistralConfig.from_pretrained(sparse_model_dir)
+        print(config)
+        model = SparseMistralforCausalLM.from_pretrained(
+            sparse_model_dir,
+            config=config,
+            torch_dtype=torch.bfloat16,
+            attn_implementation=attn_implementation,
+        )
+        if use_sparse_predictor:
+            svd_model_dir = sparse_model_dir + "_svd"
+            init_svd = not os.path.exists(svd_model_dir)
+            model.config.use_sparse_predictor = use_sparse_predictor
 
-    if is_mainprocess():
-        ds_print("model2: ", model)
+            if init_svd:
+                apply_mistral_sparse_decoder_layer(
+                    model,
+                    model.config,
+                    init_svd=False,
+                )
+                model.config.init_svd = False
+                model.save_pretrained(svd_model_dir)
+            else:
+                config = SparseMistralConfig.from_pretrained(svd_model_dir)
+                model = SparseMistralforCausalLM.from_pretrained(
+                    svd_model_dir,
+                    config=config,
+                )
+    # if use_sparse_predictor:
+    #     # Freeze original params
+    #     for params in model.parameters():
+    #         params.requires_grad = False
+    #     for name, module in model.named_modules():
+    #         if isinstance(module, SparsePredictor):
+    #             for name, params in module.named_parameters():
+    #                 params.requires_grad = True
 
-    tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
+    tokenizer = AutoTokenizer.from_pretrained(MISTRAL_7B)
+
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
-    ds_print("Applying LoRA...")
-    peft_config = LoraConfig(
-        lora_alpha=16,
-        lora_dropout=0.1,
-        r=128,
-        bias="none",
-        target_modules=[
-            "q_proj",
-            "v_proj",
-            "gate_proj",
-            "down_proj",
-            "up_proj",
-        ],
-        task_type="CAUSAL_LM",
-    )
-    model = get_peft_model(model, peft_config)
-    model.enable_input_require_grads()
+    if gradient_checkpointing:
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        model.enable_input_require_grads()  # See https://github.com/huggingface/transformers/issues/23170
+    if use_lora and not is_debugging:
+        peft_config = LoraConfig(
+            lora_alpha=16,
+            lora_dropout=0.1,
+            r=64,
+            bias="none",
+            task_type="CAUSAL_LM",
+            target_modules=["q_proj", "v_proj", "gate_proj", "up_proj", "down_proj"],
+        )
+        model = get_peft_model(model, peft_config)
+        print(model.print_trainable_parameters())
 
-    return model, tokenizer
+    # Register for AutoConfig and AutoModelforCausalLM
+    SparseMistralConfig.register_for_auto_class()
+    SparseMistralforCausalLM.register_for_auto_class("AutoModelForCausalLM")
+
+    return model, tokenizer, model.config
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Training script for text classification")
+    # Zero-shot evaluation
     parser.add_argument("--dataset_types", type=str, help="List of dataset types")
     parser.add_argument(
         "--do_evaluate",
@@ -600,56 +731,52 @@ def parse_args():
         help="Whether to evaluate the model without training",
     )
     parser.add_argument(
-        "--seed",
-        type=int,
-        default=0,
-        help="Random Seed",
-    )
-    parser.add_argument(
-        "--model_name",
-        type=str,
-        default="Mistral_Sparse_0.1",
-        help="Name of the model",
-    )
-    parser.add_argument(
         "--pretrained_model_to_load",
         type=str,
         default="mistralai/Mistral-7B-v0.1",
         help="Name of the model",
     )
-    parser.add_argument("--dataset_type", type=str, default="cola", help="Dataset Type")
     parser.add_argument(
-        "--output_dir",
-        type=str,
-        default="ckpt",
-        help="Output Directory",
-    )
-    parser.add_argument("--num_epochs", type=int, default=8, help="Number of training epochs")
-    parser.add_argument("--eval_steps", type=int, default=50, help="Evaluation steps")
-    parser.add_argument(
-        "--max_steps",
+        "--start_steps",
         type=int,
-        default=-1,
-        help="Max number of training steps",
+        default=0,
+        help="Start steps",
     )
     parser.add_argument(
-        "--do_pretraining",
-        type=bool,
-        default=False,
-        help="Whether to pretrain the model on OpenWebText",
+        "--end_steps",
+        type=int,
+        default=0,
+        help="End steps",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=0,
+        help="Random Seed",
+    )
+    parser.add_argument("--model_name", type=str, default="Mistral_Sparse", help="Name of the model")
+    parser.add_argument("--dataset_type", type=str, default="cola", help="Dataset Type")
+    parser.add_argument("--output_dir", type=str, default="ckpt", help="Output Directory")
+    parser.add_argument("--num_epochs", type=float, default=7, help="Number of training epochs")
+    parser.add_argument("--max_steps", type=int, default=-1, help="Number of maximum training steps")
+    parser.add_argument(
+        "--gradient_accumulation_steps",
+        type=int,
+        default=4,
+        help="Gradient Accumulation Steps",
     )
     parser.add_argument(
         "--push_to_hub",
-        type=bool,
+        action="store_true",
         default=False,
         help="Whether to push the model to Hugging Face Hub",
     )
-    parser.add_argument("--model_save", type=bool, default=False)
+    parser.add_argument("--model_save", action="store_true", default=False)
     parser.add_argument("--train_batch_size", type=int, default=8, help="Training batch size")
-    parser.add_argument("--test_batch_size", type=int, default=32, help="Testing batch size")
+    parser.add_argument("--test_batch_size", type=int, default=8, help="Testing batch size")
     parser.add_argument(
         "--gradient_checkpointing",
-        type=bool,
+        action="store_true",
         default=False,
         help="Use gradient checkpointing",
     )
@@ -717,7 +844,6 @@ def parse_args():
         default=0.9,
         help="Targeted Sparsity of the sparse mlp layers in Mistral.",
     )
-
     parser.add_argument(
         "--use_sparse_model",
         action="store_true",
@@ -737,16 +863,59 @@ def parse_args():
         help="Whether to log in wandb",
     )
     parser.add_argument(
+        "--use_spm",
+        action="store_true",
+        default=False,
+        help="Whether to use in sparse predictor mask",
+    )
+    parser.add_argument(
         "--use_relu",
         action="store_true",
         default=False,
-        help="Whether to replace SiLU with ReLU",
+        help="Whether to use ReLU as non-linear activation function",
+    )
+    parser.add_argument(
+        "--use_flash_attn",
+        action="store_true",
+        default=False,
+        help="Whether to use ReLU as non-linear activation function",
+    )
+    parser.add_argument(
+        "--resume_from_checkpoint",
+        action="store_true",
+        default=False,
+        help="Whether to resume training from checkpoint",
+    )
+    parser.add_argument(
+        "--sparse_model_dir",
+        type=str,
+        default=None,
+        help="Whether to load fine-tuned sparse model from given directory",
+    )
+    parser.add_argument(
+        "--ds_config_path",
+        type=str,
+        default="mistral_ds_config.json",
+        help="Deepspeed config file path",
+    )
+    parser.add_argument(
+        "--max_seq_length",
+        type=int,
+        default=8096,
+        help="maximum seq length of an input sequence",
+    )
+    parser.add_argument(
+        "--use_lora",
+        action="store_true",
+        default=True,
     )
 
     return parser.parse_args()
 
 
 if __name__ == "__main__":
+    # torch.cuda.memory._record_memory_history(max_entries=100000)
     args = parse_args()
-    ds_print(args)
+    print(args)
     train(args, use_wandb=args.use_wandb)
+    # torch.cuda.memory._dump_snapshot("snapshot_new.pickle")

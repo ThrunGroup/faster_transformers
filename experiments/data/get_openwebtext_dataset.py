@@ -1,10 +1,7 @@
 from transformers import DataCollatorForLanguageModeling
 from datasets import load_dataset
-import pickle
-import torch
 
 from .dataset import Dataset
-from utils.constants import OPENWEBTEXT
 
 
 class OpenWebText(Dataset):
@@ -15,75 +12,34 @@ class OpenWebText(Dataset):
         :param metrics: Metrics to evaluate the model
         :param prefix: Prefix to the inputs to start the summarization task
         """
-        super().__init__(tokenizer, model_type)
-        self.dataset_type = OPENWEBTEXT
+        super().__init__(tokenizer,model_type)
+        # self.tokenizer.pad_token = tokenizer.mask_toke
+        self.tokenizer.pad_token = tokenizer.eos_token
 
     def get_tokenized_dataset(self):
         """
         Load and build the openwebtext dataset which is already preprocessed.
         :return: dataset
         """
-        train_path = f"/scr/lukeai/datasets/{self.model_type}_{self.dataset_type}_train_100k_small.pkl"
-        test_path = f"/scr/lukeai/datasets/{self.model_type}_{self.dataset_type}_test_100k_small.pkl"
-        validation_path = f"/scr/lukeai/datasets/{self.model_type}_{self.dataset_type}_validation_100k_small.pkl"
+        dataset = load_dataset("stas/openwebtext-10k", split="train[:10]")
+        dataset = dataset.train_test_split(test_size=0.2)
+        tokenized_dataset = dataset.map(self.preprocess, batched=True)
+        print(tokenized_dataset)
 
-        try:
-            # Try to load preprocessed data
-            with open(train_path, "rb") as f:
-                train_dataset = pickle.load(f)
-            with open(test_path, "rb") as f:
-                test_dataset = pickle.load(f)
-            with open(validation_path, "rb") as f:
-                val_dataset = pickle.load(f)
-            print("Loaded preprocessed data from disk.")
-        except FileNotFoundError:
-            print("No dataset found.")
-            print("Using 200 data")
-            dataset = load_dataset(
-                "Skylion007/openwebtext", split="train[:600]"
-            )
+        # train_dataset = TextDataset(tokenizer=self.tokenizer, file_path=train_dataset['text'], block_size=128)
+        # test_dataset = TextDataset(tokenizer=self.tokenizer, file_path=test_dataset['text'], block_size=128)
 
-            print("dataset: ", dataset)
-
-            tokenized_dataset = dataset.map(
-                self.preprocess,
-                batched=True,
-                batch_size=128,
-                # remove_columns=dataset.column_names["train"],
-            )
-
-            train_testvalid_dataset = tokenized_dataset.train_test_split(
-                test_size=400
-            )
-            test_valid_dataset = train_testvalid_dataset[
-                "test"
-            ].train_test_split(test_size=0.5)
-            train_dataset = train_testvalid_dataset["train"]
-            val_dataset = test_valid_dataset["train"]
-            test_dataset = test_valid_dataset["test"]
-
-            print(train_dataset)
-            print(val_dataset)
-            print(test_dataset)
-
-            # Save the preprocessed data
-            with open(train_path, "wb") as f:
-                pickle.dump(train_dataset, f)
-            with open(test_path, "wb") as f:
-                pickle.dump(test_dataset, f)
-            with open(validation_path, "wb") as f:
-                pickle.dump(val_dataset, f)
-            print("Preprocessed and saved data to disk.")
-
-        return train_dataset, val_dataset, test_dataset
+        return tokenized_dataset["train"], tokenized_dataset["test"]
 
     def preprocess(self, examples):
-        tokenized_inputs = self.tokenizer(
-            [" ".join(x) for x in examples["text"]],
-            max_length=32,
-            truncation=True,
+        inputs = self.tokenizer(
+            examples["text"], max_length=1024, truncation=True
         )
-        return tokenized_inputs
+
+        return {
+            "input_ids": inputs["input_ids"],
+            "attention_mask": inputs["attention_mask"],
+        }
 
     def get_data_collator(self):
         """
@@ -95,39 +51,13 @@ class OpenWebText(Dataset):
         )
         return data_collator
 
-    def preprocess_logits_for_metrics(self, logits, labels):
+    def get_compute_metrics(self):
         """
-        Original Trainer may have a memory leak.
-        This is a workaround to avoid storing too many tensors that are not needed.
+        Load the compute_metrics function that is used by the HuggingFace Trainer to
+        evaluate the model.
+        :return:
         """
-        pred_ids = logits.max(axis=-1)
-        return pred_ids[0]
+        return self.compute_metrics()
 
-    def compute_metrics(self, preds):
-        logits, labels = preds
-
-        logits = torch.from_numpy(logits).float()
-        labels = torch.from_numpy(labels)
-
-        print("logits: ", logits.shape, logits[0][:4])
-        print("labels: ", labels.shape)
-
-        # Shift the labels to the right to align with the output of the model
-        shifted_logits = logits[..., :-1].contiguous()
-        shifted_labels = labels[..., 1:].contiguous()
-
-        print("shifted_logits: ", shifted_logits.shape)
-        print("shifted_labels: ", shifted_labels.shape)
-
-        # Flatten the logits and labels to calculate loss
-        loss_fct = torch.nn.CrossEntropyLoss(reduction="none")
-        loss = loss_fct(
-            # shifted_logits.view(-1, shifted_logits.size(-1)),
-            shifted_logits.view(-1),
-            shifted_labels.view(-1),
-        )
-
-        # Calculate perplexity
-        perplexity = torch.exp(torch.mean(loss))
-
-        return {"perplexity": perplexity.item()}
+    def compute_metrics(self):
+        return None

@@ -43,8 +43,8 @@ BILLSUM = "billsum"
 WIKITEXT2 = "wikitext-2-raw-v1"
 SQUAD = "squad"
 OPENWEBTEXT = "openwebtext"
-REFINEDWEB = "refined_web"
 SAMSUM = "samsum"
+REFINED_WEB = "refined_web"
 
 # GLUE
 QNLI = "qnli"
@@ -69,3 +69,6 @@ NUM_BLOCKS_GPT2_MEDIUM = 24
 # Mistral Token Ids
 MISTRAL_YES_ID = 5081
 MISTRAL_NO_ID = 708
+
+# Context Length
+MISTRAL_CONTEXT_LENGTH = 8192

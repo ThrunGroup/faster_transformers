@@ -3,7 +3,6 @@ import os.path
 from transformers import (
     AutoConfig,
     AutoModelForSequenceClassification,
-    AutoModelForCausalLM,
 )
 import torch
 from torch import nn
@@ -16,7 +15,9 @@ from peft import (
 from experiments.models.sparse_mistral.relufication import (
     apply_mistral_sparse_silu_mlp,
 )
-
+from experiments.models.t5_sparity_check.t5_sparsity_check_new import (
+    apply_sparsity_check_MLP,
+)
 
 from utils.constants import (
     # models
@@ -96,11 +97,9 @@ def build_model(
             model.score.load_state_dict(score_dict)
     else:
         # Load a pretrained model not finetuned on a specific downstream task
-        # model = AutoModelForSequenceClassification.from_pretrained(
-        #     model_type, config=config
-        # )
-        config.use_cache = False
-        model = AutoModelForCausalLM.from_pretrained(model_type, config=config)
+        model = AutoModelForSequenceClassification.from_pretrained(
+            model_type, config=config
+        )
 
         # You can optionally uncomment this block
         # to load a finetuned score head for faster finetuning

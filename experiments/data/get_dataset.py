@@ -3,19 +3,19 @@ from transformers import AutoTokenizer
 from .get_billsum_dataset import Billsum
 from .get_squad_dataset import SQuAD
 from .get_openwebtext_dataset import OpenWebText
-from .get_refinedweb_dataset import RefinedWeb
 from .get_samsum_dataset_ import Samsum
 from .get_glue_dataset_classification import GLUEDataset
+from .get_refinedweb_dataset import RefinedWeb
 
 from utils.constants import (
     COLA,
     BILLSUM,
     SQUAD,
     OPENWEBTEXT,
-    REFINEDWEB,
     SAMSUM,
     GLUE,
     SUPERGLUE,
+    REFINED_WEB,
     MISTRAL_7B,
 )
 
@@ -24,6 +24,7 @@ def get_dataset(
     dataset_name: str,
     tokenizer,
     model_type: str,
+    max_seq_length: int = 1024,
 ):
     """
     Tokenize a dataset and get additional data collator and metrics necessary for training the models
@@ -34,14 +35,15 @@ def get_dataset(
     :param model: Model to finetune / evaluate
     :return: tokenized dataset, data collator, and compute_metrics function
     """
+    print("DATASET NAME: ", dataset_name)
     if dataset_name == BILLSUM:
         dataset = Billsum(tokenizer, model_type)
     elif dataset_name == SQUAD:
         dataset = SQuAD(tokenizer, model_type)
     elif dataset_name == OPENWEBTEXT:
         dataset = OpenWebText(tokenizer, model_type)
-    elif dataset_name == REFINEDWEB:
-        dataset = RefinedWeb(tokenizer, model_type)
+    elif dataset_name == REFINED_WEB:
+        dataset = RefinedWeb(tokenizer, model_type, max_seq_length=max_seq_length,)
     elif dataset_name == SAMSUM:
         dataset = Samsum(tokenizer, model_type)
     elif dataset_name in GLUE + SUPERGLUE:

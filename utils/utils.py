@@ -3,7 +3,6 @@ import os
 import socket
 from datetime import datetime
 
-
 def print_size_of_model(model):
     torch.save(model.state_dict(), "temp.p")
     print("Size (MB):", os.path.getsize("temp.p") / 1e6)
@@ -43,3 +42,4 @@ def get_datetime(only_date: bool = False):
         return now.strftime("%Y-%m-%d %Hh%Mm%Ss")
     else:
         return now.strftime("%Y-%m-%d")
+

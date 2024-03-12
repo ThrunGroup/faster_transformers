@@ -2,13 +2,16 @@ from transformers import DataCollatorForLanguageModeling
 from datasets import load_dataset
 import pickle
 import torch
+import os
 
+from utils.utils import is_mainprocess
 from .dataset import Dataset
-from utils.constants import REFINEDWEB
+from datasets import Dataset as D
+from utils.constants import REFINED_WEB, MISTRAL_CONTEXT_LENGTH
 
 
 class RefinedWeb(Dataset):
-    def __init__(self, tokenizer, model_type):
+    def __init__(self, tokenizer, model_type, max_seq_length: int = 8096):
         """
         :param tokenizer: Tokenizer to tokenize the inputs
         :param model: Model to finetune / evaluate
@@ -16,19 +19,23 @@ class RefinedWeb(Dataset):
         :param prefix: Prefix to the inputs to start the summarization task
         """
         super().__init__(tokenizer, model_type)
-        self.dataset_type = REFINEDWEB
+        self.dataset_type = REFINED_WEB
 
     def get_tokenized_dataset(self):
         """
         Load and build the openwebtext dataset which is already preprocessed.
         :return: dataset
         """
-        train_path = f"/scr/lukeai/datasets/{self.model_type}_{self.dataset_type}_train_100k.pkl"
-        test_path = f"/scr/lukeai/datasets/{self.model_type}_{self.dataset_type}_test_100k.pkl"
-        validation_path = f"/scr/lukeai/datasets/{self.model_type}_{self.dataset_type}_validation_100k.pkl"
+        train_path = f"/scr/lukeai/datasets/{self.model_type}_{self.dataset_type}_train_100k_1024.pkl"
+        test_path = f"/scr/lukeai/datasets/{self.model_type}_{self.dataset_type}_test_100k_1024.pkl"
+        validation_path = f"/scr/lukeai/datasets/{self.model_type}_{self.dataset_type}_validation_100k_1024.pkl"
+
+        for path in [train_path, test_path, validation_path]:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
 
         try:
             # Try to load preprocessed data
+            # open(random_path, "rb")
             with open(train_path, "rb") as f:
                 train_dataset = pickle.load(f)
             with open(test_path, "rb") as f:
@@ -37,28 +44,35 @@ class RefinedWeb(Dataset):
                 val_dataset = pickle.load(f)
             print("Loaded preprocessed data from disk.")
         except FileNotFoundError:
-            print("No dataset found.")
-            print("Using 200 data")
-            dataset = load_dataset("tiiuae/falcon-refinedweb", split="train[:100000]")
+            dataset = load_dataset(
+                "tiiuae/falcon-refinedweb",
+                streaming=True,
+                # num_proc=5,
+            )
+            dataset.shuffle(seed=42, buffer_size=1000000)
+            print("Downloaded preprocessed data from disk.")
 
             print("dataset: ", dataset)
 
             tokenized_dataset = dataset.map(
                 self.preprocess,
                 batched=True,
-                batch_size=128,
-                # remove_columns=dataset.column_names["train"],
-            )
+                batch_size=32,
+                # num_proc=8,
+                remove_columns=[
+                    "content",
+                    "url",
+                    "timestamp",
+                    "dump",
+                    "segment",
+                    "image_urls",
+                ],
+            )["train"]
 
-            train_testvalid_dataset = tokenized_dataset.train_test_split(test_size=400)
-            test_valid_dataset = train_testvalid_dataset["test"].train_test_split(test_size=0.5)
-            train_dataset = train_testvalid_dataset["train"]
-            val_dataset = test_valid_dataset["train"]
-            test_dataset = test_valid_dataset["test"]
-
-            print(train_dataset)
-            print(val_dataset)
-            print(test_dataset)
+            train_dataset = D.from_list(list(tokenized_dataset.skip(10000).take(100000)))
+            val_dataset = D.from_list(list(tokenized_dataset.take(50)))
+            test_dataset = D.from_list(list(tokenized_dataset.skip(1000).take(50)))
+            # train_dataset = tokenized_dataset
 
             # Save the preprocessed data
             with open(train_path, "wb") as f:
@@ -68,23 +82,30 @@ class RefinedWeb(Dataset):
             with open(validation_path, "wb") as f:
                 pickle.dump(val_dataset, f)
             print("Preprocessed and saved data to disk.")
-
+        for idx in range(5):
+            print(len(train_dataset["input_ids"][idx]))
         return train_dataset, val_dataset, test_dataset
 
     def preprocess(self, examples):
         tokenized_inputs = self.tokenizer(
-            [" ".join(x) for x in examples["content"]],
+            examples["content"],
+            # max_length=MISTRAL_CONTEXT_LENGTH // 4,
             max_length=1024,
             truncation=True,
+            # padding="longest",
         )
-        return tokenized_inputs
+
+        return {
+            "input_ids": tokenized_inputs["input_ids"],
+            "attention_mask": tokenized_inputs["attention_mask"],
+        }
 
     def get_data_collator(self):
         """
         Load the data collator that is responsible for taking in batches of examples
         and converting them into a format that can be consumed by the model.
         """
-        data_collator = DataCollatorForLanguageModeling(tokenizer=self.tokenizer, mlm=False, mlm_probability=0.15)
+        data_collator = DataCollatorForLanguageModeling(tokenizer=self.tokenizer, mlm=False)
         return data_collator
 
     def preprocess_logits_for_metrics(self, logits, labels):

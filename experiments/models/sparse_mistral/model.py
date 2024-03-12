@@ -129,7 +129,7 @@ def apply_sparsity_check_MLP(
     model.activate_mare_mlp = activate_mare
 
 
-def low_rank_approximation(linear_layer, rank=64):
+def low_rank_approximation(linear_layer, act_func=nn.ReLU(), rank=64):
     # Decompose the weight matrix of the layer
     U, S, V = torch.svd(linear_layer.weight.T.data)
 
@@ -150,4 +150,4 @@ def low_rank_approximation(linear_layer, rank=64):
     if linear_layer.bias is not None:
         second_layer.bias.data = linear_layer.bias.data
 
-    return nn.Sequential(first_layer, second_layer, nn.ReLU())
+    return nn.Sequential(first_layer, second_layer, act_func)

@@ -1,0 +1,249 @@
+import torch
+import copy
+from torch import nn
+import torch.nn.functional as f
+from transformers.models.t5.modeling_t5 import T5DenseActDense, T5Attention, T5Config
+from typing import Optional, Tuple
+import numpy as np
+
+from experiments.models.router import Router
+
+
+class GATEDATTENTION(T5Attention):
+    def __init__(
+        self,
+        config: T5Config,
+        num_experts,
+        capacity_factor,
+        attention_model: T5Attention,
+        has_relative_attention_bias=False,
+    ):
+        super().__init__(
+            config=config, has_relative_attention_bias=has_relative_attention_bias
+        )
+        self.experts = [None] * num_experts
+        self.num_experts = num_experts
+        for idx in range(num_experts):
+            self.experts[idx] = copy.deepcopy(attention_model)
+        embed_dim = config.d_model
+        self.router = Router(embed_dim, num_experts)
+
+    def inject_randomness(self):
+        return
+
+    def forward(
+        self,
+        hidden_states,
+        **args,
+    ):
+        B, T, C = hidden_states.shape
+        K = max(
+            (T * self.capacity_factor // self.num_experts),
+            1,
+        )
+        routing_probs = self.router(hidden_states)  # B, T, E
+        routing_probs = f.softmax(routing_probs, dim=1)
+        topk_values, indices = torch.topk(routing_probs, K, dim=1)
+        res = torch.zeros_like(routing_probs)  # B, T, E
+        res = res.scatter(1, indices, torch.ones_like(topk_values))  # B, T, E
+        # res = f.normalize(res, p=1, dim=1)  # B, T, E
+
+        hidden_states, present_key_value_state, attention_outputs = [None] * 3
+        for idx in range(self.num_experts):
+            expert: T5Attention = self.experts[idx]
+            mask = res[:, :, idx].to(hidden_states.device).unsqueeze(dim=-1)  # B, T, 1
+            outputs = expert(hidden_states * mask, *args)
+            # Normalize
+            # for idx in range(len(outputs)):
+            #     outputs[idx] *=
+
+            if hidden_states is None:
+                hidden_states, present_key_value_state, attention_outputs = outputs
+            else:
+                hidden_states += outputs[0]
+                present_key_value_state = outputs[1]
+                attention_outputs += outputs[2]
+
+        # @Jay: 1) When to sum all the outputs from MARE and Experts (after applying mlp layers or before it)
+        #  2) Normalize router probs after choosing topk
+
+        super().forward(hidden_states, **args)
+
+
+class MAREATTENTION(T5Attention):
+    def __init__(
+        self,
+        config: T5Config,
+        num_all_rounders,
+        num_experts,
+        capacity_factor,
+        has_relative_attention_bias=False,
+    ):
+        super().__init__(
+            config=config, has_relative_attention_bias=has_relative_attention_bias
+        )
+
+    def forward(
+        self,
+        hidden_states,
+        **args,
+    ):
+        B, T, C = hidden_states.shape
+        super().forward(hidden_states, **args)
+
+        # Add attention ouputs from all rounder & Sparse experts
+
+
+class MAREMLP(T5DenseActDense):
+    def __init__(
+        self,
+        config,
+        num_all_rounders,
+        num_experts,
+        capacity_factor,
+        is_residual_hierarchy: bool = False,
+        routing_type: str = "EXPERT_CHOICE_ROUTING",
+    ):
+        super().__init__(config)
+        embed_dim = config.d_model
+        intermediate_size = config.d_ff
+
+        self.num_mlps = num_all_rounders + num_experts
+        self.num_all_rounders = num_all_rounders
+        self.num_experts = num_experts
+        self.capacity_factor = capacity_factor
+        self.is_residual_hierarchy = is_residual_hierarchy
+
+        # Sparsity-adaptive MOE
+        self.num_zeros_intermediate = 0
+        self.num_params_intermediate = 0
+
+        if num_all_rounders:
+            self.wi_ar = nn.Linear(
+                num_all_rounders * embed_dim, intermediate_size, bias=False
+            )
+            self.wo_ar = nn.Linear(
+                intermediate_size, num_all_rounders * embed_dim, bias=False
+            )
+            # self.ar_router = Router(embed_dim, num_all_rounders)
+
+        if num_experts:
+            self.wi_ex = nn.Linear(
+                num_experts * embed_dim, intermediate_size, bias=False
+            )
+            self.wo_ex = nn.Linear(
+                intermediate_size, num_experts * embed_dim, bias=False
+            )
+            self.ex_router = Router(
+                embed_dim,
+                num_experts,
+            )
+
+        self.embed_dim = embed_dim
+        # self.scales = nn.Parameter(torch.ones(8))
+        self.ar_scales = nn.Parameter(torch.ones(8))
+        self.ex_scales = nn.Parameter(torch.ones(self.num_experts * 2))
+
+    def forward(
+        self, hidden_states: Optional[Tuple[torch.FloatTensor]]
+    ) -> torch.FloatTensor:
+        B, T, C = hidden_states.shape
+
+        # All-rounders
+        if self.num_all_rounders:
+            ar_hidden_states = hidden_states.repeat(1, 1, self.num_all_rounders)
+            ar_hidden_states = self.wi_ar(ar_hidden_states)
+            ar_hidden_states = self.act(ar_hidden_states)
+            ar_hidden_states = self.dropout(ar_hidden_states)
+            if (
+                isinstance(self.wo_ar.weight, torch.Tensor)
+                and ar_hidden_states.dtype != self.wo_ar.weight.dtype
+                and self.wo_ar.weight.dtype != torch.int8
+            ):
+                ar_hidden_states = ar_hidden_states.to(self.wo_ar.weight.dtype)
+            ar_hidden_states = self.wo_ar(ar_hidden_states)  # (B, T, G*C)
+            ar_hidden_states = ar_hidden_states.view(
+                B, T, self.num_all_rounders, self.embed_dim
+            )  # (B, T, G, C)
+
+            # if self.num_all_rounders > 1:
+            #     ar_router = self.ar_router(hidden_states).unsqueeze(
+            #         -1
+            #     )  # (B, T, G, 1)
+            #     ar_hidden_states = ar_hidden_states * ar_router  # (B, T, G, C)
+
+            ar_hidden_states = ar_hidden_states.sum(dim=2)  # (B, T, C)
+
+        # Experts
+        if self.num_experts:
+            if self.is_residual_hierarchy:
+                ar_hidden_states += hidden_states
+                router = self.ex_router(ar_hidden_states)  # (B, T, E)
+            else:
+                router = self.ex_router(hidden_states)  # (B, T, E)
+
+            K = max(
+                (
+                    T
+                    * (self.capacity_factor - self.num_all_rounders)
+                    // self.num_experts
+                ),
+                1,
+            )
+
+            top_k = torch.topk(router, k=K, dim=1)  # (B, K, E)
+            top_k_indices, indices_ = torch.sort(top_k.indices, dim=1)
+            top_k_probs = torch.gather(top_k.values, 1, indices_)
+
+            # x: (B, T, E, C) -> (B, K, E, C) -> (B, K, E * C)
+            if self.is_residual_hierarchy:
+                ex_hidden_states = ar_hidden_states.repeat(1, 1, self.num_experts)
+            else:
+                ex_hidden_states = hidden_states.repeat(1, 1, self.num_experts)
+            ex_hidden_states = torch.gather(
+                ex_hidden_states.view(B, T, self.num_experts, -1),  # (B, T, E, C)
+                1,
+                top_k_indices.unsqueeze(-1).expand(-1, -1, -1, C),
+                # (B, K, E, C)
+            ).view(
+                B, K, -1
+            )  # (B, K, E*C)
+
+            ex_hidden_states = self.wi_ex(ex_hidden_states)
+            ex_hidden_states = self.act(ex_hidden_states)
+            ex_hidden_states = self.dropout(ex_hidden_states)
+            if (
+                isinstance(self.wo_ex.weight, torch.Tensor)
+                and ex_hidden_states.dtype != self.wo_ex.weight.dtype
+                and self.wo_ex.weight.dtype != torch.int8
+            ):
+                ex_hidden_states = ex_hidden_states.to(self.wo_ex.weight.dtype)
+            ex_hidden_states = self.wo_ex(ex_hidden_states)  # (B, K, E*D)
+
+            # logits: (B, T, E, C)
+            ex_zeros = torch.zeros(
+                B,
+                T,
+                self.num_experts,
+                self.embed_dim,
+                dtype=top_k_probs.dtype,
+                device=ex_hidden_states.device,
+            )
+
+            ex_zeros.scatter_(
+                1,
+                top_k_indices.unsqueeze(-1).expand(-1, -1, -1, self.embed_dim),
+                ex_hidden_states.view(B, K, self.num_experts, -1)
+                * top_k_probs.unsqueeze(-1)
+                * self.ex_scales[: self.num_experts].view(1, 1, -1, 1),
+            )
+            ex_hidden_states = ex_zeros.sum(dim=2)
+
+        if self.num_all_rounders and self.num_experts:
+            hidden_states = self.ar_scales[0] * ar_hidden_states + ex_hidden_states
+        elif self.num_all_rounders:
+            hidden_states = ar_hidden_states
+        else:
+            hidden_states = ex_hidden_states
+
+        return hidden_states

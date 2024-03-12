@@ -10,13 +10,10 @@ import wandb
 import gc
 import torch
 import argparse
-import numpy as np
 
 from experiments.data.get_dataset import get_dataset
 from experiments.models.build_model import build_model
-from experiments.models.sparse_mistral.relufication import (
-    print_dead_neuron_stats,
-)
+from experiments.models.sparse_mistral.relufication import print_dead_neuron_stats
 from experiments.models.sparse_mistral.relufication import (
     SparseSiLUTrainer,
     enable_sparse_silu,
@@ -30,7 +27,6 @@ from utils.constants import (
     MISTRAL_7B,
     # Datasets
     COLA,
-    OPENWEBTEXT,
 )
 
 
@@ -73,7 +69,6 @@ def finetune(
 
     data_collator = dataset.get_data_collator()
     compute_metrics = dataset.get_compute_metrics()
-    preprocess_logits_for_metrics = dataset.preprocess_logits_for_metrics
 
     if "LOCAL_RANK" in os.environ and int(os.environ["LOCAL_RANK"]) == 0:
         wandb_run = wandb.init(
@@ -86,8 +81,7 @@ def finetune(
     # @TODO: Unification of output dir
 
     training_args = TrainingArguments(
-        output_dir=os.path.join("ckpt", model_name),
-        max_steps=2,
+        output_dir=os.path.join("/scr/jay/ckpt", model_name),
         evaluation_strategy="steps",
         eval_steps=20,  # early stopping counts only when eval step and save step match
         save_steps=20,
@@ -126,8 +120,7 @@ def finetune(
         tokenizer=tokenizer,
         data_collator=data_collator,
         callbacks=[early_stopping],
-        # compute_metrics=compute_metrics,
-        # preprocess_logits_for_metrics=preprocess_logits_for_metrics,
+        compute_metrics=compute_metrics,
         use_sparse_regularization=use_sparse_regularization,
     )
 
@@ -259,8 +252,7 @@ def create_model(
 if __name__ == "__main__":
     dataset_types = [
         # SST2,
-        # COLA,
-        OPENWEBTEXT,
+        COLA,
         # RTE,
         # MRPC,
         # QNLI,
@@ -277,49 +269,30 @@ if __name__ == "__main__":
                 common_args = {
                     "model_type": model_type,
                     "dataset_name": dataset_type,
-                    "num_epochs": 1,
-                    "train_batch_size": 8,
-                    "test_batch_size": 8,
-                    "gradient_checkpointing": True,
+                    "num_epochs": 20,
+                    "train_batch_size": 4,
+                    "test_batch_size": 16,
+                    "gradient_checkpointing": False,
                     "use_lora": True,
                 }
 
-                # Original model
-                # create_model(
-                #     **common_args,
-                #     push_to_hub=False,  # whether to save the model both in local and remote repositories
-                #     use_sparse_silu=False,  # when turned on, it kills negligible swish outputs < 0.1
-                #     use_sparse_regularization=False,  # for sparse silu regularization
-                #     run_name="_original_pretraining",
-                # )
-
-                # Original model
+                # "pretrained_model_name" here means a model finetuned on a downstream task that you want to build upon
+                # If you omit the parameter, it will automatically download a pretrained model (not finetuned)
                 create_model(
                     **common_args,
                     push_to_hub=True,  # whether to save the model both in local and remote repositories
                     use_sparse_silu=True,  # when turned on, it kills negligible swish outputs < 0.1
                     use_sparse_regularization=True,  # for sparse silu regularization
-                    run_name="_sparse_pretraining",
+                    # run_name="Mistral-7B-v0.1_cola_swiglu"
+                    run_name="_sparse_swiglu_ignore_0_1",
+                    pretrained_model_name="Mistral-7B-v0.1_cola_sparse_swiglu_scratch",
                 )
-
-                # # "pretrained_model_name" here means a model finetuned on a downstream task that you want to build upon
-                # # If you omit the parameter, it will automatically download a pretrained model (not finetuned)
-                # create_model(
-                #     **common_args,
-                #     push_to_hub=True,  # whether to save the model both in local and remote repositories
-                #     use_sparse_silu=True,  # when turned on, it kills negligible swish outputs < 0.1
-                #     use_sparse_regularization=True,  # for sparse silu regularization
-                #     # run_name="Mistral-7B-v0.1_cola_swiglu"
-                #     run_name="_sparse_swiglu_ignore_0_1",
-                #     pretrained_model_name="Mistral-7B-v0.1_cola_sparse_swiglu_scratch",
-                # )
-
-                # create_model(
-                #     **common_args,
-                #     push_to_hub=True,  # whether to save the model both in local and remote repositories
-                #     use_sparse_silu=False,  # when turned on, it kills negligible swish outputs < 0.1
-                #     use_sparse_regularization=True,  # for sparse silu regularization
-                #     # run_name="Mistral-7B-v0.1_cola_swiglu"
-                #     run_name="Mistral_scratch_cola",
-                #     pretrained_model_name="Mistral-7B-v0.1_cola_sparse_swiglu_scratch",
-                # )
+                create_model(
+                    **common_args,
+                    push_to_hub=True,  # whether to save the model both in local and remote repositories
+                    use_sparse_silu=False,  # when turned on, it kills negligible swish outputs < 0.1
+                    use_sparse_regularization=True,  # for sparse silu regularization
+                    # run_name="Mistral-7B-v0.1_cola_swiglu"
+                    run_name="Mistral_scratch_cola",
+                    pretrained_model_name="Mistral-7B-v0.1_cola_sparse_swiglu_scratch",
+                )
