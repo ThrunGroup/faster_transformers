@@ -1,0 +1,41 @@
+{
+  "architectures": [
+    "SparseMistralforCausalLM"
+  ],
+  "attention_dropout": 0.0,
+  "auto_map": {
+    "AutoConfig": "sparsification_sftt.SparseMistralConfig",
+    "AutoModelForCausalLM": "sparsification_sftt.SparseMistralforCausalLM"
+  },
+  "bos_token_id": 1,
+  "eos_token_id": 2,
+  "hidden_act": "silu",
+  "hidden_size": 64,
+  "initializer_range": 0.02,
+  "intermediate_size": 64,
+  "max_position_embeddings": 131072,
+  "model_type": "sparse_mistral",
+  "num_attention_heads": 32,
+  "num_hidden_layers": 4,
+  "num_key_value_heads": 8,
+  "rms_norm_eps": 1e-06,
+  "rope_theta": 10000.0,
+  "sliding_window": 4096,
+  "thresholds": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "tie_word_embeddings": false,
+  "torch_dtype": "float32",
+  "transformers_version": "4.37.2",
+  "us_sparse_regularization": true,
+  "use_cache": true,
+  "use_graceful_regularization": true,
+  "use_relu": false,
+  "use_sparse_model": true,
+  "use_sparse_predictor": false,
+  "use_sparse_regularization": false,
+  "vocab_size": 32000
+}

@@ -19,19 +19,19 @@
   "zero_optimization": {
     "stage": 2,
     "offload_optimizer": {
-    "device": "cpu",
-    "pin_memory": false,
-    "ratio": 1,
-    "buffer_count": 4,
-    "fast_init": false
-  },
+      "device": "cpu",
+      "pin_memory": false,
+      "ratio": 1,
+      "buffer_count": 2,
+      "fast_init": false
+    },
     "allgather_partitions": true,
-    "allgather_bucket_size": 2e8,
+    "allgather_bucket_size": 1e8,
     "overlap_comm": true,
     "reduce_scatter": true,
-    "reduce_bucket_size": 2e8,
-    "contiguous_gradients": true,
-    "round_robin_gradients": true
+    "reduce_bucket_size": 1e8,
+    "contiguous_gradients": false,
+    "round_robin_gradients": false
   },
   "gradient_accumulation_steps": "auto",
   "gradient_clipping": "auto",

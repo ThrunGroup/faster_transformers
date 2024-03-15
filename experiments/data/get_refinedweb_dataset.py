@@ -31,11 +31,10 @@ class RefinedWeb(Dataset):
         if self.max_seq_length == 8096:
             prefix = f"{self.model_type}_{self.dataset_type}"
         else:
-            prefix = f"{self.model_type}_{self.dataset_type}_seq{self.max_seq_length}_seed{self.seed}"
-        train_path = f"/scr/jay/datasets/{prefix}_train_100k_small.pkl"
-        test_path = f"/scr/jay/datasets/{prefix}_test_100_small.pkl"
-        validation_path = f"/scr/jay/datasets/{prefix}_validation_100_small.pkl"
-        random_path = f"asd/sad/a/a/a/ads/"
+            prefix = f"{self.model_type}_{self.dataset_type}_seq{self.max_seq_length}_seed{self.seed}_"
+        train_path = f"/scr/lukeai/datasets/{prefix}_train_100k_small.pkl"
+        test_path = f"/scr/lukeai/datasets/{prefix}_test_100_small.pkl"
+        validation_path = f"/scr/lukeai/datasets/{prefix}_validation_100_small.pkl"
 
         for path in [train_path, test_path, validation_path]:
             os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -77,9 +76,7 @@ class RefinedWeb(Dataset):
             )["train"]
             print(tokenized_dataset)
 
-            train_dataset = D.from_list(
-                list(tokenized_dataset.skip(10000).take(100000))
-            )
+            train_dataset = D.from_list(list(tokenized_dataset.skip(10000).take(100000)))
             val_dataset = D.from_list(list(tokenized_dataset.take(50)))
             test_dataset = D.from_list(list(tokenized_dataset.skip(1000).take(50)))
             # train_dataset = tokenized_dataset
@@ -95,14 +92,14 @@ class RefinedWeb(Dataset):
             with open(validation_path, "wb") as f:
                 pickle.dump(val_dataset, f)
             print("Preprocessed and saved data to disk.")
-        train_dataset.filter(lambda item: len(item['input_ids']) < 1000)
+        train_dataset.filter(lambda item: len(item["input_ids"]) < 1000)
         train_dataset.shuffle()
         return train_dataset, val_dataset, test_dataset
 
     def preprocess(self, examples):
         tokenized_inputs = self.tokenizer(
             examples["content"],
-            max_length=2 * MISTRAL_CONTEXT_LENGTH,
+            max_length=self.max_seq_length,
             truncation=True,
             # padding="longest",
         )
@@ -117,9 +114,7 @@ class RefinedWeb(Dataset):
         Load the data collator that is responsible for taking in batches of examples
         and converting them into a format that can be consumed by the model.
         """
-        data_collator = DataCollatorForLanguageModeling(
-            tokenizer=self.tokenizer, mlm=False
-        )
+        data_collator = DataCollatorForLanguageModeling(tokenizer=self.tokenizer, mlm=False)
         return data_collator
 
     def preprocess_logits_for_metrics(self, logits, labels):
