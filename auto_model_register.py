@@ -54,7 +54,7 @@ from utils.constants import MISTRAL_7B
 #         config.save_pretrained(path)
 
 # path = "/scr/jay/ckpt/sparse_models/unit_test"
-path = "/scr/jay/ckpt/2024-03-10/Mistral_Sparse_refined_web_50p_no_adapter"
+path = "/scr/jay/ckpt/2024-03-11/Mistral_Sparse_refined_web_50p_no_adapter"
 # path = "thrunlab/Mistral_Sparse_refined_web_relu_2024-03-01"
 # #
 model = AutoModelForCausalLM.from_pretrained(path, trust_remote_code=True)
@@ -62,6 +62,8 @@ tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
 config = AutoConfig.from_pretrained(path, trust_remote_code=True)
 print(config)
 print(model)
+for m in model.model.layers:
+    print(m.mlp.dead_threshold)
 
 
 # Register for AutoConfig and AutoModelforCausalLM

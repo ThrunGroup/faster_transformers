@@ -288,6 +288,7 @@ class MistralSparseSiluMLP(MistralMLP):
         super().__init__(config)
         self.swish_outputs = None
         self.relu = nn.ReLU()
+        self.resilu = nn.Sequential(nn.SiLU())
 
         self.kill_sparse_swish_outputs = False
         self.dead_percentage = 0
@@ -302,6 +303,7 @@ class MistralSparseSiluMLP(MistralMLP):
         )
         self.regularization_threshold = kwargs.pop("regularization_threshold", 0.5)
         self.use_relu = kwargs.pop("use_relu", False)
+        self.use_resilu = kwargs.pop("use_resilu", False)
         self.activation_norm = None
 
         # Activation Histograms
@@ -358,11 +360,14 @@ class MistralSparseSiluMLP(MistralMLP):
                 self.sparse_act_fn(self.gate_proj(x) * sp_mask) * self.up_proj(x)
             )  # Todo: This doesn't accelerate runtime (instead slowing down)
 
-        elif self.use_relu:
-            post_act = self.relu(self.gate_proj(x))
+        elif self.use_relu or self.use_resilu:
+            if self.use_relu:
+                post_act = self.relu(self.gate_proj(x))
+            else:
+                post_act = self.resilu(self.gate_proj(x))
             self.count += 1
             if self.count <= 1:
-                print("USING RELU!!!!")
+                print("USING RELU or ReSiLU!!!!")
 
             if self.is_stats:
                 dead_neurons = post_act == 0
@@ -561,7 +566,8 @@ class SparseMistralforCausalLM(MistralForCausalLM):
                         m.mlp.dead_threshold = config.thresholds[idx]
                         m.mlp.sparse_act_fn.set_new_threshold(m.mlp.dead_threshold)
                         m.mlp.kill_sparse_swish_outputs = True
-                        m.mlp.use_relu = config.use_relu
+                        m.mlp.use_relu = getattr(config, "use_relu", False)
+                        m.mlp.use_resilu = getattr(config, "use_resilu", False)
         if config.use_sparse_predictor:
             self.apply_sparse_predictor(init_svd=config.init_svd)
 
@@ -852,7 +858,10 @@ def set_regularization_threshold(model, threshold: float = 0.1):
             layer.mlp.regularization_threshold = threshold  # TODO: find better param
 
 
-def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
+def set_sparse_threshold(
+    model, sparsity_level: float, use_relu: bool = False, use_resilu: bool = False
+):
+    assert not (use_relu and use_resilu), "It's not allowed to use both relu and resilu"
     for i, layer in enumerate(model.model.layers):
         if (
             isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
@@ -860,6 +869,11 @@ def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
             if use_relu:
                 layer.mlp.sparse_act_fn = nn.ReLU()
                 layer.mlp.use_relu = True
+                layer.mlp.use_resilu = False
+            elif use_resilu:
+                layer.mlp.sparse_act_fn = nn.Sequential(nn.ReLU(), nn.SiLU())
+                layer.mlp.use_resilu = True
+                layer.mlp.use_relu = False
             else:
                 layer.mlp.dead_threshold = get_threshold(
                     layer.mlp.histogram_bins,

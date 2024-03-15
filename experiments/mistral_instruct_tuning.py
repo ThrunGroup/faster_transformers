@@ -296,6 +296,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     if exp_config.use_relu:
         exp_config.targeted_sparsity = "ReLU"
+    elif exp_config.use_resilu:
+        exp_config.targeted_sparsity = "ReSiLU"
 
     run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
 
@@ -464,7 +466,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(base_model, act_hist_path)
         if exp_config.use_relu:
-            set_sparse_threshold(base_model, 0, True)
+            set_sparse_threshold(base_model, 0, use_relu=True)
+        elif exp_config.use_resilu:
+            set_sparse_threshold(base_model, 0, use_resilu=True)
         else:
             set_sparse_threshold(base_model, exp_config.targeted_sparsity)
 
@@ -593,6 +597,7 @@ def prepare_sparse_model(
     base_model_name: str = "mistralai/Mistral-7B-Instruct-v0.1",
     gradient_checkpointing: bool = False,
     use_relu: bool = False,
+    use_resilu: bool = False,
     cutoff_large: bool = False,
 ):
     # Register for AutoConfig and AutoModelforCausalLM
@@ -669,10 +674,12 @@ def prepare_sparse_model(
                     svd_model_dir,
                     config=config,
                 )
+    model.config.use_relu = False
+    model.config.use_resilu = False
     if use_relu:
         model.config.use_relu = True
-    else:
-        model.config.use_relu = False
+    elif use_resilu:
+        model.config.use_resilu = True
     # if use_sparse_predictor:
     #     # Freeze original params
     #     for params in model.parameters():
@@ -851,6 +858,12 @@ def parse_args():
     )
     parser.add_argument(
         "--use_relu",
+        action="store_true",
+        default=False,
+        help="Whether to use ReLU as non-linear activation function",
+    )
+    parser.add_argument(
+        "--use_resilu",
         action="store_true",
         default=False,
         help="Whether to use ReLU as non-linear activation function",

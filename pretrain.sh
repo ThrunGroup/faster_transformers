@@ -16,7 +16,7 @@ deepspeed --master_port 12310 experiments/pretrain_sparse_model.py --use_sparse_
     --set_sparsity_aware_threshold --print_sparsity --use_wandb --num_epochs 11 --max_steps $initial_steps --model_save \
     --train_batch_size 1 --test_batch_size 1 --use_flash_attn --gradient_accumulation_steps 4 \
     --ds_config_path ds_config.json --max_seq_length 1024 --is_plot --gradient_checkpointing \
-    --output_dir /scr/jay/ckpt/$date --push_to_hub
+    --output_dir /scr/jay/ckpt/$date
 
 echo "Evaluating after $initial_steps steps..."
 accelerate launch -m --main_process_port 12310 lm_eval --model hf \
@@ -33,7 +33,7 @@ for ((i=1; i<=max_iterations; i++)); do
     deepspeed --master_port 12310 experiments/pretrain_sparse_model.py --use_sparse_model --targeted_sparsity $targeted_sparsity \
     --set_sparsity_aware_threshold --print_sparsity --use_wandb --num_epochs 11 --max_steps $current_steps --model_save \
     --train_batch_size 1 --test_batch_size 1 --use_flash_attn --gradient_accumulation_steps 4 \
-    --ds_config_path ds_config.json --push_to_hub --resume_from_checkpoint --max_seq_length 1024 --gradient_checkpointing \
+    --ds_config_path ds_config.json --resume_from_checkpoint --max_seq_length 1024 --gradient_checkpointing \
     --output_dir /scr/jay/ckpt/$date
 
     echo "Evaluating after $current_steps steps..."
