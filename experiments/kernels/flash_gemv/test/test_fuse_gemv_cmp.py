@@ -4,6 +4,7 @@ import flash_gemv
 import triton
 import triton.language as tl
 import numpy as np
+import argparse
 
 @triton.autotune(
     configs=[
@@ -290,7 +291,7 @@ def test_gemv_gemv_gemv():
     # print("Start")
     flash_gemv.fuse_gemv_gemv_gemv(input, wgate_t, wup_t, wdown, output, threshold)
     torch.cuda.synchronize()
-    output = output.half()
+    # output = output.half()
     act_fn = nn.SiLU()
     golden_inter = act_fn(torch.matmul(input, wgate))
     golden_inter = golden_inter.squeeze(0).squeeze(0)
@@ -306,19 +307,180 @@ def test_gemv_gemv_gemv():
     np.savetxt('value.txt', output.squeeze(0).squeeze(0).cpu().numpy())
     np.savetxt('golden_value.txt', golden_output.cpu().numpy())
 
+def test_flag_batch():
+    torch.manual_seed(0)
+    B = 2
+    input = torch.randn(1, B, 4096).half().cuda() - 0.5
+    weight = torch.rand(4096, 14336).half().cuda() - 0.5
+    weight_t = weight.t().contiguous()
+    threshold = 0.2
+    value = torch.zeros(1, B, 14336).to(torch.float16).cuda()
+    flag = torch.zeros(1, B, 14336, dtype=torch.bool).cuda()
+    flash_gemv.fuse_gemv_flag_batch(input, weight_t, value, flag, threshold)
+    torch.cuda.synchronize()
+    indices = torch.nonzero(flag, as_tuple=False)
+    act_fn = nn.SiLU()
+    golden_value = act_fn(torch.matmul(input, weight))
+    golden_flag = (torch.abs(golden_value) > threshold)
+    golden_indices = torch.nonzero(golden_flag, as_tuple=False)
+    print(indices.shape)
+    print(golden_indices.shape)
+    golden_value[torch.abs(golden_value) <= threshold] = 0
+    np.savetxt('value.txt', value.flatten().cpu().numpy())
+    np.savetxt('golden_value.txt', golden_value.flatten().cpu().numpy())
+
+def test_flag_local():
+    torch.manual_seed(0)
+    B = 2
+    input = torch.randn(1, B, 4096).half().cuda() - 0.5
+    weight = torch.rand(4096, 14336).half().cuda() - 0.5
+    weight_t = weight.t().contiguous()
+    threshold = 0.2
+    value = torch.zeros(1, B, 14336).to(torch.float16).cuda()
+    flag = torch.zeros(1, B, 14336, dtype=torch.bool).cuda()
+    flash_gemv.fuse_gemv_flag_local(input, weight_t, value, flag, threshold)
+    torch.cuda.synchronize()
+    indices = torch.nonzero(flag, as_tuple=False)
+    act_fn = nn.SiLU()
+    golden_value = act_fn(torch.matmul(input, weight))
+    golden_flag = (torch.abs(golden_value) > threshold)
+    golden_indices = torch.nonzero(golden_flag, as_tuple=False)
+    print(indices.shape)
+    print(golden_indices.shape)
+    golden_value[torch.abs(golden_value) <= threshold] = 0
+    np.savetxt('value.txt', value.to(torch.float32).flatten().cpu().numpy())
+    np.savetxt('golden_value.txt', golden_value.to(torch.float32).flatten().cpu().numpy())
+
+def test_flag_gemv_local():
+    torch.manual_seed(0)
+    B = 2
+    input = torch.randn(1, B, 4096).half().cuda() - 0.5
+    weight = torch.rand(4096, 14336).half().cuda() - 0.5
+    weight_t = weight.t().contiguous()
+    wup = torch.rand(4096, 14336).half().cuda() - 0.5
+    wup_t = wup.t().contiguous()
+    threshold = 0.2
+    value = torch.zeros(1, B, 14336).to(torch.float16).cuda()
+    flag = torch.zeros(1, B, 14336, dtype=torch.bool).cuda()
+    flash_gemv.fuse_gemv_flag_local(input, weight_t, value, flag, threshold)
+    torch.cuda.synchronize()
+    flash_gemv.fuse_flag_gemv_local(input, wup_t, value, flag)
+    torch.cuda.synchronize()
+    indices = torch.nonzero(flag, as_tuple=False)
+    act_fn = nn.SiLU()
+    golden_value = act_fn(torch.matmul(input, weight))
+    golden_flag = (torch.abs(golden_value) > threshold)
+    golden_indices = torch.nonzero(golden_flag, as_tuple=False)
+    golden_up = torch.matmul(input, wup) * golden_value
+    golden_up[torch.abs(golden_value) <= threshold] = 0
+    print(indices.shape)
+    print(golden_indices.shape)
+    np.savetxt('value_1.txt', value.to(torch.float32).flatten().cpu().numpy())
+    np.savetxt('golden_up.txt', golden_up.to(torch.float32).flatten().cpu().numpy())
+
+def test_flag_gemv_gemv_batch():
+    torch.manual_seed(0)
+    B = 2
+    input = torch.randn(1, B, 4096).half().cuda() - 0.5
+    weight = torch.rand(4096, 14336).half().cuda() - 0.5
+    weight_t = weight.t().contiguous()
+    wup = torch.rand(4096, 14336).half().cuda() - 0.5
+    wup_t = wup.t().contiguous()
+    wdown = torch.rand(14336, 4096).half().cuda() - 0.5
+    threshold = 0.2
+    value = torch.zeros(1, B, 14336).to(torch.float16).cuda()
+    flag = torch.zeros(1, B, 14336, dtype=torch.bool).cuda()
+    output = torch.zeros(1, B, 4096).cuda()
+    flash_gemv.fuse_gemv_flag_local(input, weight_t, value, flag, threshold)
+    torch.cuda.synchronize()
+    flash_gemv.fuse_flag_gemv_local(input, wup_t, value, flag)
+    torch.cuda.synchronize()
+    flash_gemv.atomic_gemv(value, wdown, output, flag)
+    torch.cuda.synchronize()
+    output = output.half()
+    indices = torch.nonzero(flag, as_tuple=False)
+    act_fn = nn.SiLU()
+    golden_value = act_fn(torch.matmul(input, weight))
+    golden_flag = (torch.abs(golden_value) > threshold)
+    golden_indices = torch.nonzero(golden_flag, as_tuple=False)
+    golden_up = torch.matmul(input, wup) * golden_value
+    golden_up[torch.abs(golden_value) <= threshold] = 0
+    golden_output = torch.matmul(golden_up, wdown)
+    print(indices.shape)
+    print(golden_indices.shape)
+    np.savetxt('value_whole.txt', output.to(torch.float32).flatten().cpu().numpy())
+    np.savetxt('golden_whole.txt', golden_output.to(torch.float32).flatten().cpu().numpy())
+
+def test_flag_gemv_gemv_atomic():
+    torch.manual_seed(0)
+    B = 2
+    input = torch.randn(1, B, 4096).half().cuda() - 0.5
+    weight = torch.rand(4096, 14336).half().cuda() - 0.5
+    weight_t = weight.t().contiguous()
+    wup = torch.rand(4096, 14336).half().cuda() - 0.5
+    wup_t = wup.t().contiguous()
+    wdown = torch.rand(14336, 4096).half().cuda() - 0.5
+    threshold = 0.3
+
+    output = torch.zeros(1, B, 4096).cuda()
+    flash_gemv.flag_gemv_gemv_atomic(input, weight_t, wup_t, wdown, output, threshold)
+    torch.cuda.synchronize()
+    output = output.half()
+    act_fn = nn.SiLU()
+    golden_value = act_fn(torch.matmul(input, weight))
+    golden_up = torch.matmul(input, wup) * golden_value
+    golden_up[torch.abs(golden_value) <= threshold] = 0
+    golden_output = torch.matmul(golden_up, wdown)
+    # print the indices that |output - golden_output| > 0.01 * |output|
+    nq_indices = torch.nonzero(torch.abs(golden_output-output) > 0.01 * torch.abs(output))
+    print(nq_indices)
+    print(nq_indices.shape)
+
+    np.savetxt('value_whole.txt', output.to(torch.float32).flatten().cpu().numpy())
+    np.savetxt('golden_whole.txt', golden_output.to(torch.float32).flatten().cpu().numpy())
+
+def test_flag_gemv_gemv_local():
+    torch.manual_seed(0)
+    B = 2
+    input = torch.randn(1, B, 4096).half().cuda() - 0.5
+    weight = torch.rand(4096, 14336).half().cuda() - 0.5
+    weight_t = weight.t().contiguous()
+    wup = torch.rand(4096, 14336).half().cuda() - 0.5
+    wup_t = wup.t().contiguous()
+    wdown = torch.rand(14336, 4096).half().cuda() - 0.5
+    wdown_t = wdown.t().contiguous()
+    threshold = 0.3
+
+    # output = torch.zeros(1, B, 4096).half().cuda()
+    # flash_gemv.flag_gemv_gemv(input, weight_t, wup_t, wdown_t, output, threshold)
+    output = flash_gemv.flag_gemv_gemv_inner(input, weight_t, wup_t, wdown_t, threshold)
+    torch.cuda.synchronize()
+    act_fn = nn.SiLU()
+    golden_value = act_fn(torch.matmul(input, weight))
+    golden_up = torch.matmul(input, wup) * golden_value
+    golden_up[torch.abs(golden_value) <= threshold] = 0
+    golden_output = torch.matmul(golden_up, wdown)
+    # print the indices that |output - golden_output| > 0.01 * |output|
+    nq_indices = torch.nonzero(torch.abs(golden_output-output) > 0.01 * torch.abs(output))
+    print(nq_indices)
+    print(nq_indices.shape)
+
+    np.savetxt('value_whole.txt', output.to(torch.float32).flatten().cpu().numpy())
+    np.savetxt('golden_whole.txt', golden_output.to(torch.float32).flatten().cpu().numpy())
+
 def bench_flag():
     torch.manual_seed(0)
     input = torch.randn(1, 1, 4096).half().cuda()
     weight = torch.randn(4096, 14336).half().cuda()
     weight_t = weight.t().contiguous()
-    threshold = 0.1
+    threshold = 0.2
     value = torch.zeros(1, 1, 14336).half().cuda()
     flag = torch.zeros(14336, dtype=torch.bool).cuda()
     flash_gemv.fuse_gemv_flag(input, weight_t, value, flag, threshold)
     torch.cuda.synchronize()
     act_fn = nn.SiLU()
-    golden_value = torch.abs(act_fn(torch.matmul(input, weight)))
-    golden_flag = (golden_value > threshold)
+    golden_value = act_fn(torch.matmul(input, weight))
+    golden_flag = torch.abs(golden_value) > threshold
     print(golden_flag.shape)
 
 def bench_flag_gemv():
@@ -338,10 +500,88 @@ def bench_flag_gemv():
     flash_gemv.fuse_gemv_flag(input, wgate_t, value, flag, threshold)
     # gather_gemv_elemul_flag_3d(input, value, wup_t, flag)
 
+def bench_flag_batch():
+    torch.manual_seed(0)
+    B = 16
+    input = torch.randn(1, B, 4096).half().cuda()
+    weight = torch.randn(4096, 14336).half().cuda()
+    weight_t = weight.t().contiguous()
+    threshold = 0.2
+    value = torch.zeros(1, B, 14336).to(torch.float16).cuda()
+    flag = torch.zeros(1, B, 14336, dtype=torch.bool).cuda()
+    flash_gemv.fuse_gemv_flag_batch(input, weight_t, value, flag, threshold)
+    torch.cuda.synchronize()
+    indices = torch.nonzero(flag, as_tuple=False)
+    act_fn = nn.SiLU()
+    golden_value = act_fn(torch.matmul(input, weight))
+    golden_flag = (torch.abs(golden_value) > threshold)
+    golden_indices = torch.nonzero(golden_flag, as_tuple=False)
+    print(indices.shape)
+    print(golden_indices.shape)
+
+def bench_flag_local():
+    torch.manual_seed(0)
+    B = 1
+    input = torch.randn(1, B, 4096).half().cuda()
+    weight = torch.randn(4096, 14336).half().cuda()
+    weight_t = weight.t().contiguous()
+    threshold = 0.1
+    value = torch.zeros(1, B, 14336).to(torch.float16).cuda()
+    flag = torch.zeros(1, B, 14336, dtype=torch.bool).cuda()
+    flash_gemv.fuse_gemv_flag_local(input, weight_t, value, flag, threshold)
+    torch.cuda.synchronize()
+    indices = torch.nonzero(flag, as_tuple=False)
+    act_fn = nn.SiLU()
+    golden_value = act_fn(torch.matmul(input, weight))
+    golden_flag = (torch.abs(golden_value) > threshold)
+    golden_indices = torch.nonzero(golden_flag, as_tuple=False)
+    print(indices.shape)
+    print(golden_indices.shape)
+
+def bench_flag_gemv_gemv_atomic(B, threshold):
+    torch.manual_seed(0)
+    # B = 2
+    input = torch.randn(1, B, 4096).half().cuda() - 0.5
+    weight_t = torch.rand(14336, 4096).half().cuda() - 0.5
+    wup_t = torch.rand(14336, 4096).half().cuda() - 0.5
+    wdown = torch.rand(14336, 4096).half().cuda() - 0.5
+    # threshold = 0.3
+
+    output = torch.zeros(1, B, 4096).cuda()
+    flash_gemv.flag_gemv_gemv_atomic(input, weight_t, wup_t, wdown, output, threshold)
+    output = output.half()
+    torch.cuda.synchronize()
+
+def bench_flag_gemv_gemv_local(B, threshold):
+    torch.manual_seed(0)
+    input = torch.randn(1, B, 4096).half().cuda() - 0.5
+    weight_t = torch.rand(14336, 4096).half().cuda() - 0.5
+    wup_t = torch.rand(14336, 4096).half().cuda() - 0.5
+    wdown_t = torch.rand(4096, 14336).half().cuda() - 0.5
+
+    output = torch.zeros(1, B, 4096).half().cuda()
+    flash_gemv.flag_gemv_gemv(input, weight_t, wup_t, wdown_t, output, threshold)
+    torch.cuda.synchronize()
 
 if __name__ == '__main__':
     # test_flag()
     # bench_flag_gemv()
     # test_flag_gemv()
     # test_flag_gemv_gemv()
-    test_gemv_gemv_gemv()
+    # test_gemv_gemv_gemv()
+    # test_flag_batch()
+    # bench_flag_batch()
+    # bench_flag()
+    # test_flag_local()
+    # bench_flag_local()
+    # test_flag_gemv_local()
+    # test_flag_gemv_gemv_batch()
+    # test_flag_gemv_gemv_atomic()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--B", type=int, default=2)
+    parser.add_argument("--ths", type=float, default=0.1)
+    args = parser.parse_args()
+
+    # bench_flag_gemv_gemv_atomic(args.B, args.ths)
+    test_flag_gemv_gemv_local()
+    # bench_flag_gemv_gemv_local(args.B, args.ths)

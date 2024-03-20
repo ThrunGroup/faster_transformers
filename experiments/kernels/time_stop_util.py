@@ -2612,7 +2612,7 @@ class GenerationMixin:
         # auto-regressive generation
         while True:
             count += 1
-            if count > 1:
+            if count == 2:
                 start_event.record()
                 # torch.cuda.synchronize()
             if synced_gpus:

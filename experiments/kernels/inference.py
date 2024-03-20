@@ -113,10 +113,10 @@ class FusePrunedMistralMLP(MistralMLP):
             config,
     ):
         super().__init__(config)
-        self.fc2_weight_t = self.register_buffer("fc2_weigth_t", None)
-        self.value = torch.zeros(1, 1, 14336).half().cuda()
-        self.flag = torch.zeros(14336, dtype=torch.bool).cuda()
-        self.range = torch.arange(14336, dtype=torch.int64).cuda()
+        # self.fc2_weight_t = self.register_buffer("fc2_weigth_t", None)
+        # self.value = torch.zeros(1, 1, 14336).half().cuda()
+        # self.flag = torch.zeros(14336, dtype=torch.bool).cuda()
+        # self.range = torch.arange(14336, dtype=torch.int64).cuda()
 
 
     # def forward(self, x):
@@ -146,13 +146,23 @@ class FusePrunedMistralMLP(MistralMLP):
     #     )
     #     return x_2
     
+    # def forward(self, x):
+    #     if (x.shape[1] != 1):
+    #         return super().forward(x)
+        
+    #     flash_gemv.fuse_gemv_flag_gemv(x, self.gate_proj.weight, self.up_proj.weight, self.value, self.flag, self.threshold)
+    #     x_2 = gather_transposed_gemv_flag_3d(self.value, self.fc2_weight_t, self.flag)
+    #     return x_2
+
+    # def forward(self, x):
+    #     if (x.shape[1] != 1):
+    #         return super().forward(x)
+    #     return flash_gemv.fuse_gemv_gemv_gemv(x, self.gate_proj.weight, self.up_proj.weight, self.fc2_weight_t, self.threshold)
+    
     def forward(self, x):
         if (x.shape[1] != 1):
             return super().forward(x)
-        
-        flash_gemv.fuse_gemv_flag_gemv(x, self.gate_proj.weight, self.up_proj.weight, self.value, self.flag, self.threshold)
-        x_2 = gather_transposed_gemv_flag_3d(self.value, self.fc2_weight_t, self.flag)
-        return x_2
+        return flash_gemv.flag_gemv_gemv_inner(x, self.gate_proj.weight, self.up_proj.weight, self.down_proj.weight, self.threshold)
 
     # def forward(self, x):
     #     if (x.shape[1] != 1):
@@ -844,6 +854,9 @@ def benchmark_generation(context_length, generation_length, prompt_path="text.tx
         replace_fuse_mlp(model, config)
         load_thresholds(model, ths_path)
         transpose_weights(model)
+    elif sparse_mode == 5:
+        replace_fuse_mlp(model, config)
+        load_thresholds(model, ths_path)
 
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
@@ -854,9 +867,16 @@ def benchmark_generation(context_length, generation_length, prompt_path="text.tx
 
 
     # benchmark_sentence(tokenizer, model, full_string, prompt_tokens=context_length, max_tokens=generation_length, num_return_sequences=1, num_beams=num_beams)
+    if sparse_mode == -1:
+        file = open(f'/home/zhongming/genghan/dejavu_profile/profiles/prefill-decode/Dense-{context_length}-{generation_length-context_length-1}.csv', 'w')
+    elif sparse_mode == 4:
+        file = open(f'/home/zhongming/genghan/dejavu_profile/profiles/prefill-decode/fuseall-4-{context_length}-{generation_length-context_length-1}.csv', 'w')
+    elif sparse_mode == 5:
+        file = open(f'/home/zhongming/genghan/dejavu_profile/profiles/prefill-decode/inner-5-{context_length}-{generation_length-context_length-1}.csv', 'w')
     throughputs, elapsed_times, gen_lengths = benchmark_sentence(tokenizer, model, full_string, prompt_tokens=context_length, max_tokens=generation_length, num_return_sequences=1, num_beams=num_beams)
     for (tp, et, gl) in zip(throughputs, elapsed_times, gen_lengths):
         print("Throughput: {:.2f} tokens/s; Elapsed time: {} ms; Generation Length: {}".format(tp, et, gl))
+        file.write("{},{},{}\n".format(tp, et, gl))
     print("Average Throughput: {:.2f} tokens/s".format(mstats.gmean(throughputs)))
 
 
