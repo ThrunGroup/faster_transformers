@@ -297,6 +297,7 @@ class MistralSparseSiluMLP(MistralMLP):
 
         # Hyperparameters to tune
         self.dead_threshold = kwargs.pop("dead_threshold", 0)
+        self.pre_mlp_dead_threshold = kwargs.pop("pre_mlp_dead_threshold", 0)
         self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", True)
         self.regularization_type = kwargs.pop(
             "regularization_type", "L1 regularization"
@@ -313,6 +314,7 @@ class MistralSparseSiluMLP(MistralMLP):
         self.histogram_bins = torch.cat(
             [torch.tensor([-torch.inf]), self.histogram_bins, torch.tensor([torch.inf])]
         )
+        self.pre_mlp_hist_counts = torch.zeros(num_bins - 1)
         self.pre_act_hist_counts = torch.zeros(num_bins - 1)
         self.post_act_hist_counts = torch.zeros(num_bins - 1)
         self.t = 0
@@ -332,11 +334,17 @@ class MistralSparseSiluMLP(MistralMLP):
     def deactivate_stats(self):
         self.is_stats = False
 
-    def collect_stats(self, pre_activation, post_activation):
+    def collect_stats(
+        self,
+        pre_mlp,
+        pre_activation,
+        post_activation,
+    ):
         start_time = time.time()
         pre_activation = pre_activation.float().cpu().detach()
         post_activation = post_activation.float().cpu().detach()
         # self.histogram_bins=self.histogram_bins.to(pre_activation.device).type(pre_activation.dtype)
+        self.pre_mlp_hist_counts = torch.histogram(pre_mlp, bins=self.histogram_bins)[0]
         self.pre_act_hist_counts += torch.histogram(
             pre_activation, bins=self.histogram_bins
         )[0]
@@ -386,8 +394,11 @@ class MistralSparseSiluMLP(MistralMLP):
 
         else:
             self.count += 1
+            # x[abs(x) < 0.7 * x.std()] = 0
             if self.count <= 1:
                 print("USING SparseSILU!!!!")
+                # print(x.mean(), x.std(), x.max(), x.min())
+                # print(f"pre mlp sparsity: {(x==0).float().mean()}")
             pre_act = self.gate_proj(x)
             post_act = self.act_fn(pre_act)
             if self.kill_sparse_swish_outputs:
@@ -415,7 +426,7 @@ class MistralSparseSiluMLP(MistralMLP):
                         self.is_collect_histogram
                         and pre_act.eq(0).float().mean() < 0.99
                     ):  # Padded dataset
-                        self.collect_stats(pre_act, post_act)
+                        self.collect_stats(x, pre_act, post_act)
 
                 post_act[dead_neurons] = 0
 
@@ -931,6 +942,7 @@ def save_act_hist(
         ):  # Can set the threshold only the relevant statistics is collected.
             act_dict[i] = (
                 layer.mlp.histogram_bins,
+                # layer.mlp.pre_mlp_hist_counts,
                 layer.mlp.pre_act_hist_counts,
                 layer.mlp.post_act_hist_counts,
             )
@@ -953,6 +965,7 @@ def load_act_hist(
         ):  # Can set the threshold only the relevant statistics is collected.
             (
                 layer.mlp.histogram_bins,
+                # layer.mlp.pre_mlp_hist_counts,
                 layer.mlp.pre_act_hist_counts,
                 layer.mlp.post_act_hist_counts,
             ) = act_dict[i]
