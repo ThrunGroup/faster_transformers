@@ -89,7 +89,6 @@ def prepare_sparse_model(
                 hidden_size=64,
                 intermediate_size=64,
                 num_hidden_layers=4,
-                # num_attention_heads=4,
             )
             if use_sparse_model:
                 config = get_sparse_config(config, model_type)
@@ -429,10 +428,10 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             thresholds = [float(m.mlp.dead_threshold) for m in model.model.layers]
             model.config.thresholds = thresholds
         # model.config.save_pretrained(output_dir)
-        # model.save_pretrained(output_dir + "_no_adapter")
-        # tokenizer.save_pretrained(output_dir + "_no_adapter")
-        model.save_pretrained(output_dir)
-        tokenizer.save_pretrained(output_dir)
+        model.save_pretrained(output_dir + "_no_adapter")
+        tokenizer.save_pretrained(output_dir + "_no_adapter")
+        # model.save_pretrained(output_dir)
+        # tokenizer.save_pretrained(output_dir)
 
     if push_to_hub:
         trainer.model = model

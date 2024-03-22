@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Initial steps and increment
-initial_steps=200
+initial_steps=0
 step_increment=200
-max_iterations=5  # This will train up to 2000 steps in increments of 500
-is_first_training=0
+max_iterations=2  # This will train up to 2000 steps in increments of 500
+is_first_training=1
 
 for ((i=1; i<=max_iterations; i++)); do
     current_steps=$((initial_steps + i * step_increment))  # Calculate the number of steps trained so far
