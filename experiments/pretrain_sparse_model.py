@@ -158,9 +158,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     )
 
     # Load dataset
-    dataset = get_dataset(
-        dataset_type, tokenizer, MISTRAL_7B, max_seq_length=exp_config.max_seq_length
-    )
+    dataset = get_dataset(dataset_type, tokenizer, MISTRAL_7B, max_seq_length=exp_config.max_seq_length)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
     print(train_dataset, val_dataset, test_dataset)
     data_collator = dataset.get_data_collator()
@@ -229,9 +227,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         data_seed=seed,
     )
 
-    early_stopping = EarlyStoppingCallback(
-        early_stopping_patience=1000, early_stopping_threshold=0.002
-    )
+    early_stopping = EarlyStoppingCallback(early_stopping_patience=1000, early_stopping_threshold=0.002)
     sparsification_scheduler = GradualSparsificationScheduler(
         num_warmup_steps=num_warmup_steps,
         increment_ratio=increment_ratio,
@@ -254,9 +250,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         tokenizer=tokenizer,
         data_collator=data_collator,
         args=trainer_config,
-        train_dataset=train_dataset.with_format(
-            "torch"
-        ),  # train_dataset.with_format("torch"),
+        train_dataset=train_dataset.with_format("torch"),  # train_dataset.with_format("torch"),
         eval_dataset=val_dataset.with_format("torch"),
         # compute_metrics=dataset.compute_metrics,
         # preprocess_logits_for_metrics=dataset.preprocess_logits_for_metrics,
@@ -265,9 +259,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     )
 
     if gradient_checkpointing:
-        model.gradient_checkpointing_enable(
-            gradient_checkpointing_kwargs={"use_reentrant": False}
-        )
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
         config.use_cache = False
         model.config.use_cache = False
         # model.enable_input_require_grads()  # See https://github.com/huggingface/transformers/issues/23170
@@ -278,16 +270,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         base_model = model
 
     # Collect statistics and find the threshold for given sparsity
-    if (
-        not use_graceful_regularization
-        and exp_config.set_sparsity_aware_threshold
-    ):
+    if not use_graceful_regularization and exp_config.set_sparsity_aware_threshold:
         if is_debugging:
             act_hist_path = "/tmp/pre_finetune__act_hist.pt"
         else:
-            act_hist_path = (
-                f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist.pt"
-            )
+            act_hist_path = f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist.pt"
 
         activate_stats(base_model)
         if os.path.exists(act_hist_path):
@@ -348,9 +335,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
             enable_sparse_predictor(base_model)
         else:
-            warnings.warn(
-                "use_spm arg is ignored as use_spare_model arg is not activated."
-            )
+            warnings.warn("use_spm arg is ignored as use_spare_model arg is not activated.")
     trainer.train(resume_from_checkpoint=exp_config.resume_from_checkpoint)
 
     # Evaluate on test dataset
@@ -362,9 +347,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         if exp_config.use_sparse_model:
             enable_sparse_predictor(model)
         else:
-            warnings.warn(
-                "use_spm arg is ignored as use_spare_model arg is not activated."
-            )
+            warnings.warn("use_spm arg is ignored as use_spare_model arg is not activated.")
 
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
@@ -381,9 +364,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         if is_debugging:
             act_hist_path = "/tmp/post_finetune__act_hist.pt"
         else:
-            act_hist_path = (
-                "/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
-            )
+            act_hist_path = "/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
         save_act_hist(model, act_hist_path)
         plot_act(model)
 
@@ -442,4 +423,3 @@ if __name__ == "__main__":
     args.dataset_type = REFINED_WEB
     train(args, use_wandb=args.use_wandb)
     # torch.cuda.memory._dump_snapshot("snapshot_new.pickle")
-    # deepspeed experiments/pretrain_sparse_model.py --use_sparse_model --targeted_sparsity 0.75 --set_sparsity_aware_threshold --print_sparsity --use_wandb --num_epochs 1 --gradient_checkpointing --model_save --train_batch_size 1 --test_batch_size 1 --use_flash_attn --max_steps 2000 --gradient_accumulation_steps 8
