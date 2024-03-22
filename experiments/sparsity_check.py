@@ -6,7 +6,7 @@ from transformers import (
     TrainingArguments,
 )
 from experiments.data.get_dataset import get_dataset
-from experiments.models.sparse_mistral.sparsification_sftt import (
+from experiments.models.sparse_mistral.sparse_silu import (
     SparseMistralforCausalLM,
     activate_stats,
     print_dead_neuron_stats,

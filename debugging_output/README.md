@@ -2,18 +2,18 @@
 tags:
 - generated_from_trainer
 model-index:
-- name: Mistral_Sparse_refined_web_graceful_reg_90p_debugging_2024-03-14
+- name: sparse_llama_7b_refined_web_90p_debugging_2024-03-21
   results: []
 ---
 
 <!-- This model card has been generated automatically according to the information the Trainer had access to. You
 should probably proofread and complete it, then remove this comment. -->
 
-# Mistral_Sparse_refined_web_graceful_reg_90p_debugging_2024-03-14
+# sparse_llama_7b_refined_web_90p_debugging_2024-03-21
 
 This model is a fine-tuned version of [](https://huggingface.co/) on the None dataset.
 It achieves the following results on the evaluation set:
-- Loss: 10.3877
+- Loss: 10.3854
 
 ## Model description
 

@@ -1,4 +1,4 @@
-from mistral_instruct_tuning import train, parse_args
+from instruct_tuning import train, parse_args
 from utils.constants import COLA, WIC, BOOLQ, SST2
 
 

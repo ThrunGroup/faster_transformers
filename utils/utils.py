@@ -3,6 +3,22 @@ import os
 import socket
 from datetime import datetime
 
+from utils.constants import MISTRAL, LLAMA
+
+
+def get_model_type_from_name(model_name: str):
+    model_name = model_name.lower()
+    if MISTRAL.lower() in model_name:
+        return MISTRAL
+    if LLAMA.lower() in model_name:
+        return LLAMA
+    raise ValueError(f"Model name {model_name} is not recognized.")
+
+
+def get_model_type(model):
+    model_name = model.__class__.__name__
+    return get_model_type_from_name(model_name)
+
 
 def print_size_of_model(model):
     torch.save(model.state_dict(), "temp.p")

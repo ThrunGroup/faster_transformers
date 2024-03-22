@@ -1,6 +1,6 @@
 import wandb
 import argparse
-from experiments.mistral_instruct_tuning import train, is_running_deepspeed
+from experiments.instruct_tuning import train, is_running_deepspeed
 from datetime import datetime
 
 
@@ -47,9 +47,7 @@ def get_sweep_config(config):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Hyperparameter sweep script for MistralModel"
-    )
+    parser = argparse.ArgumentParser(description="Hyperparameter sweep script for MistralModel")
     parser.add_argument("--project_name", type=str, default="Sweep_SparseMistralMLP")
     parser.add_argument("--num_epochs", type=int, default=8)
     parser.add_argument("--train_batch_size", type=int, default=16)

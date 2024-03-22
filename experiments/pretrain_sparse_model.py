@@ -1,13 +1,41 @@
-from experiments.models.sparse_mistral.sparsification_sftt import (
-    SparseTrainer,
-    GracefulRegularizationScheduler,
+from transformers import (
+    AutoTokenizer,
+    BitsAndBytesConfig,
+    TrainingArguments,
+    MistralForCausalLM,
+    MistralConfig,
+    LlamaForCausalLM,
+    LlamaConfig,
 )
+from peft import (
+    LoraConfig,
+    get_peft_model,
+)
+
+
+import torch
+import deepspeed
+import torch.nn as nn
+import os
+import gc
+import wandb
+import numpy as np
+import sys
+import argparse
+import time
+import warnings
+
+from experiments.models.sparse_silu.ugly_utils import *
+
+# from experiments.models.sparse_silu.callbacks import GracefulRegularizationScheduler
+# from trainer import SparseTrainer
+from utils.utils import get_model_type_from_name
 from utils.constants import (
     REFINED_WEB,
 )
-from utils.utils import ds_print, is_mainprocess, is_running_deepspeed
+from utils.utils import ds_print, is_mainprocess, is_running_deepspeed, get_datetime
+from utils.parse_args import parse_args
 from experiments.data.get_dataset import get_dataset
-from mistral_instruct_tuning import *
 
 
 def get_run_name(exp_config):
@@ -28,6 +56,126 @@ def get_run_name(exp_config):
     return run_name
 
 
+def prepare_sparse_model(
+    is_debugging=False,
+    use_sparse_model: bool = True,
+    use_sparse_regularization: bool = False,
+    use_sparse_predictor: bool = False,
+    use_graceful_regularization: bool = False,
+    sparse_model_dir: str = None,
+    use_lora: bool = True,
+    use_flash_attn: bool = False,
+    base_model_name: str = "mistralai/Mistral-7B-Instruct-v0.1",
+    gradient_checkpointing: bool = False,
+    use_relu: bool = False,
+    cutoff_large: bool = False,
+):
+    # Register for AutoConfig and AutoModelforCausalLM
+    model_type = get_model_type_from_name(base_model_name)
+    BaseConfig = MistralConfig if model_type == MISTRAL else LlamaConfig
+    BaseCausalLM = MistralForCausalLM if model_type == MISTRAL else LlamaForCausalLM
+    SparseConfig = SparseMistralConfig if model_type == MISTRAL else SparseLlamaConfig
+    SparseCausalLM = SparseMistralforCausalLM if model_type == MISTRAL else SparseLlamaForCausalLM
+    SparseConfig.register_for_auto_class()
+    SparseCausalLM.register_for_auto_class("AutoModelForCausalLM")
+
+    if use_flash_attn:
+        attn_implementation = "flash_attention_2"
+    else:
+        attn_implementation = None
+    if sparse_model_dir is None:
+        if is_debugging:
+            config = BaseConfig(
+                hidden_size=64,
+                intermediate_size=64,
+                num_hidden_layers=4,
+                # num_attention_heads=4,
+            )
+            if use_sparse_model:
+                config = get_sparse_config(config, model_type)
+                model = SparseCausalLM(config=config)
+            else:
+                model = BaseCausalLM(config=config)
+        else:
+            config = BaseConfig.from_pretrained(base_model_name, model_type)
+            config = get_sparse_config(config)
+            config.use_cache = True
+            model = SparseCausalLM.from_pretrained(
+                base_model_name,
+                config=config,
+                torch_dtype=torch.bfloat16,
+                attn_implementation=attn_implementation,
+            )
+            model.config_class = SparseConfig
+
+        if use_sparse_model:
+            model.config.use_sparse_model = use_sparse_model
+            apply_sparse_silu_mlp(model, model.config, use_sparse_regularization=use_sparse_regularization)
+            enable_sparse_silu(model)
+        if use_sparse_predictor:
+            model.config.use_sparse_predictor = use_sparse_predictor
+            apply_sparse_decoder_layer(model, model.config, init_svd=not is_debugging)
+        if use_sparse_regularization:
+            model.config.us_sparse_regularization = use_sparse_regularization
+        if use_graceful_regularization:
+            model.config.use_graceful_regularization = use_graceful_regularization
+    else:
+        config = SparseConfig.from_pretrained(sparse_model_dir)
+        print(config)
+        model = SparseCausalLM.from_pretrained(
+            sparse_model_dir,
+            config=config,
+            torch_dtype=torch.bfloat16,
+            attn_implementation=attn_implementation,
+        )
+        if use_sparse_predictor:
+            svd_model_dir = sparse_model_dir + "_svd"
+            init_svd = not os.path.exists(svd_model_dir)
+            model.config.use_sparse_predictor = use_sparse_predictor
+
+            if init_svd:
+                apply_sparse_decoder_layer(
+                    model,
+                    model.config,
+                    init_svd=False,
+                )
+                model.config.init_svd = False
+                model.save_pretrained(svd_model_dir)
+            else:
+                config = SparseConfig.from_pretrained(svd_model_dir)
+                model = SparseCausalLM.from_pretrained(
+                    svd_model_dir,
+                    config=config,
+                )
+    model.config.use_relu = use_relu
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"
+    if gradient_checkpointing:
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        model.enable_input_require_grads()  # See https://github.com/huggingface/transformers/issues/23170
+    if use_lora:
+        peft_config = LoraConfig(
+            lora_alpha=16,
+            lora_dropout=0.1,
+            r=64,
+            bias="none",
+            task_type="CAUSAL_LM",
+            target_modules=["q_proj", "v_proj", "gate_proj", "up_proj", "down_proj"],
+        )
+        model = get_peft_model(model, peft_config)
+        print(model.print_trainable_parameters())
+
+    # Register for AutoConfig and AutoModelforCausalLM
+    # SparseMistralConfig.register_for_auto_class()
+    # SparseMistralforCausalLM.register_for_auto_class("AutoModelForCausalLM")
+    # model.config.register_for_auto_class()
+    # model.register_for_auto_class("AutoModelForCausalLM")
+
+    return model, tokenizer, model.config
+
+
 def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     ds_print(f"Config: {exp_config}")
     if use_wandb and is_mainprocess():
@@ -40,6 +188,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             time.sleep(1)
 
     model_name = exp_config.model_name
+    model_type = get_model_type_from_name(model_name)
     gradient_checkpointing = exp_config.gradient_checkpointing
     push_to_hub = exp_config.push_to_hub
     is_debugging = exp_config.is_debugging
@@ -86,21 +235,21 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         exp_config.sparse_model_dir,
         exp_config.use_lora,
         exp_config.use_flash_attn,
-        base_model_name=MISTRAL_7B,
+        base_model_name=exp_config.base_model_repo_id,
         gradient_checkpointing=gradient_checkpointing,
         use_relu=exp_config.use_relu,
     )
 
     # Load dataset
-    dataset = get_dataset(dataset_type, tokenizer, MISTRAL_7B, max_seq_length=exp_config.max_seq_length)
+    dataset = get_dataset(dataset_type, tokenizer, model_type, max_seq_length=exp_config.max_seq_length)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    print(train_dataset, val_dataset, test_dataset)
     data_collator = dataset.get_data_collator()
 
+    output_dir = os.path.join(exp_config.output_dir, run_name)
     if is_debugging:
-        output_dir = "debugging_output"
-    else:
-        output_dir = os.path.join(exp_config.output_dir, run_name)
+        output_dir += "_debugging"
+    ds_print(f"Output directory: {output_dir}")
+
     with open("model_directory.txt", "w") as f:
         f.write(output_dir)
 
@@ -212,10 +361,10 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         eval_result = trainer.evaluate(sampled_train_dataset)
         trainer.is_deepspeed_enabled = is_deepspeed_enabled
 
-        print("===Pre-training test Result==")
-        print(eval_result)
+        ds_print("===Pre-training test Result==")
+        ds_print(eval_result)
         total_sparsity = print_dead_neuron_stats(base_model)
-        print(f"pre-training sparsity: {total_sparsity}")
+        ds_print(f"pre-training sparsity: {total_sparsity}")
 
     # Plot activation histograms
     if is_plot:
@@ -280,8 +429,10 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             thresholds = [float(m.mlp.dead_threshold) for m in model.model.layers]
             model.config.thresholds = thresholds
         # model.config.save_pretrained(output_dir)
-        model.save_pretrained(output_dir + "_no_adapter")
-        tokenizer.save_pretrained(output_dir + "_no_adapter")
+        # model.save_pretrained(output_dir + "_no_adapter")
+        # tokenizer.save_pretrained(output_dir + "_no_adapter")
+        model.save_pretrained(output_dir)
+        tokenizer.save_pretrained(output_dir)
 
     if push_to_hub:
         trainer.model = model
