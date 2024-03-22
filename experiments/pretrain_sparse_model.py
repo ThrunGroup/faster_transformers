@@ -108,16 +108,15 @@ def prepare_sparse_model(
             model.config_class = SparseConfig
 
         if use_sparse_model:
-            model.config.use_sparse_model = use_sparse_model
             apply_sparse_silu_mlp(model, model.config, use_sparse_regularization=use_sparse_regularization)
             enable_sparse_silu(model)
         if use_sparse_predictor:
-            model.config.use_sparse_predictor = use_sparse_predictor
             apply_sparse_decoder_layer(model, model.config, init_svd=not is_debugging)
-        if use_sparse_regularization:
-            model.config.us_sparse_regularization = use_sparse_regularization
-        if use_graceful_regularization:
-            model.config.use_graceful_regularization = use_graceful_regularization
+
+        model.config.use_sparse_predictor = use_sparse_predictor
+        model.config.use_sparse_model = use_sparse_model
+        model.config.us_sparse_regularization = use_sparse_regularization
+        model.config.use_graceful_regularization = use_graceful_regularization
     else:
         config = SparseConfig.from_pretrained(sparse_model_dir)
         print(config)
@@ -164,7 +163,7 @@ def prepare_sparse_model(
             target_modules=["q_proj", "v_proj", "gate_proj", "up_proj", "down_proj"],
         )
         model = get_peft_model(model, peft_config)
-        print(model.print_trainable_parameters())
+        ds_print(model.print_trainable_parameters())
 
     # Register for AutoConfig and AutoModelforCausalLM
     # SparseMistralConfig.register_for_auto_class()
@@ -238,6 +237,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         gradient_checkpointing=gradient_checkpointing,
         use_relu=exp_config.use_relu,
     )
+    state_dict = model.state_dict()
+    for key, value in state_dict.items():
+        ds_print(key)
 
     # Load dataset
     dataset = get_dataset(dataset_type, tokenizer, model_type, max_seq_length=exp_config.max_seq_length)
@@ -349,10 +351,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             set_sparse_threshold(base_model, exp_config.targeted_sparsity)
 
     if not use_graceful_regularization and exp_config.print_sparsity:
-        if exp_config.use_lora:
-            base_model = model.get_base_model()
-        else:
-            base_model = model
         activate_stats(base_model, exp_config.print_act_stats)
 
         is_deepspeed_enabled = trainer.is_deepspeed_enabled

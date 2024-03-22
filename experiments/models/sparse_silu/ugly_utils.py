@@ -160,7 +160,7 @@ def disable_sparse_predictor(
             layer.use_sparse_predictor = False
 
 
-def activate_stats(model, model_type: str = None, is_collect_histogram: bool = True):
+def activate_stats(model, is_collect_histogram: bool = True):
     SparseMLP = get_mlp_class(model)
     for layer in model.model.layers:
         if isinstance(layer.mlp, SparseMLP):
