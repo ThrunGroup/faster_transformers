@@ -3,6 +3,8 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     SparseMistralforCausalLM,
     SparseMistralConfig,
     get_sparse_mistral_config,
+    print_dead_neuron_stats,
+    activate_stats,
 )
 from experiments.mistral_instruct_tuning import prepare_sparse_model
 from torch.utils.data import DataLoader
@@ -35,7 +37,7 @@ def sparse_inference():
     tokenizer = AutoTokenizer.from_pretrained(path)
     dataset_type = REFINED_WEB
 
-    dataset = get_dataset(dataset_type, tokenizer, MISTRAL_7B, max_seq_length=1000)
+    dataset = get_dataset(dataset_type, tokenizer, MISTRAL_7B, max_seq_length=1024)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset(
         train_size=50,
     )
@@ -57,7 +59,9 @@ def sparse_inference():
         data_collator=data_collator,
     )
     # trainer.push_to_hub()
+    activate_stats(model, False)
     print(trainer.evaluate())
+    print_dead_neuron_stats(model,)
 
     dataloader = DataLoader(test_dataset, batch_size=8, collate_fn=data_collator)
 
