@@ -1,4 +1,4 @@
-from mistral_instruct_tuning import train, parse_args
+from instruction_tuning import train, parse_args
 from transformers import MistralConfig
 from experiments.models.sparse_mistral.sparsification_sftt import (
     SparseSFTTTrainer,

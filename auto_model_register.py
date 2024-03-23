@@ -2,9 +2,9 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     MistralSparseSiluMLP,
     SparseMistralforCausalLM,
     SparseMistralConfig,
-    get_sparse_mistral_config
+    get_sparse_mistral_config,
 )
-from experiments.mistral_instruct_tuning import prepare_sparse_model
+from experiments.instruction_tuning import prepare_sparse_model
 import os
 from transformers import (
     MistralConfig,

@@ -3,7 +3,7 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     SparseMistralforCausalLM,
     SparseMistralConfig,
 )
-from experiments.mistral_instruct_tuning import (
+from experiments.instruction_tuning import (
     prepare_sparse_model,
     set_sparse_threshold,
     load_act_hist,

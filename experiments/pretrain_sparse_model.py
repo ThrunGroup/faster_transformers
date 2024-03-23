@@ -58,6 +58,7 @@ from experiments.models.sparse_mistral.sparsification_sftt import (
     enable_sparse_predictor,
     disable_sparse_predictor,
     get_sparse_mistral_config,
+    SparseMistralConfig,
 )
 from experiments.models.sparse_mistral.svd_router import SparsePredictor
 from utils.mistral_utils import compress_mistral
@@ -66,6 +67,7 @@ from utils.utils import (
     is_running_deepspeed,
     is_mainprocess,
     get_datetime,
+    ds_print,
 )
 from utils.constants import (
     MISTRAL_YES_ID,
@@ -84,12 +86,135 @@ from format_dataset_for_instruction_tuning import (
     get_dataset_for_instruction_tuning,
 )
 from experiments.data.get_dataset import get_dataset
+from utils.parse_args import parse_args
 
-from mistral_instruct_tuning import *
+
+def prepare_sparse_model(
+    is_debugging=False,
+    use_sparse_model: bool = True,
+    use_sparse_regularization: bool = False,
+    use_sparse_predictor: bool = False,
+    sparse_model_dir: str = None,
+    use_lora: bool = True,
+    use_flash_attn: bool = False,
+    base_model_name: str = "mistralai/Mistral-7B-Instruct-v0.1",
+    gradient_checkpointing: bool = False,
+    use_relu: bool = False,
+    cutoff_large: bool = False,
+):
+    # Register for AutoConfig and AutoModelforCausalLM
+    SparseMistralConfig.register_for_auto_class()
+    SparseMistralforCausalLM.register_for_auto_class("AutoModelForCausalLM")
+
+    if use_flash_attn:
+        attn_implementation = "flash_attention_2"
+    else:
+        attn_implementation = None
+    if sparse_model_dir is None:
+        if is_debugging:
+            config = MistralConfig(
+                hidden_size=64,
+                intermediate_size=64,
+                num_hidden_layers=4,
+                # num_attention_heads=4,
+            )
+            if use_sparse_model:
+                config = get_sparse_mistral_config(config)
+                model = SparseMistralforCausalLM(config=config)
+            else:
+                model = MistralForCausalLM(config=config)
+        else:
+            config = MistralConfig.from_pretrained(base_model_name)
+            config = get_sparse_mistral_config(config)
+            config.use_cache = True
+            model = SparseMistralforCausalLM.from_pretrained(
+                base_model_name,
+                config=config,
+                torch_dtype=torch.bfloat16,
+                attn_implementation=attn_implementation,
+            )
+            model.config_class = SparseMistralConfig
+
+        if use_sparse_model:
+            model.config.use_sparse_model = use_sparse_model
+            apply_mistral_sparse_silu_mlp(model, model.config, use_sparse_regularization=use_sparse_regularization)
+            enable_sparse_silu(model)
+        if use_sparse_predictor:
+            model.config.use_sparse_predictor = use_sparse_predictor
+            apply_mistral_sparse_decoder_layer(model, model.config, init_svd=not is_debugging)
+        if use_sparse_regularization:
+            model.config.us_sparse_regularization = use_sparse_regularization
+    else:
+        config = SparseMistralConfig.from_pretrained(sparse_model_dir)
+        ds_print(config)
+        model = SparseMistralforCausalLM.from_pretrained(
+            sparse_model_dir,
+            config=config,
+            torch_dtype=torch.bfloat16,
+            attn_implementation=attn_implementation,
+        )
+        if use_sparse_predictor:
+            svd_model_dir = sparse_model_dir + "_svd"
+            init_svd = not os.path.exists(svd_model_dir)
+            model.config.use_sparse_predictor = use_sparse_predictor
+
+            if init_svd:
+                apply_mistral_sparse_decoder_layer(
+                    model,
+                    model.config,
+                    init_svd=False,
+                )
+                model.config.init_svd = False
+                model.save_pretrained(svd_model_dir)
+            else:
+                config = SparseMistralConfig.from_pretrained(svd_model_dir)
+                model = SparseMistralforCausalLM.from_pretrained(
+                    svd_model_dir,
+                    config=config,
+                )
+    if use_relu:
+        model.config.use_relu = True
+    else:
+        model.config.use_relu = False
+    # if use_sparse_predictor:
+    #     # Freeze original params
+    #     for params in model.parameters():
+    #         params.requires_grad = False
+    #     for name, module in model.named_modules():
+    #         if isinstance(module, SparsePredictor):
+    #             for name, params in module.named_parameters():
+    #                 params.requires_grad = True
+
+    tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "right"
+    if gradient_checkpointing:
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
+        model.enable_input_require_grads()  # See https://github.com/huggingface/transformers/issues/23170
+    if use_lora:
+        peft_config = LoraConfig(
+            lora_alpha=16,
+            lora_dropout=0.1,
+            r=64,
+            bias="none",
+            task_type="CAUSAL_LM",
+            target_modules=["q_proj", "v_proj", "gate_proj", "up_proj", "down_proj"],
+        )
+        model = get_peft_model(model, peft_config)
+        print(model.print_trainable_parameters())
+
+    # Register for AutoConfig and AutoModelforCausalLM
+    # SparseMistralConfig.register_for_auto_class()
+    # SparseMistralforCausalLM.register_for_auto_class("AutoModelForCausalLM")
+    # model.config.register_for_auto_class()
+    # model.register_for_auto_class("AutoModelForCausalLM")
+
+    return model, tokenizer, model.config
 
 
 def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
-    print(f"Config: {exp_config}")
+    ds_print(f"Config: {exp_config}")
     if use_wandb:
         if is_running_deepspeed():
             if int(os.environ["LOCAL_RANK"]) == 0:
@@ -116,6 +241,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     dataset_type = exp_config.dataset_type
     is_plot = exp_config.is_plot
     seed = exp_config.seed
+    is_first_training = exp_config.is_first_training
 
     # Gradual Sparsification
     use_gradual_sparsification = exp_config.use_gradual_sparsification
@@ -125,6 +251,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     # Graceful Regularization
     use_graceful_regularization = exp_config.use_graceful_regularization
     keep_regularization_with_kill = exp_config.keep_regularization_with_kill
+
+    if is_debugging:
+        act_hist_path = f"/matx/u/lukeai/act_hist/debugging_{model_name}/{dataset_type}.pt"
+    else:
+        act_hist_path = f"/matx/u/lukeai/act_hist/{model_name}/{dataset_type}.pt"
 
     # If not using sparse Mistral model, all flags related to sparse model should be set as zero or false.
     if not exp_config.use_sparse_model:
@@ -160,7 +291,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     # Load dataset
     dataset = get_dataset(dataset_type, tokenizer, MISTRAL_7B, max_seq_length=exp_config.max_seq_length)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
-    print(train_dataset, val_dataset, test_dataset)
     data_collator = dataset.get_data_collator()
 
     if is_debugging:
@@ -271,11 +401,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     # Collect statistics and find the threshold for given sparsity
     if not use_graceful_regularization and exp_config.set_sparsity_aware_threshold:
-        if is_debugging:
-            act_hist_path = "/tmp/pre_finetune__act_hist.pt"
-        else:
-            act_hist_path = f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist.pt"
-
         activate_stats(base_model)
         if os.path.exists(act_hist_path):
             load_act_hist(base_model, act_hist_path)
@@ -337,6 +462,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         else:
             warnings.warn("use_spm arg is ignored as use_spare_model arg is not activated.")
     trainer.train(resume_from_checkpoint=exp_config.resume_from_checkpoint)
+    # trainer.train("/matx/u/lukeai/ckpt/sparse_mistral_refined_web_90p/checkpoint-200")
 
     # Evaluate on test dataset
     if exp_config.use_lora:
@@ -361,10 +487,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         log_dict.update({"total_sparsity": total_sparsity})
 
     if exp_config.print_act_stats:
-        if is_debugging:
-            act_hist_path = "/tmp/post_finetune__act_hist.pt"
-        else:
-            act_hist_path = "/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
         save_act_hist(model, act_hist_path)
         plot_act(model)
 

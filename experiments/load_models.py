@@ -8,7 +8,7 @@ import torch
 import os
 
 from utils.constants import GPT2, GPT2_LARGE
-from utils.parse_string import get_model_type, parse_string, string_to_dict
+from utils.parse_args import get_model_type, parse_string, string_to_dict
 
 # from accelerators.apply_accelerator import apply_accelerator
 
@@ -28,9 +28,7 @@ def get_naive_model_and_tokenizer(model_name: str):
         tokenizer.pad_token = pad_token
         # tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
-        model = GPT2LMHeadModel.from_pretrained(
-            model_name, pad_token_id=tokenizer.eos_token_id
-        )
+        model = GPT2LMHeadModel.from_pretrained(model_name, pad_token_id=tokenizer.eos_token_id)
 
     else:
         assert False, "No such model"
@@ -56,9 +54,7 @@ def load_model(model_name: str):
     # Load the model
     if model_type == GPT2:
         tokenizer = GPT2Tokenizer.from_pretrained(GPT2)
-        model = GPT2LMHeadModel.from_pretrained(
-            model_path, pad_token_id=tokenizer.eos_token_id
-        )
+        model = GPT2LMHeadModel.from_pretrained(model_path, pad_token_id=tokenizer.eos_token_id)
     else:
         assert False, f"{model_name} is not valid"
 
@@ -90,9 +86,7 @@ def load_model(model_name: str):
         checkpoint = torch.load(checkpoint_path)
         model.load_state_dict(checkpoint)
     else:
-        assert (
-            False
-        ), f"{model_name} could not be found in the checkpoint folder"
+        assert False, f"{model_name} could not be found in the checkpoint folder"
 
     print(f"Successfully loaded {model_name}")
 
