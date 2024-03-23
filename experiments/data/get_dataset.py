@@ -29,7 +29,7 @@ def get_dataset(
     """
     Tokenize a dataset and get additional data collator and metrics necessary for training the models
 
-    :param dataset_name: Name of the dataset to build
+    :param dataset_name: Name of the datase t to build
     :param model_name: Name of the model
     :param tokenizer: Tokenizer to tokenize the inputs
     :param model: Model to finetune / evaluate

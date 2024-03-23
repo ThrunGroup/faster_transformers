@@ -147,6 +147,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     else:
         run_name += f"_{int(exp_config.targeted_sparsity * 100)}p"
 
+    if exp_config.cut_pre_mlp:
+        run_name += "cut_pre_mlp"
+    if exp_config.cut_pre_attn:
+        run_name += "cut_pre_attn"
+
     # Load model
     model, tokenizer, config = prepare_sparse_model(
         is_debugging,
@@ -160,6 +165,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         gradient_checkpointing=gradient_checkpointing,
         use_relu=exp_config.use_relu,
         use_resilu=exp_config.use_resilu,
+        cut_pre_mlp=exp_config.cut_pre_mlp,
+        cut_pre_attn=exp_config.cut_pre_attn,
     )
 
     # Load dataset
@@ -396,6 +403,19 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         if exp_config.use_sparse_model:
             thresholds = [float(m.mlp.dead_threshold) for m in model.model.layers]
             model.config.thresholds = thresholds
+
+            if exp_config.cut_pre_mlp:
+                pre_mlp_thresholds = [
+                    float(m.mlp.pre_mlp_threshold) for m in model.model.layers
+                ]
+                model.config.pre_mlp_thresholds = pre_mlp_thresholds
+
+            if exp_config.cut_pre_attn:
+                pre_attn_thresholds = [
+                    float(m.self_att .pre_attn_threshold) for m in model.model.layers
+                ]
+                model.config.pre_attn_thresholds = pre_attn_thresholds
+
         # model.config.save_pretrained(output_dir)
         model.save_pretrained(output_dir + "_no_adapter")
         tokenizer.save_pretrained(output_dir + "_no_adapter")

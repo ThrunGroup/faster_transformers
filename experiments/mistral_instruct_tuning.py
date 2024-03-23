@@ -300,6 +300,10 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         exp_config.targeted_sparsity = "ReSiLU"
 
     run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
+    if exp_config.cut_pre_mlp:
+        run_name += "cut_pre_mlp"
+    if exp_config.cut_pre_attn:
+        run_name += "cut_pre_attn"
 
     # Load dataset
     dataset = get_dataset_for_instruction_tuning(dataset_type, seed=seed)
@@ -598,7 +602,8 @@ def prepare_sparse_model(
     gradient_checkpointing: bool = False,
     use_relu: bool = False,
     use_resilu: bool = False,
-    cutoff_large: bool = False,
+    cut_pre_mlp: bool = False,
+    cut_pre_attn: bool = False,
 ):
     # Register for AutoConfig and AutoModelforCausalLM
     SparseMistralConfig.register_for_auto_class()
@@ -635,8 +640,15 @@ def prepare_sparse_model(
 
         if use_sparse_model:
             model.config.use_sparse_model = use_sparse_model
+            model.config.cut_pre_mlp = cut_pre_mlp
+            model.config.cut_pre_attn = cut_pre_attn
             apply_mistral_sparse_silu_mlp(
-                model, model.config, use_sparse_regularization=use_sparse_regularization
+                model,
+                model.config,
+                use_sparse_regularization=use_sparse_regularization,
+                use_flash_attn=use_flash_attn,
+                cut_pre_mlp=cut_pre_mlp,
+                cut_pre_attn=cut_pre_attn,
             )
             enable_sparse_silu(model)
         if use_sparse_predictor:
@@ -837,6 +849,18 @@ def parse_args():
         action="store_true",
         default=False,
         help="Whether to use sparse Mistral model",
+    )
+    parser.add_argument(
+        "--cut_pre_mlp",
+        action="store_true",
+        default=False,
+        help="Whether to cut small values before mlp",
+    )
+    parser.add_argument(
+        "--cut_pre_attn",
+        action="store_true",
+        default=False,
+        help="Whether to cut small values before attention",
     )
     parser.add_argument(
         "--use_sparse_regularization",

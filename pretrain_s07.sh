@@ -3,7 +3,7 @@
 source /sailhome/vxbrando/.bashrc
 conda activate mistral
 # Initial steps and increment
-initial_steps=100
+initial_steps=1
 step_increment=250
 max_iterations=10 # This will train up to 2000 steps in increments of 500
 targeted_sparsity=0.7

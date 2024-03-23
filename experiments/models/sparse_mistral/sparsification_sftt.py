@@ -5,8 +5,10 @@ from datasets import Dataset
 from transformers.utils import is_sagemaker_mp_enabled, is_sagemaker_dp_enabled
 from typing import Any, Dict, Union, Optional, Tuple
 from torch.nn import MSELoss
-
+from transformers.utils import is_flash_attn_2_available, logging
+import inspect
 import warnings
+import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -25,6 +27,7 @@ from transformers.models.mistral.modeling_mistral import (
     MISTRAL_ATTENTION_CLASSES,
     MistralRMSNorm,
     MistralForCausalLM,
+    MistralFlashAttention2,
 )
 from experiments.models.sparse_mistral.svd_router import (
     low_rank_approximation,
@@ -37,6 +40,15 @@ from utils.utils import (
     get_datetime,
     ds_print,
 )
+
+if is_flash_attn_2_available():
+    from flash_attn import flash_attn_func, flash_attn_varlen_func
+    from flash_attn.bert_padding import index_first_axis, pad_input, unpad_input  # noqa
+
+    _flash_supports_window_size = "window_size" in list(
+        inspect.signature(flash_attn_func).parameters
+    )
+logger = logging.get_logger(__name__)
 
 
 class SparseSFTTTrainer(SFTTrainer):
@@ -283,6 +295,536 @@ class SparseSiLU(nn.SiLU):
         return self.m(act) - self.m(-act)
 
 
+def rotate_half(x):
+    """Rotates half the hidden dims of the input."""
+    x1 = x[..., : x.shape[-1] // 2]
+    x2 = x[..., x.shape[-1] // 2 :]
+    return torch.cat((-x2, x1), dim=-1)
+
+
+def apply_rotary_pos_emb(q, k, cos, sin, position_ids, unsqueeze_dim=1):
+    """Applies Rotary Position Embedding to the query and key tensors.
+
+    Args:
+        q (`torch.Tensor`): The query tensor.
+        k (`torch.Tensor`): The key tensor.
+        cos (`torch.Tensor`): The cosine part of the rotary embedding.
+        sin (`torch.Tensor`): The sine part of the rotary embedding.
+        position_ids (`torch.Tensor`):
+            The position indices of the tokens corresponding to the query and key tensors. For example, this can be
+            used to pass offsetted position ids when working with a KV-cache.
+        unsqueeze_dim (`int`, *optional*, defaults to 1):
+            The 'unsqueeze_dim' argument specifies the dimension along which to unsqueeze cos[position_ids] and
+            sin[position_ids] so that they can be properly broadcasted to the dimensions of q and k. For example, note
+            that cos[position_ids] and sin[position_ids] have the shape [batch_size, seq_len, head_dim]. Then, if q and
+            k have the shape [batch_size, heads, seq_len, head_dim], then setting unsqueeze_dim=1 makes
+            cos[position_ids] and sin[position_ids] broadcastable to the shapes of q and k. Similarly, if q and k have
+            the shape [batch_size, seq_len, heads, head_dim], then set unsqueeze_dim=2.
+    Returns:
+        `tuple(torch.Tensor)` comprising of the query and key tensors rotated using the Rotary Position Embedding.
+    """
+    cos = cos[position_ids].unsqueeze(unsqueeze_dim)
+    sin = sin[position_ids].unsqueeze(unsqueeze_dim)
+    q_embed = (q * cos) + (rotate_half(q) * sin)
+    k_embed = (k * cos) + (rotate_half(k) * sin)
+    return q_embed, k_embed
+
+
+def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
+    """
+    This is the equivalent of torch.repeat_interleave(x, dim=1, repeats=n_rep). The hidden states go from (batch,
+    num_key_value_heads, seqlen, head_dim) to (batch, num_attention_heads, seqlen, head_dim)
+    """
+    batch, num_key_value_heads, slen, head_dim = hidden_states.shape
+    if n_rep == 1:
+        return hidden_states
+    hidden_states = hidden_states[:, :, None, :, :].expand(
+        batch, num_key_value_heads, n_rep, slen, head_dim
+    )
+    return hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
+
+
+def _get_unpad_data(attention_mask):
+    seqlens_in_batch = attention_mask.sum(dim=-1, dtype=torch.int32)
+    indices = torch.nonzero(attention_mask.flatten(), as_tuple=False).flatten()
+    max_seqlen_in_batch = seqlens_in_batch.max().item()
+    cu_seqlens = F.pad(torch.cumsum(seqlens_in_batch, dim=0, dtype=torch.int32), (1, 0))
+    return (
+        indices,
+        cu_seqlens,
+        max_seqlen_in_batch,
+    )
+
+
+class SparseMistralFlashAttention(MistralFlashAttention2):
+    """
+    Multi-headed attention from 'Attention Is All You Need' paper. Modified to use sliding window attention: Longformer
+    and "Generating Long Sequences with Sparse Transformers".
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.counts = 0
+        self.pre_attn_sparsity = 0
+        self.visit_counts = 0
+        self.is_stats = False
+        self.pre_attn_std = 0
+        self.pre_attn_threshold = 0
+
+    def activate_stats(self):
+        self.is_stats = True
+        self.visit_counts = 0
+        self.pre_attn_sparsity = 0
+        self.pre_attn_std = 0
+
+    def deactivate_stats(self):
+        self.is_stats = False
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_value: Optional = None,
+        output_attentions: bool = False,
+        use_cache: bool = False,
+        **kwargs,
+    ):
+        if "padding_mask" in kwargs:
+            warnings.warn(
+                "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
+            )
+
+            # overwrite attention_mask with padding_mask
+            attention_mask = kwargs.pop("padding_mask")
+        bsz, q_len, _ = hidden_states.size()
+        mask = abs(hidden_states - hidden_states.mean()) < self.pre_attn_threshold
+        hidden_states[mask] = 0
+        self.counts += 1
+
+        if self.is_stats:
+            self.pre_attn_sparsity = (
+                self.pre_attn_sparsity * self.visit_counts
+                + (hidden_states == 0).float().mean()
+            ) / (self.visit_counts + 1)
+            self.pre_attn_std = (self.pre_attn_std + 0.6 * hidden_states.std()) / (
+                self.visit_counts + 1
+            )
+            self.visit_counts += 1
+            self.counts -= 1
+
+        if self.counts == 10:
+            print(f"Attention {self.layer_idx}: ", (hidden_states == 0).float().mean())
+            print(
+                mask.shape,
+            )
+
+        query_states = self.q_proj(hidden_states)
+        key_states = self.k_proj(hidden_states)
+        value_states = self.v_proj(hidden_states)
+
+        query_states = query_states.view(
+            bsz, q_len, self.num_heads, self.head_dim
+        ).transpose(1, 2)
+        key_states = key_states.view(
+            bsz, q_len, self.num_key_value_heads, self.head_dim
+        ).transpose(1, 2)
+        value_states = value_states.view(
+            bsz, q_len, self.num_key_value_heads, self.head_dim
+        ).transpose(1, 2)
+
+        kv_seq_len = key_states.shape[-2]
+        if past_key_value is not None:
+            if self.layer_idx is None:
+                raise ValueError(
+                    f"The cache structure has changed since version v4.36. If you are using {self.__class__.__name__} "
+                    "for auto-regressive decoding with k/v caching, please make sure to initialize the attention class "
+                    "with a layer index."
+                )
+            kv_seq_len += past_key_value.get_usable_length(kv_seq_len, self.layer_idx)
+
+        # Because the input can be padded, the absolute sequence length depends on the max position id.
+        rotary_seq_len = max(kv_seq_len, position_ids[:, -1].max().item()) + 1
+        cos, sin = self.rotary_emb(value_states, seq_len=rotary_seq_len)
+
+        query_states, key_states = apply_rotary_pos_emb(
+            query_states, key_states, cos, sin, position_ids
+        )
+
+        use_sliding_windows = (
+            _flash_supports_window_size
+            and getattr(self.config, "sliding_window", None) is not None
+            and kv_seq_len > self.config.sliding_window
+        )
+
+        if not _flash_supports_window_size:
+            logger.warning_once(
+                "The current flash attention version does not support sliding window attention, for a more memory efficient implementation"
+                " make sure to upgrade flash-attn library."
+            )
+
+        if past_key_value is not None:
+            # Activate slicing cache only if the config has a value `sliding_windows` attribute
+            cache_has_contents = past_key_value.get_seq_length(self.layer_idx) > 0
+            if (
+                getattr(self.config, "sliding_window", None) is not None
+                and kv_seq_len > self.config.sliding_window
+                and cache_has_contents
+            ):
+                slicing_tokens = 1 - self.config.sliding_window
+
+                past_key = past_key_value[self.layer_idx][0]
+                past_value = past_key_value[self.layer_idx][1]
+
+                past_key = past_key[:, :, slicing_tokens:, :].contiguous()
+                past_value = past_value[:, :, slicing_tokens:, :].contiguous()
+
+                if past_key.shape[-2] != self.config.sliding_window - 1:
+                    raise ValueError(
+                        f"past key must have a shape of (`batch_size, num_heads, self.config.sliding_window-1, head_dim`), got"
+                        f" {past_key.shape}"
+                    )
+
+                if attention_mask is not None:
+                    attention_mask = attention_mask[:, slicing_tokens:]
+                    attention_mask = torch.cat(
+                        [attention_mask, torch.ones_like(attention_mask[:, -1:])],
+                        dim=-1,
+                    )
+
+            cache_kwargs = {"sin": sin, "cos": cos}  # Specific to RoPE models
+            key_states, value_states = past_key_value.update(
+                key_states, value_states, self.layer_idx, cache_kwargs
+            )
+
+        # repeat k/v heads if n_kv_heads < n_heads
+        key_states = repeat_kv(key_states, self.num_key_value_groups)
+        value_states = repeat_kv(value_states, self.num_key_value_groups)
+        dropout_rate = 0.0 if not self.training else self.attention_dropout
+
+        # In PEFT, usually we cast the layer norms in float32 for training stability reasons
+        # therefore the input hidden states gets silently casted in float32. Hence, we need
+        # cast them back in float16 just to be sure everything works as expected.
+        input_dtype = query_states.dtype
+        if input_dtype == torch.float32:
+            if torch.is_autocast_enabled():
+                target_dtype = torch.get_autocast_gpu_dtype()
+            # Handle the case where the model is quantized
+            elif hasattr(self.config, "_pre_quantization_dtype"):
+                target_dtype = self.config._pre_quantization_dtype
+            else:
+                target_dtype = self.q_proj.weight.dtype
+
+            logger.warning_once(
+                f"The input hidden states seems to be silently casted in float32, this might be related to"
+                f" the fact you have upcasted embedding or layer norm layers in float32. We will cast back the input in"
+                f" {target_dtype}."
+            )
+
+            query_states = query_states.to(target_dtype)
+            key_states = key_states.to(target_dtype)
+            value_states = value_states.to(target_dtype)
+
+        # Reashape to the expected shape for Flash Attention
+        query_states = query_states.transpose(1, 2)
+        key_states = key_states.transpose(1, 2)
+        value_states = value_states.transpose(1, 2)
+
+        attn_output = self._flash_attention_forward(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            q_len,
+            dropout=dropout_rate,
+            use_sliding_windows=use_sliding_windows,
+        )
+
+        attn_output = attn_output.reshape(bsz, q_len, self.hidden_size).contiguous()
+        attn_output = self.o_proj(attn_output)
+
+        if not output_attentions:
+            attn_weights = None
+
+        return attn_output, attn_weights, past_key_value
+
+    def _flash_attention_forward(
+        self,
+        query_states,
+        key_states,
+        value_states,
+        attention_mask,
+        query_length,
+        dropout=0.0,
+        softmax_scale=None,
+        use_sliding_windows=False,
+    ):
+        """
+        Calls the forward method of Flash Attention - if the input hidden states contain at least one padding token
+        first unpad the input, then computes the attention scores and pad the final attention scores.
+
+        Args:
+            query_states (`torch.Tensor`):
+                Input query states to be passed to Flash Attention API
+            key_states (`torch.Tensor`):
+                Input key states to be passed to Flash Attention API
+            value_states (`torch.Tensor`):
+                Input value states to be passed to Flash Attention API
+            attention_mask (`torch.Tensor`):
+                The padding mask - corresponds to a tensor of size `(batch_size, seq_len)` where 0 stands for the
+                position of padding tokens and 1 for the position of non-padding tokens.
+            dropout (`float`):
+                Attention dropout
+            softmax_scale (`float`, *optional*):
+                The scaling of QK^T before applying softmax. Default to 1 / sqrt(head_dim)
+            use_sliding_windows (`bool`, *optional*):
+                Whether to activate sliding window attention.
+        """
+        if not self._flash_attn_uses_top_left_mask:
+            causal = self.is_causal
+        else:
+            # TODO: Remove the `query_length != 1` check once Flash Attention for RoCm is bumped to 2.1. For details, please see the comment in LlamaFlashAttention2 __init__.
+            causal = self.is_causal and query_length != 1
+
+        # Contains at least one padding token in the sequence
+        if attention_mask is not None:
+            batch_size = query_states.shape[0]
+            (
+                query_states,
+                key_states,
+                value_states,
+                indices_q,
+                cu_seq_lens,
+                max_seq_lens,
+            ) = self._upad_input(
+                query_states, key_states, value_states, attention_mask, query_length
+            )
+
+            cu_seqlens_q, cu_seqlens_k = cu_seq_lens
+            max_seqlen_in_batch_q, max_seqlen_in_batch_k = max_seq_lens
+
+            if not use_sliding_windows:
+                attn_output_unpad = flash_attn_varlen_func(
+                    query_states,
+                    key_states,
+                    value_states,
+                    cu_seqlens_q=cu_seqlens_q,
+                    cu_seqlens_k=cu_seqlens_k,
+                    max_seqlen_q=max_seqlen_in_batch_q,
+                    max_seqlen_k=max_seqlen_in_batch_k,
+                    dropout_p=dropout,
+                    softmax_scale=softmax_scale,
+                    causal=causal,
+                )
+            else:
+                attn_output_unpad = flash_attn_varlen_func(
+                    query_states,
+                    key_states,
+                    value_states,
+                    cu_seqlens_q=cu_seqlens_q,
+                    cu_seqlens_k=cu_seqlens_k,
+                    max_seqlen_q=max_seqlen_in_batch_q,
+                    max_seqlen_k=max_seqlen_in_batch_k,
+                    dropout_p=dropout,
+                    softmax_scale=softmax_scale,
+                    causal=causal,
+                    window_size=(
+                        self.config.sliding_window,
+                        self.config.sliding_window,
+                    ),
+                )
+
+            attn_output = pad_input(
+                attn_output_unpad, indices_q, batch_size, query_length
+            )
+        else:
+            if not use_sliding_windows:
+                attn_output = flash_attn_func(
+                    query_states,
+                    key_states,
+                    value_states,
+                    dropout,
+                    softmax_scale=softmax_scale,
+                    causal=causal,
+                )
+            else:
+                attn_output = flash_attn_func(
+                    query_states,
+                    key_states,
+                    value_states,
+                    dropout,
+                    softmax_scale=softmax_scale,
+                    causal=causal,
+                    window_size=(
+                        self.config.sliding_window,
+                        self.config.sliding_window,
+                    ),
+                )
+
+        return attn_output
+
+    def _upad_input(
+        self, query_layer, key_layer, value_layer, attention_mask, query_length
+    ):
+        batch_size, kv_seq_len, num_heads, head_dim = key_layer.shape
+
+        # On the first iteration we need to properly re-create the padding mask
+        # by slicing it on the proper place
+        if kv_seq_len != attention_mask.shape[-1]:
+            attention_mask_num_tokens = attention_mask.shape[-1]
+            attention_mask = attention_mask[:, attention_mask_num_tokens - kv_seq_len :]
+
+        indices_k, cu_seqlens_k, max_seqlen_in_batch_k = _get_unpad_data(attention_mask)
+
+        key_layer = index_first_axis(
+            key_layer.reshape(batch_size * kv_seq_len, num_heads, head_dim), indices_k
+        )
+        value_layer = index_first_axis(
+            value_layer.reshape(batch_size * kv_seq_len, num_heads, head_dim), indices_k
+        )
+
+        if query_length == kv_seq_len:
+            query_layer = index_first_axis(
+                query_layer.reshape(batch_size * kv_seq_len, num_heads, head_dim),
+                indices_k,
+            )
+            cu_seqlens_q = cu_seqlens_k
+            max_seqlen_in_batch_q = max_seqlen_in_batch_k
+            indices_q = indices_k
+        elif query_length == 1:
+            max_seqlen_in_batch_q = 1
+            cu_seqlens_q = torch.arange(
+                batch_size + 1, dtype=torch.int32, device=query_layer.device
+            )  # There is a memcpy here, that is very bad.
+            indices_q = cu_seqlens_q[:-1]
+            query_layer = query_layer.squeeze(1)
+        else:
+            # The -q_len: slice assumes left padding.
+            attention_mask = attention_mask[:, -query_length:]
+            query_layer, indices_q, cu_seqlens_q, max_seqlen_in_batch_q = unpad_input(
+                query_layer, attention_mask
+            )
+
+        return (
+            query_layer,
+            key_layer,
+            value_layer,
+            indices_q,
+            (cu_seqlens_q, cu_seqlens_k),
+            (max_seqlen_in_batch_q, max_seqlen_in_batch_k),
+        )
+
+
+class SparseMistralAttention(MistralAttention):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.counts = 0
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_value: Optional = None,
+        output_attentions: bool = False,
+        use_cache: bool = False,
+        **kwargs,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
+        if "padding_mask" in kwargs:
+            warnings.warn(
+                "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
+            )
+        bsz, q_len, _ = hidden_states.size()
+        mask = abs(hidden_states - hidden_states.mean()) < 0.6 * hidden_states.std()
+        hidden_states[mask] = 0
+        self.counts += 1
+        if 10 <= self.counts <= 11:
+            print(f"Attention {self.layer_idx}: ", (hidden_states == 0).float().mean())
+            self.counts += 1
+
+        query_states = self.q_proj(hidden_states)
+        key_states = self.k_proj(hidden_states)
+        value_states = self.v_proj(hidden_states)
+
+        query_states = query_states.view(
+            bsz, q_len, self.num_heads, self.head_dim
+        ).transpose(1, 2)
+        key_states = key_states.view(
+            bsz, q_len, self.num_key_value_heads, self.head_dim
+        ).transpose(1, 2)
+        value_states = value_states.view(
+            bsz, q_len, self.num_key_value_heads, self.head_dim
+        ).transpose(1, 2)
+
+        kv_seq_len = key_states.shape[-2]
+        if past_key_value is not None:
+            if self.layer_idx is None:
+                raise ValueError(
+                    f"The cache structure has changed since version v4.36. If you are using {self.__class__.__name__} "
+                    "for auto-regressive decoding with k/v caching, please make sure to initialize the attention class "
+                    "with a layer index."
+                )
+            kv_seq_len += past_key_value.get_usable_length(kv_seq_len, self.layer_idx)
+        cos, sin = self.rotary_emb(value_states, seq_len=kv_seq_len)
+        query_states, key_states = apply_rotary_pos_emb(
+            query_states, key_states, cos, sin, position_ids
+        )
+
+        if past_key_value is not None:
+            cache_kwargs = {"sin": sin, "cos": cos}  # Specific to RoPE models
+            key_states, value_states = past_key_value.update(
+                key_states, value_states, self.layer_idx, cache_kwargs
+            )
+
+        # repeat k/v heads if n_kv_heads < n_heads
+        key_states = repeat_kv(key_states, self.num_key_value_groups)
+        value_states = repeat_kv(value_states, self.num_key_value_groups)
+
+        attn_weights = torch.matmul(
+            query_states, key_states.transpose(2, 3)
+        ) / math.sqrt(self.head_dim)
+
+        if attn_weights.size() != (bsz, self.num_heads, q_len, kv_seq_len):
+            raise ValueError(
+                f"Attention weights should be of size {(bsz, self.num_heads, q_len, kv_seq_len)}, but is"
+                f" {attn_weights.size()}"
+            )
+
+        if attention_mask is not None:
+            if attention_mask.size() != (bsz, 1, q_len, kv_seq_len):
+                raise ValueError(
+                    f"Attention mask should be of size {(bsz, 1, q_len, kv_seq_len)}, but is {attention_mask.size()}"
+                )
+
+            attn_weights = attn_weights + attention_mask
+
+        # upcast attention to fp32
+        attn_weights = nn.functional.softmax(
+            attn_weights, dim=-1, dtype=torch.float32
+        ).to(query_states.dtype)
+        attn_weights = nn.functional.dropout(
+            attn_weights, p=self.attention_dropout, training=self.training
+        )
+        attn_output = torch.matmul(attn_weights, value_states)
+
+        if attn_output.size() != (bsz, self.num_heads, q_len, self.head_dim):
+            raise ValueError(
+                f"`attn_output` should be of size {(bsz, self.num_heads, q_len, self.head_dim)}, but is"
+                f" {attn_output.size()}"
+            )
+
+        attn_output = attn_output.transpose(1, 2).contiguous()
+        attn_output = attn_output.reshape(bsz, q_len, self.hidden_size)
+
+        attn_output = self.o_proj(attn_output)
+
+        if not output_attentions:
+            attn_weights = None
+
+        return attn_output, attn_weights, past_key_value
+
+
 class MistralSparseSiluMLP(MistralMLP):
     def __init__(self, config, *args, **kwargs):
         super().__init__(config)
@@ -291,12 +833,15 @@ class MistralSparseSiluMLP(MistralMLP):
         self.resilu = nn.Sequential(nn.SiLU())
 
         self.kill_sparse_swish_outputs = False
+        self.cut_pre_mlp = False
         self.dead_percentage = 0
+        self.pre_mlp_sparsity = 0
         self.is_stats = False
         self.visit_counts = 0
 
         # Hyperparameters to tune
         self.dead_threshold = kwargs.pop("dead_threshold", 0)
+        self.pre_mlp_threshold = kwargs.pop("pre_mlp_threshold", 0)
         self.pre_mlp_dead_threshold = kwargs.pop("pre_mlp_dead_threshold", 0)
         self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", True)
         self.regularization_type = kwargs.pop(
@@ -314,7 +859,8 @@ class MistralSparseSiluMLP(MistralMLP):
         self.histogram_bins = torch.cat(
             [torch.tensor([-torch.inf]), self.histogram_bins, torch.tensor([torch.inf])]
         )
-        self.pre_mlp_hist_counts = torch.zeros(num_bins - 1)
+        self.pre_mlp_std = 0
+        # self.pre_mlp_hist_counts = torch.zeros(num_bins - 1)
         self.pre_act_hist_counts = torch.zeros(num_bins - 1)
         self.post_act_hist_counts = torch.zeros(num_bins - 1)
         self.t = 0
@@ -344,7 +890,7 @@ class MistralSparseSiluMLP(MistralMLP):
         pre_activation = pre_activation.float().cpu().detach()
         post_activation = post_activation.float().cpu().detach()
         # self.histogram_bins=self.histogram_bins.to(pre_activation.device).type(pre_activation.dtype)
-        self.pre_mlp_hist_counts = torch.histogram(pre_mlp, bins=self.histogram_bins)[0]
+        # self.pre_mlp_hist_counts = torch.histogram(pre_mlp, bins=self.histogram_bins)[0]
         self.pre_act_hist_counts += torch.histogram(
             pre_activation, bins=self.histogram_bins
         )[0]
@@ -394,7 +940,17 @@ class MistralSparseSiluMLP(MistralMLP):
 
         else:
             self.count += 1
-            # x[abs(x) < 0.7 * x.std()] = 0
+
+            if self.cut_pre_mlp:
+                if (
+                    self.is_stats
+                ):  # collect statistics for deciding threhold value to cut values of hidden vec before mlp
+                    self.pre_mlp_std = (x.std() + 0.6 * self.pre_mlp_std) / (
+                        self.visit_counts + 1
+                    )
+                    x[abs(x) < self.pre_mlp_threshold] = 0
+                    self.count -= 1
+
             if self.count <= 1:
                 print("USING SparseSILU!!!!")
                 # print(x.mean(), x.std(), x.max(), x.min())
@@ -415,6 +971,11 @@ class MistralSparseSiluMLP(MistralMLP):
                     self.agg_sparsity = (
                         self.agg_sparsity * self.visit_counts + agg_sparsity
                     ) / (self.visit_counts + 1)
+                    self.pre_mlp_sparsity = (
+                        self.pre_mlp_sparsity * self.visit_counts
+                        + (x == 0).float().mean()
+                    ) / (self.visit_counts + 1)
+
                     self.visit_counts += 1
 
                     self.a = dead_percentage
@@ -429,6 +990,10 @@ class MistralSparseSiluMLP(MistralMLP):
                         self.collect_stats(x, pre_act, post_act)
 
                 post_act[dead_neurons] = 0
+            if self.count == 10:
+                print(
+                    f"sparsity: {dead_percentage}/ pre-activation sparsity: {(x==0).float().mean()}"
+                )
 
             out = self.down_proj(post_act * self.up_proj(x))
             if self.use_sparse_regularization:
@@ -575,10 +1140,16 @@ class SparseMistralforCausalLM(MistralForCausalLM):
                 for idx, m in enumerate(self.model.layers):
                     if isinstance(m.mlp, MistralSparseSiluMLP):
                         m.mlp.dead_threshold = config.thresholds[idx]
+                        m.mlp.pre_mlp_threshold = config.pre_mlp_thresholds[idx]
                         m.mlp.sparse_act_fn.set_new_threshold(m.mlp.dead_threshold)
                         m.mlp.kill_sparse_swish_outputs = True
                         m.mlp.use_relu = getattr(config, "use_relu", False)
                         m.mlp.use_resilu = getattr(config, "use_resilu", False)
+                    if isinstance(
+                        m.self_attn,
+                        (SparseMistralAttention, SparseMistralFlashAttention),
+                    ):
+                        m.self_attn.pre_mlp_threshold = config.pre_attn_thresholds[idx]
         if config.use_sparse_predictor:
             self.apply_sparse_predictor(init_svd=config.init_svd)
 
@@ -587,6 +1158,8 @@ class SparseMistralforCausalLM(MistralForCausalLM):
             self,
             config=self.config,
             use_sparse_regularization=self.config.use_sparse_regularization,
+            cut_pre_mlp=self.config.cut_pre_mlp,
+            cut_pre_attn=self.config.cut_pre_attn,
         )
 
     def apply_sparse_predictor(self, init_svd: bool = True):
@@ -734,6 +1307,8 @@ def get_sparse_mistral_config(
     use_sparse_predictor=False,
     use_sparse_regularization=False,
     thresholds=None,
+    cut_pre_mlp=False,
+    cut_pre_attn=False,
 ):
     new_config = SparseMistralConfig()
     new_config.__dict__.update(config.__dict__)
@@ -742,6 +1317,8 @@ def get_sparse_mistral_config(
     config.use_sparse_predictor = use_sparse_predictor
     config.use_sparse_regularization = use_sparse_regularization
     config.thresholds = thresholds
+    config.cut_pre_mlp = cut_pre_mlp
+    config.cut_pre_attn = cut_pre_attn
 
     return config
 
@@ -750,8 +1327,10 @@ def apply_mistral_sparse_silu_mlp(
     model,
     config,
     use_sparse_regularization: bool = False,
+    use_flash_attn: bool = False,
+    cut_pre_mlp: bool = False,
+    cut_pre_attn: bool = False,
 ):
-    # counts = 0
     for layer in model.model.layers:
         # counts += 1
         # if counts < 4:
@@ -763,7 +1342,33 @@ def apply_mistral_sparse_silu_mlp(
         new_mlp.gate_proj = original_mlp.gate_proj
         new_mlp.up_proj = original_mlp.up_proj
         new_mlp.down_proj = original_mlp.down_proj
+        new_mlp.cut_pre_mlp = cut_pre_mlp
         layer.mlp = new_mlp
+    if cut_pre_attn:
+        for layer in model.model.layers:
+            original_attention = layer.self_attn
+            if use_flash_attn:
+                new_attention = SparseMistralFlashAttention(
+                    config=original_attention.config,
+                    layer_idx=original_attention.layer_idx,
+                )
+
+            else:
+                new_attention = SparseMistralAttention(
+                    config=original_attention.config,
+                    layer_idx=original_attention.layer_idx,
+                )
+            for attr in vars(original_attention):
+                setattr(new_attention, attr, getattr(original_attention, attr))
+                layer.self_attn = new_attention
+
+
+def apply_mistral_sparse_attention(
+    model,
+    config,
+):
+    for layer in model.model.layers:
+        layer.self_attention = layer.self_attention
 
 
 def apply_mistral_sparse_decoder_layer(
@@ -809,6 +1414,8 @@ def activate_stats(model, is_collect_histogram: bool = True):
     for layer in model.model.layers:
         if isinstance(layer.mlp, MistralSparseSiluMLP):
             layer.mlp.activate_stats(is_collect_histogram=is_collect_histogram)
+        if isinstance(layer.self_attn, SparseMistralAttention):
+            layer.self_attn.activate_stats()
 
 
 def deactivate_stats(model):
@@ -831,10 +1438,19 @@ def print_dead_neuron_stats(model):
         if isinstance(layer.mlp, MistralSparseSiluMLP):
             dead_percentage = layer.mlp.dead_percentage * 100
             agg_sparsity = layer.mlp.agg_sparsity * 100
+            pre_mlp_sparsity = layer.mlp.pre_mlp_sparsity * 100
             print(f"layer {i} sparsity: {dead_percentage:.3f}%")
             print(f"layer {i} agg sparsity: {agg_sparsity:.3f}%")
+            print(f"layer {i} pre_mlp_sparsity: {pre_mlp_sparsity:.3f}%")
+
             total_sparsity += dead_percentage
             counts += 1
+        if isinstance(layer.self_attn, SparseMistralAttention) or isinstance(
+            layer.self_attn, SparseMistralFlashAttention
+        ):
+            print(
+                f"Attention layer {i} sparsity: {layer.self_attn.pre_attn_sparsity * 100: .3f}%"
+            )
 
     print(f"Total sparsity: {total_sparsity/counts: .3f}%")
     return total_sparsity / counts
@@ -895,6 +1511,14 @@ def set_sparse_threshold(
                 layer.mlp.regularization_threshold = (
                     layer.mlp.dead_threshold * 1.2
                 )  # TODO: find better param
+
+            if layer.mlp.cut_pre_mlp:
+                layer.mlp.pre_mlp_threshold = layer.mlp.pre_mlp_std
+
+        if isinstance(
+            layer.self_attn, (SparseMistralAttention, SparseMistralFlashAttention)
+        ):
+            layer.self_attn.pre_attn_threshold = layer.self_attn.pre_attn_std
 
 
 def plot_histogram(

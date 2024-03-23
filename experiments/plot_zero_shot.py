@@ -7,10 +7,12 @@ import os
 import json
 import matplotlib.pyplot as plt
 
+from datetime import date
 
 def plot():
     # Parent directory where all model directories are stored
-    parent_directories = ["/scr/jay/output/2024-03-11", "/scr/jay/output/2024-03-12"]
+    # parent_directories = ["/scr/jay/output/2024-03-11", "/scr/jay/output/2024-03-12", "/scr/jay/output/2024-03-20"]
+    parent_directories = ["/scr/jay/output/2024-03-21", "/scr/jay/output/2024-03-22",]
 
     # List to store directory names
     directories = []
@@ -72,7 +74,7 @@ def plot():
     # Save the figure
     dirname = "/sailhome/vxbrando/faster_transformers/figures"
     os.makedirs(dirname, exist_ok=True)
-    plt.savefig(f"{dirname}/Model Comparisons zero shot accuracy.png")
+    plt.savefig(f"{dirname}/{date.today()}_Model Comparisons zero shot accuracy.png")
 
 
 plot()
