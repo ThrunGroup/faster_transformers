@@ -15,7 +15,7 @@ import numpy as np
 import time
 import os
 import copy
-
+import flash_gemv
 from transformers.models.mistral.modeling_mistral import (
     MistralMLP,
     MistralAttention,
@@ -288,20 +288,24 @@ class MistralSparseSiluMLP(MistralMLP):
         super().__init__(config)
         self.swish_outputs = None
         self.relu = nn.ReLU()
+        self.resilu = nn.Sequential(nn.SiLU())
 
         self.kill_sparse_swish_outputs = False
         self.dead_percentage = 0
         self.is_stats = False
         self.visit_counts = 0
+        self.is_profile = False
 
         # Hyperparameters to tune
         self.dead_threshold = kwargs.pop("dead_threshold", 0)
+        self.pre_mlp_dead_threshold = kwargs.pop("pre_mlp_dead_threshold", 0)
         self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", True)
         self.regularization_type = kwargs.pop(
             "regularization_type", "L1 regularization"
         )
         self.regularization_threshold = kwargs.pop("regularization_threshold", 0.5)
         self.use_relu = kwargs.pop("use_relu", False)
+        self.use_resilu = kwargs.pop("use_resilu", False)
         self.activation_norm = None
 
         # Activation Histograms
@@ -311,13 +315,21 @@ class MistralSparseSiluMLP(MistralMLP):
         self.histogram_bins = torch.cat(
             [torch.tensor([-torch.inf]), self.histogram_bins, torch.tensor([torch.inf])]
         )
+        self.pre_mlp_hist_counts = torch.zeros(num_bins - 1)
         self.pre_act_hist_counts = torch.zeros(num_bins - 1)
         self.post_act_hist_counts = torch.zeros(num_bins - 1)
         self.t = 0
+        self.count = 0
         self.agg_sparsity = 0
+        self.agg_path = "/sailhome/zgh23/faster_transformers/experiments/agg_data/agg_sparsity.csv"
+        self.dead_path = "/sailhome/zgh23/faster_transformers/experiments/agg_data/dead_percentage.csv"
+        self.agg_snapshot = "/sailhome/zgh23/faster_transformers/experiments/agg_data/agg_sparsity_snapshot.csv"
+        self.dead_snapshot = "/sailhome/zgh23/faster_transformers/experiments/agg_data/dead_snapshot.csv"
 
         # Sparse activation function
         self.sparse_act_fn = SparseSiLU(threshold=self.dead_threshold)
+        self.sp_method = 0
+        self.wdown_t = self.register_buffer("wdown_t", None)
 
     def activate_stats(self, is_collect_histogram: bool = True):
         self.is_stats = True
@@ -329,11 +341,17 @@ class MistralSparseSiluMLP(MistralMLP):
     def deactivate_stats(self):
         self.is_stats = False
 
-    def collect_stats(self, pre_activation, post_activation):
+    def collect_stats(
+        self,
+        pre_mlp,
+        pre_activation,
+        post_activation,
+    ):
         start_time = time.time()
         pre_activation = pre_activation.float().cpu().detach()
         post_activation = post_activation.float().cpu().detach()
         # self.histogram_bins=self.histogram_bins.to(pre_activation.device).type(pre_activation.dtype)
+        self.pre_mlp_hist_counts = torch.histogram(pre_mlp, bins=self.histogram_bins)[0]
         self.pre_act_hist_counts += torch.histogram(
             pre_activation, bins=self.histogram_bins
         )[0]
@@ -357,8 +375,36 @@ class MistralSparseSiluMLP(MistralMLP):
                 self.sparse_act_fn(self.gate_proj(x) * sp_mask) * self.up_proj(x)
             )  # Todo: This doesn't accelerate runtime (instead slowing down)
 
-        elif self.use_relu:
-            post_act = self.relu(self.gate_proj(x))
+        if self.is_profile:
+            if x.shape[1] == 1:
+                if self.sp_method == 1:
+                    return flash_gemv.flag_gemv_gemv_inner_bf16(x, self.gate_proj.weight, self.up_proj.weight, self.down_proj.weight, self.dead_threshold)
+                elif self.sp_method == 2:
+                    return flash_gemv.gemv_gemv_triton(x, self.act_fn(self.gate_proj(x)), self.up_proj.weight, self.wdown_t, self.dead_threshold)
+                else:
+                    post_act = self.act_fn(self.gate_proj(x))
+                    dead_neurons = post_act.abs() <= self.dead_threshold
+                    post_act[dead_neurons] = 0
+                    return self.down_proj(post_act * self.up_proj(x))                    
+            else:
+                post_act = self.act_fn(self.gate_proj(x))
+                dead_neurons = post_act.abs() <= self.dead_threshold
+                post_act[dead_neurons] = 0
+                return self.down_proj(post_act * self.up_proj(x))
+
+        # print(x.shape)
+        # if x.shape[1] == 1:
+        #     # print(x.shape)
+        #     return flash_gemv.flag_gemv_gemv_inner_bf16(x, self.gate_proj.weight, self.up_proj.weight, self.down_proj.weight, self.dead_threshold)
+
+        elif self.use_relu or self.use_resilu:
+            if self.use_relu:
+                post_act = self.relu(self.gate_proj(x))
+            else:
+                post_act = self.resilu(self.gate_proj(x))
+            self.count += 1
+            if self.count <= 1:
+                print("USING RELU or ReSiLU!!!!")
 
             if self.is_stats:
                 dead_neurons = post_act == 0
@@ -376,15 +422,22 @@ class MistralSparseSiluMLP(MistralMLP):
             return self.down_proj(post_act * self.up_proj(x))
 
         else:
+            self.count += 1
+            # x[abs(x) < 0.7 * x.std()] = 0
+            # if self.count <= 2:
+            #     print(x.shape)
+                # print(x.mean(), x.std(), x.max(), x.min())
+                # print(f"pre mlp sparsity: {(x==0).float().mean()}")
             pre_act = self.gate_proj(x)
             post_act = self.act_fn(pre_act)
             if self.kill_sparse_swish_outputs:
                 dead_neurons = post_act.abs() <= self.dead_threshold
 
-                dead_percentage = dead_neurons.float().mean()
-                agg_sparsity = dead_neurons.all(dim=0).float().mean()
-
-                if self.is_stats:
+                # print("pre act sparsity: ", (pre_act==0).float().mean())
+                if self.is_stats and x.shape[1] == 1:
+                    dead_percentage = dead_neurons.float().mean()
+                    or_batch = torch.any(dead_neurons, dim=0).float()
+                    agg_sparsity = torch.sum(or_batch, dim=1).item() / 14336
                     self.dead_percentage = (
                         self.dead_percentage * self.visit_counts + dead_percentage
                     ) / (self.visit_counts + 1)
@@ -393,14 +446,37 @@ class MistralSparseSiluMLP(MistralMLP):
                     ) / (self.visit_counts + 1)
                     self.visit_counts += 1
 
-                    # print(self.agg_sparsity)
+                    # self.a = dead_percentage
+
+                    print(f"Batch aggregated density: {self.agg_sparsity}; Dead percentage: {self.dead_percentage}")
+
+                    with open(self.agg_path, 'a') as file:
+                        print(f"{self.agg_sparsity}", file=file)
+                    with open(self.dead_path, 'a') as file:
+                        print(f"{self.dead_percentage}", file=file)          
+
+                    with open(self.agg_path, 'r+') as file:
+                        lines = file.readlines()
+                        if len(lines) == 32:
+                            file.seek(0)
+                            file.truncate()
+                            with open(self.agg_snapshot, 'w') as pfile:
+                                pfile.writelines(lines)
+
+                    with open(self.dead_path, 'r+') as file:
+                        lines = file.readlines()
+                        if len(lines) == 32:
+                            file.seek(0)
+                            file.truncate()
+                            with open(self.dead_snapshot, 'w') as pfile:
+                                pfile.writelines(lines)      
 
                     # Collect histogram stats
                     if (
                         self.is_collect_histogram
                         and pre_act.eq(0).float().mean() < 0.99
                     ):  # Padded dataset
-                        self.collect_stats(pre_act, post_act)
+                        self.collect_stats(x, pre_act, post_act)
 
                 post_act[dead_neurons] = 0
 
@@ -551,7 +627,8 @@ class SparseMistralforCausalLM(MistralForCausalLM):
                         m.mlp.dead_threshold = config.thresholds[idx]
                         m.mlp.sparse_act_fn.set_new_threshold(m.mlp.dead_threshold)
                         m.mlp.kill_sparse_swish_outputs = True
-                        m.mlp.use_relu = config.use_relu
+                        m.mlp.use_relu = getattr(config, "use_relu", False)
+                        m.mlp.use_resilu = getattr(config, "use_resilu", False)
         if config.use_sparse_predictor:
             self.apply_sparse_predictor(init_svd=config.init_svd)
 
@@ -842,7 +919,10 @@ def set_regularization_threshold(model, threshold: float = 0.1):
             layer.mlp.regularization_threshold = threshold  # TODO: find better param
 
 
-def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
+def set_sparse_threshold(
+    model, sparsity_level: float, use_relu: bool = False, use_resilu: bool = False
+):
+    assert not (use_relu and use_resilu), "It's not allowed to use both relu and resilu"
     for i, layer in enumerate(model.model.layers):
         if (
             isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
@@ -850,6 +930,11 @@ def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
             if use_relu:
                 layer.mlp.sparse_act_fn = nn.ReLU()
                 layer.mlp.use_relu = True
+                layer.mlp.use_resilu = False
+            elif use_resilu:
+                layer.mlp.sparse_act_fn = nn.Sequential(nn.ReLU(), nn.SiLU())
+                layer.mlp.use_resilu = True
+                layer.mlp.use_relu = False
             else:
                 layer.mlp.dead_threshold = get_threshold(
                     layer.mlp.histogram_bins,
@@ -863,7 +948,10 @@ def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
 
 
 def plot_histogram(
-    bin_edges, histogram_counts: torch.tensor, title: str = "Activation Distribution", fig_dir: str = "figures"
+    bin_edges,
+    histogram_counts: torch.tensor,
+    title: str = "Activation Distribution",
+    fig_dir: str = "figures",
 ):
     plt.bar(
         bin_edges[:-1], histogram_counts, width=np.diff(bin_edges), edgecolor="black"
@@ -904,6 +992,7 @@ def save_act_hist(
         ):  # Can set the threshold only the relevant statistics is collected.
             act_dict[i] = (
                 layer.mlp.histogram_bins,
+                # layer.mlp.pre_mlp_hist_counts,
                 layer.mlp.pre_act_hist_counts,
                 layer.mlp.post_act_hist_counts,
             )
@@ -926,6 +1015,7 @@ def load_act_hist(
         ):  # Can set the threshold only the relevant statistics is collected.
             (
                 layer.mlp.histogram_bins,
+                # layer.mlp.pre_mlp_hist_counts,
                 layer.mlp.pre_act_hist_counts,
                 layer.mlp.post_act_hist_counts,
             ) = act_dict[i]

@@ -296,6 +296,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     if exp_config.use_relu:
         exp_config.targeted_sparsity = "ReLU"
+    elif exp_config.use_resilu:
+        exp_config.targeted_sparsity = "ReSiLU"
 
     run_name = f"{model_name}_{dataset_type}_{exp_config.targeted_sparsity}"
 
@@ -464,7 +466,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(base_model, act_hist_path)
         if exp_config.use_relu:
-            set_sparse_threshold(base_model, 0, True)
+            set_sparse_threshold(base_model, 0, use_relu=True)
+        elif exp_config.use_resilu:
+            set_sparse_threshold(base_model, 0, use_resilu=True)
         else:
             set_sparse_threshold(base_model, exp_config.targeted_sparsity)
 
@@ -593,7 +597,13 @@ def prepare_sparse_model(
     base_model_name: str = "mistralai/Mistral-7B-Instruct-v0.1",
     gradient_checkpointing: bool = False,
     use_relu: bool = False,
+    use_resilu: bool = False,
+    cutoff_large: bool = False,
 ):
+    # Register for AutoConfig and AutoModelforCausalLM
+    SparseMistralConfig.register_for_auto_class()
+    SparseMistralforCausalLM.register_for_auto_class("AutoModelForCausalLM")
+
     if use_flash_attn:
         attn_implementation = "flash_attention_2"
     else:
@@ -614,13 +624,14 @@ def prepare_sparse_model(
         else:
             config = MistralConfig.from_pretrained(base_model_name)
             config = get_sparse_mistral_config(config)
-            config.use_cache = False
+            config.use_cache = True
             model = SparseMistralforCausalLM.from_pretrained(
                 base_model_name,
                 config=config,
                 torch_dtype=torch.bfloat16,
                 attn_implementation=attn_implementation,
             )
+            model.config_class = SparseMistralConfig
 
         if use_sparse_model:
             model.config.use_sparse_model = use_sparse_model
@@ -663,10 +674,12 @@ def prepare_sparse_model(
                     svd_model_dir,
                     config=config,
                 )
+    model.config.use_relu = False
+    model.config.use_resilu = False
     if use_relu:
         model.config.use_relu = True
-    else:
-        model.config.use_relu = False
+    elif use_resilu:
+        model.config.use_resilu = True
     # if use_sparse_predictor:
     #     # Freeze original params
     #     for params in model.parameters():
@@ -698,8 +711,10 @@ def prepare_sparse_model(
         print(model.print_trainable_parameters())
 
     # Register for AutoConfig and AutoModelforCausalLM
-    SparseMistralConfig.register_for_auto_class()
-    SparseMistralforCausalLM.register_for_auto_class("AutoModelForCausalLM")
+    # SparseMistralConfig.register_for_auto_class()
+    # SparseMistralforCausalLM.register_for_auto_class("AutoModelForCausalLM")
+    # model.config.register_for_auto_class()
+    # model.register_for_auto_class("AutoModelForCausalLM")
 
     return model, tokenizer, model.config
 
@@ -843,6 +858,12 @@ def parse_args():
     )
     parser.add_argument(
         "--use_relu",
+        action="store_true",
+        default=False,
+        help="Whether to use ReLU as non-linear activation function",
+    )
+    parser.add_argument(
+        "--use_resilu",
         action="store_true",
         default=False,
         help="Whether to use ReLU as non-linear activation function",

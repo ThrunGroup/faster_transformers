@@ -23,7 +23,7 @@ class RefinedWeb(Dataset):
         self.max_seq_length = max_seq_length
         self.seed = 0
 
-    def get_tokenized_dataset(self):
+    def get_tokenized_dataset(self, train_size: int = 100000):
         """
         Load and build the openwebtext dataset which is already preprocessed.
         :return: dataset
@@ -32,9 +32,9 @@ class RefinedWeb(Dataset):
             prefix = f"{self.model_type}_{self.dataset_type}"
         else:
             prefix = f"{self.model_type}_{self.dataset_type}_seq{self.max_seq_length}_seed{self.seed}"
-        train_path = f"/scr/jay/datasets/{prefix}_train_100k_small.pkl"
-        test_path = f"/scr/jay/datasets/{prefix}_test_100_small.pkl"
-        validation_path = f"/scr/jay/datasets/{prefix}_validation_100_small.pkl"
+        train_path = f"/scr/zgh23/datasets/{prefix}_train_100k_small.pkl"
+        test_path = f"/scr/zgh23/datasets/{prefix}_test_100_small.pkl"
+        validation_path = f"/scr/zgh23/datasets/{prefix}_validation_100_small.pkl"
         random_path = f"asd/sad/a/a/a/ads/"
 
         for path in [train_path, test_path, validation_path]:
@@ -62,7 +62,7 @@ class RefinedWeb(Dataset):
             print("dataset: ", dataset)
 
             tokenized_dataset = dataset.map(
-                self.preprocess,
+                lambda x: self.preprocess(x, self.max_seq_length),
                 batched=True,
                 batch_size=32,
                 # num_proc=8,
@@ -78,7 +78,7 @@ class RefinedWeb(Dataset):
             print(tokenized_dataset)
 
             train_dataset = D.from_list(
-                list(tokenized_dataset.skip(10000).take(100000))
+                list(tokenized_dataset.skip(10000).take(train_size))
             )
             val_dataset = D.from_list(list(tokenized_dataset.take(50)))
             test_dataset = D.from_list(list(tokenized_dataset.skip(1000).take(50)))
@@ -95,11 +95,11 @@ class RefinedWeb(Dataset):
             with open(validation_path, "wb") as f:
                 pickle.dump(val_dataset, f)
             print("Preprocessed and saved data to disk.")
-        train_dataset.filter(lambda item: len(item['input_ids']) < 1000)
+        # train_dataset.filter(lambda item: len(item["input_ids"]) < 1000)
         train_dataset.shuffle()
         return train_dataset, val_dataset, test_dataset
 
-    def preprocess(self, examples):
+    def preprocess(self, examples, max_seq_length=2 * MISTRAL_CONTEXT_LENGTH):
         tokenized_inputs = self.tokenizer(
             examples["content"],
             max_length=2 * MISTRAL_CONTEXT_LENGTH,
