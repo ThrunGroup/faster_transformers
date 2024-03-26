@@ -207,9 +207,10 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     print("FIRST TRAINING? : ", is_first_training)
 
     if is_debugging:
-        act_hist_path = f"/scr/lukeai/act_hist/debugging_{model_name}/{dataset_type}.pt"
+        act_hist_path = f"/matx/u/lukeai/act_hist/debugging_{model_name}/{dataset_type}.pt"
     else:
-        act_hist_path = f"/scr/lukeai/act_hist/{model_name}/{dataset_type}.pt"
+        act_hist_path = f"/matx/u/lukeai/act_hist/{model_name}/{dataset_type}.pt"
+    print("Act hist path: ", act_hist_path)
 
     # If not using sparse Mistral model, all flags related to sparse model should be set as zero or false.
     if not exp_config.use_sparse_model:
@@ -237,9 +238,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         gradient_checkpointing=gradient_checkpointing,
         use_relu=exp_config.use_relu,
     )
-    state_dict = model.state_dict()
-    for key, value in state_dict.items():
-        ds_print(key)
 
     # Load dataset
     dataset = get_dataset(dataset_type, tokenizer, model_type, max_seq_length=exp_config.max_seq_length)
@@ -250,9 +248,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     if is_debugging:
         output_dir += "_debugging"
     ds_print(f"Output directory: {output_dir}")
-
-    with open("model_directory.txt", "w") as f:
-        f.write(output_dir)
 
     # Use only 500 samples of training dataset to collect statistics
     sampled_train_dataset = train_dataset.select(range(500))
@@ -426,8 +421,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             thresholds = [float(m.mlp.dead_threshold) for m in model.model.layers]
             model.config.thresholds = thresholds
         # model.config.save_pretrained(output_dir)
-        model.save_pretrained(output_dir + "_no_adapter")
-        tokenizer.save_pretrained(output_dir + "_no_adapter")
+        no_adapter_output_dir = output_dir + "_no_adapter"
+        with open("model_directory.txt", "w") as f:
+            f.write(no_adapter_output_dir)
+        model.save_pretrained(no_adapter_output_dir)
+        tokenizer.save_pretrained(no_adapter_output_dir)
         # model.save_pretrained(output_dir)
         # tokenizer.save_pretrained(output_dir)
 

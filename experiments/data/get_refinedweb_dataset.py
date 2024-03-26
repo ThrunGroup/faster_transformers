@@ -32,9 +32,9 @@ class RefinedWeb(Dataset):
             prefix = f"{self.model_type}_{self.dataset_type}"
         else:
             prefix = f"{self.model_type}_{self.dataset_type}_seq{self.max_seq_length}_seed{self.seed}_"
-        train_path = f"/scr/lukeai/datasets/{prefix}_train_100k_small.pkl"
-        test_path = f"/scr/lukeai/datasets/{prefix}_test_100_small.pkl"
-        validation_path = f"/scr/lukeai/datasets/{prefix}_validation_100_small.pkl"
+        train_path = f"/matx/u/lukeai/datasets/{prefix}_train.pkl"
+        test_path = f"/matx/u/lukeai/datasets/{prefix}_test.pkl"
+        validation_path = f"/matx/u/lukeai/datasets/{prefix}_validation.pkl"
 
         for path in [train_path, test_path, validation_path]:
             os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -99,7 +99,7 @@ class RefinedWeb(Dataset):
     def preprocess(self, examples):
         tokenized_inputs = self.tokenizer(
             examples["content"],
-            max_length=self.max_seq_length,
+            max_length=2 * MISTRAL_CONTEXT_LENGTH,
             truncation=True,
             # padding="longest",
         )

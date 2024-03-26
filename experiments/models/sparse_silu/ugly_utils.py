@@ -200,8 +200,8 @@ def print_dead_neuron_stats(model):
         if isinstance(layer.mlp, SparseMLP):
             dead_percentage = layer.mlp.dead_percentage * 100
             agg_sparsity = layer.mlp.agg_sparsity * 100
-            ds_print(f"layer {i} sparsity: {dead_percentage:.3f}%")
-            ds_print(f"layer {i} agg sparsity: {agg_sparsity:.3f}%")
+            # ds_print(f"layer {i} sparsity: {dead_percentage:.3f}%")
+            # ds_print(f"layer {i} agg sparsity: {agg_sparsity:.3f}%")
             total_sparsity += dead_percentage
             counts += 1
 
