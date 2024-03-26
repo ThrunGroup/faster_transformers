@@ -104,16 +104,19 @@ def benchmark_decode(B, bm, method, gen_len):
         for batch in dataloader:
             input_ids = batch["input_ids"].to(device)  # Move input tensors to the device
             max_lengths = input_ids.size(1) + gen_len   
+            try:
+                outputs = model.generate(
+                    input_ids=input_ids,
+                    max_length=max_lengths,
+                    pad_token_id=tokenizer.eos_token_id,
+                    use_cache=True,
+                    do_sample=True, 
+                    temperature=0.7, 
+                    num_beams=bm
+                ) 
+            except RuntimeError as _:
+                continue
 
-            outputs = model.generate(
-                input_ids=input_ids,
-                max_length=max_lengths,
-                pad_token_id=tokenizer.eos_token_id,
-                use_cache=True,
-                do_sample=True, 
-                temperature=0.7, 
-                num_beams=bm
-            ) 
 
 def benchmark_generation():
     # Replace ~/miniconda3/envs/svd/lib/python3.11/site-packages/transformers/generation/utils
@@ -157,7 +160,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--B", type=int, default=1)
     parser.add_argument("--bm", type=int, default=1)
-    parser.add_argument("--gen", type=int, default=500)
+    parser.add_argument("--gen", type=int, default=501)
     parser.add_argument("--method", type=int, default=0)
     args = parser.parse_args()
     # benchmark_generation()

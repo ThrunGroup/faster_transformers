@@ -2938,9 +2938,10 @@ class GenerationMixin:
                 end_event.record()
                 torch.cuda.synchronize()
                 elapsed_time_ms = start_event.elapsed_time(end_event)
+                count = count - 1
                 print("Context Length: {}; Generation Length: {}; Elapsed time: {} ms; Throughput: {:.2f} tokens/s".format(context_length, count, elapsed_time_ms, count / (elapsed_time_ms / 1000)))
-                # with open(f'/home/zhongming/genghan/dejavu_profile/4-{context_length}-{count}.csv', 'a') as f:
-                #     f.write(f'{elapsed_time_ms},{count},{count / (elapsed_time_ms / 1000)}\n')
+                with open(f'/sailhome/zgh23/kernel/faster_transformers/experiments/latency_data/dense-{input_ids.shape[0]}-{count}.csv', 'a') as f:
+                    f.write(f'{context_length},{count},{elapsed_time_ms},{count / (elapsed_time_ms / 1000)}\n')
                 break
 
         if streamer is not None:
@@ -3629,7 +3630,10 @@ class GenerationMixin:
                     end_event.record()
                     torch.cuda.synchronize()
                     elapsed_time_ms = start_event.elapsed_time(end_event)
-                    print("Generation Length: {}; Elapsed time: {} ms; Throughput: {:.2f} tokens/s".format(count, elapsed_time_ms, count / (elapsed_time_ms / 1000)))
+                    count = count - 1
+                    print("Context Length: {}; Generation Length: {}; Elapsed time: {} ms; Throughput: {:.2f} tokens/s".format(context_length, count, elapsed_time_ms, count / (elapsed_time_ms / 1000)))
+                    with open(f'/sailhome/zgh23/kernel/faster_transformers/experiments/latency_data/dense-{input_ids.shape[0]}-{count}.csv', 'a') as f:
+                        f.write(f'{context_length},{count},{elapsed_time_ms},{count / (elapsed_time_ms / 1000)}\n')
                     break
                 else:
                     this_peer_finished = True

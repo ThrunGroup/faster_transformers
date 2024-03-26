@@ -3,14 +3,14 @@
 /sailhome/zgh23/.cache/huggingface/modules/transformers_modules/thrunlab/sparse_mistral_50p_no_adapter/3948f9d5a40579888c347b0ba6ad60c65df5833a
 
 # Benchmark the decoding phase
-1. Replace the `~/miniconda3/envs/svd/lib/python3.11/site-packages/transformers/generation/utils.py` with `time_stop_util.py`
-2. Run `bench_sparse_inference.py`
-
+Only Support B=1, bm=1 NOW!!!
+1. Change the output filenames in `time_stop_util.py`
+2. Replace the `~/miniconda3/envs/svd/lib/python3.11/site-packages/transformers/generation/utils.py` with `time_stop_util.py`
+3. Run `bench_sparse_inference.py`
 - Method 0: Dense: ~ 33 tokens/s
 - Method 1: CUDA (sparse Wup + dense Wdown): ~ 35 tokens/s
 - Method 2: Triton (sparse Wup + sparse Wdown): ~ 39 tokens/s
-
-3. Replace the `~/miniconda3/envs/svd/lib/python3.11/site-packages/transformers/generation/utils.py` with `ori_util.py`
+4. Replace the `~/miniconda3/envs/svd/lib/python3.11/site-packages/transformers/generation/utils.py` with `ori_util.py`
 
 # Benchmark the MLP
 1. Go to `/sailhome/zgh23/flash_gemv/bench`

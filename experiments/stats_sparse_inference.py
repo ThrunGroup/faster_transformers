@@ -46,10 +46,11 @@ def sparse_inference(B, bm, gen_len):
 
     for m in model.model.layers:
         m.mlp.activate_stats(False)
-        m.mlp.agg_path = f"/sailhome/zgh23/faster_transformers/experiments/agg_data/agg_sparsity_{B}_{bm}_tmp.csv"
-        m.mlp.dead_path = f"/sailhome/zgh23/faster_transformers/experiments/agg_data/dead_percentage_{B}_{bm}_tmp.csv"
-        m.mlp.agg_snapshot = f"/sailhome/zgh23/faster_transformers/experiments/agg_data/agg_sparsity_{B}_{bm}.csv"
-        m.mlp.dead_snapshot = f"/sailhome/zgh23/faster_transformers/experiments/agg_data/dead_percentage_{B}_{bm}.csv"
+        m.mlp.agg_path = f"/sailhome/zgh23/kernel/faster_transformers/experiments/agg_data/agg_sparsity_{B}_{bm}_tmp.csv"
+        m.mlp.dead_path = f"/sailhome/zgh23/kernel/faster_transformers/experiments/agg_data/dead_percentage_{B}_{bm}_tmp.csv"
+        m.mlp.agg_snapshot = f"/sailhome/zgh23/kernel/faster_transformers/experiments/agg_data/agg_sparsity_{B}_{bm}.csv"
+        m.mlp.dead_snapshot = f"/sailhome/zgh23/kernel/faster_transformers/experiments/agg_data/dead_percentage_{B}_{bm}.csv"
+        print(m.mlp.gate_proj.weight.dtype)
 
 
     dataloader = DataLoader(test_dataset, batch_size=B, collate_fn=data_collator)
@@ -57,6 +58,7 @@ def sparse_inference(B, bm, gen_len):
     counts = 0
     # Generate tokens in batch
     model.eval()  # Set the model to evaluation mode
+    print(len(dataloader))
     with torch.no_grad():
         for batch in dataloader:
             input_ids = batch["input_ids"].to(
@@ -65,12 +67,8 @@ def sparse_inference(B, bm, gen_len):
             max_lengths = input_ids.size(1) + gen_len
             print(max_lengths)
 
-            attention_mask = batch["attention_mask"].to(
-                device
-            )  # Move attention mask to the device
             outputs = model.generate(
                 input_ids=input_ids,
-                attention_mask=attention_mask,
                 max_length=max_lengths,
                 pad_token_id=tokenizer.eos_token_id,
                 use_cache=True,
@@ -80,18 +78,18 @@ def sparse_inference(B, bm, gen_len):
             )
 
             # Decode generated tokens to texts
-            generated_texts = [
-                tokenizer.decode(output, skip_special_tokens=True) for output in outputs
-            ]
-            counts += 1
-            if counts <= 1:
-                for idx in range(len(input_ids)):
-                    ids = input_ids[idx]
-                    # Decode the input_ids to a string
-                    tokens_str = tokenizer.decode(ids, skip_special_tokens=True)
-                    print(f"Tokens before generation: \n {tokens_str}")
-                    generated_text = generated_texts[idx]
-                    print(f"Generated: \n {generated_text}\n")
+            # generated_texts = [
+            #     tokenizer.decode(output, skip_special_tokens=True) for output in outputs
+            # ]
+            # counts += 1
+            # if counts <= 1:
+            #     for idx in range(len(input_ids)):
+            #         ids = input_ids[idx]
+            #         # Decode the input_ids to a string
+            #         tokens_str = tokenizer.decode(ids, skip_special_tokens=True)
+            #         print(f"Tokens before generation: \n {tokens_str}")
+            #         generated_text = generated_texts[idx]
+            #         print(f"Generated: \n {generated_text}\n")
 
 
 if __name__ == "__main__":
