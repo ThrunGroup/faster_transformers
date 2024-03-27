@@ -200,8 +200,8 @@ def print_dead_neuron_stats(model):
         if isinstance(layer.mlp, SparseMLP):
             dead_percentage = layer.mlp.dead_percentage * 100
             agg_sparsity = layer.mlp.agg_sparsity * 100
-            ds_print(f"layer {i} sparsity: {dead_percentage:.3f}%")
-            ds_print(f"layer {i} agg sparsity: {agg_sparsity:.3f}%")
+            # ds_print(f"layer {i} sparsity: {dead_percentage:.3f}%")
+            # ds_print(f"layer {i} agg sparsity: {agg_sparsity:.3f}%")
             total_sparsity += dead_percentage
             counts += 1
 
@@ -730,6 +730,7 @@ class LlamaSparseSiluMLP(LlamaMLP):
             self.count += 1
             if self.count <= 1:
                 ds_print("USING SparseSILU!!!!")
+                ds_print(self.dead_threshold)
             pre_act = self.gate_proj(x)
             post_act = self.act_fn(pre_act)
             if self.kill_sparse_swish_outputs:

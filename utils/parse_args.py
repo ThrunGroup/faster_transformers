@@ -108,6 +108,7 @@ def parse_args():
         default=4,
         help="Gradient Accumulation Steps",
     )
+    parser.add_argument("--use_stage3", action="store_true", default=False, help="Use Stage 3")
     parser.add_argument(
         "--push_to_hub",
         action="store_true",
