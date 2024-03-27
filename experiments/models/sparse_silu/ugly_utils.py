@@ -730,6 +730,7 @@ class LlamaSparseSiluMLP(LlamaMLP):
             self.count += 1
             if self.count <= 1:
                 ds_print("USING SparseSILU!!!!")
+                ds_print(self.dead_threshold)
             pre_act = self.gate_proj(x)
             post_act = self.act_fn(pre_act)
             if self.kill_sparse_swish_outputs:

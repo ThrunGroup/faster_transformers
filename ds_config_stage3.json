@@ -26,12 +26,12 @@
       "device": "cpu",
       "pin_memory": true
     },
-    "overlap_comm": true,
-    "contiguous_gradients": true,
+    "overlap_comm": false,
+    "contiguous_gradients": false,
     "reduce_scatter": true,
-    "reduce_bucket_size": 2e8,
+    "reduce_bucket_size": 5e7,
     "allgather_partitions": true,
-    "allgather_bucket_size": 2e8
+    "allgather_bucket_size": 5e7
   },
   "activation_checkpointing": {
     "partition_activations": true,

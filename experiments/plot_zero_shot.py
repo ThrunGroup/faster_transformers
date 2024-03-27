@@ -10,20 +10,21 @@ import matplotlib.pyplot as plt
 from datetime import date
 
 
-def plot():
-    # Parent directory where all model directories are stored
-    parent_directories = [
-        "/matx/u/lukeai/sparse_silu/output",
-    ]
-
+def plot(
+    parent_directories,
+    base_model_name,
+    sparse_model_name,
+    relu_model_name,
+):
     # List to store directory names
     directories = []
 
     # Automatically find directories that match the naming convention
     for parent_directory in parent_directories:
         for entry in os.scandir(parent_directory):
-            print(entry.name, entry.is_dir())
-            if entry.is_dir() and entry.name.startswith("llama-2-7b-chat-hf"):
+            if entry.is_dir() and any(
+                model_name in entry.name for model_name in [base_model_name, sparse_model_name, relu_model_name]
+            ):
                 directories.append(entry.path)
     print("directories: ", directories)
 
@@ -43,19 +44,24 @@ def plot():
                     count += 1
                 avg_acc = acc_sum / count if count > 0 else 0
 
-                if "llama-2-7b-chat-hf" in directory:
+                if base_model_name in directory:
                     base_model_accuracy = avg_acc
-                    print(base_model_accuracy)
-                    print(directory)
+                    print("Base model acc: ", base_model_accuracy)
                 else:
                     # Extract step number and model type from directory name
                     parts = directory.split("_")
+                    if relu_model_name in directory:
+                        model_type = "relu"
+                    else:
+                        model_type = parts[3]  # Adjusted for the full path
                     step = int(parts[-1].replace("steps", ""))
-                    model_type = parts[3]  # Adjusted for the full path
 
                     if model_type not in model_accuracies:
                         model_accuracies[model_type] = {}
                     model_accuracies[model_type][step] = avg_acc
+
+    # print(model_accuracies)
+    # return
 
     # Plotting the results
     plt.figure(figsize=(10, 6))
@@ -63,7 +69,8 @@ def plot():
         steps = sorted(accuracies.keys())
         values = [accuracies[step] for step in steps]
         plt.plot(steps, values, label=model_type, marker="o")
-        print(model_type, values)
+        for step in steps:
+            print("model type: ", model_type, "step: ", step, "accuracy: ", accuracies[step])
 
     if base_model_accuracy > 0:
         plt.plot(steps, [base_model_accuracy for _ in steps], label="Base Mistral")
@@ -78,10 +85,19 @@ def plot():
     dirname = "/matx/u/lukeai/sparse_silu/figures"
     os.makedirs(dirname, exist_ok=True)
     plt.savefig(f"{dirname}/{date.today()}_Model Comparisons zero shot accuracy.png")
-
-
-plot()
+    print(f"{dirname}/{date.today()}_Model Comparisons zero shot accuracy.png")
 
 
 if __name__ == "__main__":
-    plot()
+    parent_directories = [
+        "/matx/u/lukeai/sparse_silu/output",
+    ]
+    prefixes = [
+        "llama-2-7b-chat-hf",
+    ]
+    plot(
+        parent_directories,
+        base_model_name="llama-2-7b-chat-hf",
+        sparse_model_name="llama_sparse",
+        relu_model_name="llama_relu",
+    )

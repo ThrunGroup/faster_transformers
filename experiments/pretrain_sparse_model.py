@@ -44,14 +44,16 @@ def get_run_name(exp_config):
 
     run_name = f"{model_name}_{dataset_type}"
 
+    ds_print("USE RELU: ", exp_config.use_relu)
+    ds_print("TARGETED SPARSITY: ", exp_config.targeted_sparsity)
+
     if exp_config.use_relu:
         run_name += "_relu"
+    elif exp_config.targeted_sparsity:
+        run_name += f"_{int(exp_config.targeted_sparsity * 100)}p"
 
     if exp_config.use_graceful_regularization:
         run_name += "_graceful_reg"
-
-    if exp_config.targeted_sparsity:
-        run_name += f"_{int(exp_config.targeted_sparsity * 100)}p"
 
     return run_name
 
@@ -96,7 +98,7 @@ def prepare_sparse_model(
             else:
                 model = BaseCausalLM(config=config)
         else:
-            config = BaseConfig.from_pretrained(base_model_name, model_type)
+            config = BaseConfig.from_pretrained(base_model_name)
             config = get_sparse_config(config)
             config.use_cache = True
             model = SparseCausalLM.from_pretrained(

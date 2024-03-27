@@ -1,1 +1,1 @@
-/matx/u/lukeai/ckpt/sparse_llama_7b_hf_refined_web_70p_no_adapter
+/matx/u/lukeai/ckpt/llama_7b_hf_relu_refined_web_relu_no_adapter

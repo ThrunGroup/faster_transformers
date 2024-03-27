@@ -5,4 +5,3 @@ wandb
 thrunlab/*
 ckpt/*
 scores/
-*output/
