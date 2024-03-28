@@ -8,20 +8,20 @@ is_first_training=1
 
 for ((i=1; i<=max_iterations; i++)); do
     current_steps=$((initial_steps + i * step_increment))  # Calculate the number of steps trained so far
-#    double_steps=$((current_steps * 2))
+    double_steps=$((current_steps * 2))
 
     echo "Training for $current_steps steps..."
     deepspeed --master_port 12329 experiments/pretrain_sparse_model.py \
       --set_sparsity_aware_threshold \
       --use_sparse_model --print_sparsity \
       --use_wandb --max_steps $current_steps --model_save \
-      --train_batch_size 1 --test_batch_size 1 --use_flash_attn \
+      --train_batch_size 1 --test_batch_size 2 --use_flash_attn \
       --gradient_accumulation_steps 8 --ds_config_path ds_config.json \
       --push_to_hub --max_seq_length 1024  \
       --output_dir /matx/u/lukeai/ckpt \
       --gradient_checkpointing \
       --is_first_training $is_first_training \
-      --model_name "llama_7b_hf_relu" \
+      --model_name "relu_llama_7b_hf_fp16" \
       --base_model_repo_id "meta-llama/Llama-2-7b-hf" \
       --use_relu
 

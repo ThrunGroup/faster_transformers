@@ -1,55 +1,55 @@
 {
   "results": {
     "arc_challenge": {
-      "acc,none": 0.20136518771331058,
-      "acc_stderr,none": 0.011718927477444262,
-      "acc_norm,none": 0.2295221843003413,
-      "acc_norm_stderr,none": 0.01228892676089078,
+      "acc,none": 0.20733788395904437,
+      "acc_stderr,none": 0.011846905782971352,
+      "acc_norm,none": 0.23464163822525597,
+      "acc_norm_stderr,none": 0.01238387356076868,
       "alias": "arc_challenge"
     },
     "arc_easy": {
-      "acc,none": 0.38215488215488214,
-      "acc_stderr,none": 0.009970747281292422,
-      "acc_norm,none": 0.37163299663299665,
-      "acc_norm_stderr,none": 0.009915897123658793,
+      "acc,none": 0.38341750841750843,
+      "acc_stderr,none": 0.009976995068264721,
+      "acc_norm,none": 0.3720538720538721,
+      "acc_norm_stderr,none": 0.009918187193096471,
       "alias": "arc_easy"
     },
     "boolq": {
-      "acc,none": 0.6091743119266055,
-      "acc_stderr,none": 0.00853404406545651,
+      "acc,none": 0.6131498470948012,
+      "acc_stderr,none": 0.008518188340844753,
       "alias": "boolq"
     },
     "hellaswag": {
-      "acc,none": 0.31995618402708625,
-      "acc_stderr,none": 0.004655059308602631,
-      "acc_norm,none": 0.38239394542919736,
-      "acc_norm_stderr,none": 0.004849788423944374,
+      "acc,none": 0.31338378809002193,
+      "acc_stderr,none": 0.004629209184813547,
+      "acc_norm,none": 0.36128261302529374,
+      "acc_norm_stderr,none": 0.004793904922401883,
       "alias": "hellaswag"
     },
     "openbookqa": {
-      "acc,none": 0.142,
-      "acc_stderr,none": 0.0156256302478103,
-      "acc_norm,none": 0.256,
-      "acc_norm_stderr,none": 0.01953692357474759,
+      "acc,none": 0.15,
+      "acc_stderr,none": 0.015984712135164926,
+      "acc_norm,none": 0.26,
+      "acc_norm_stderr,none": 0.019635965529725512,
       "alias": "openbookqa"
     },
     "piqa": {
-      "acc,none": 0.6147986942328618,
-      "acc_stderr,none": 0.011354179751257075,
-      "acc_norm,none": 0.6109902067464635,
-      "acc_norm_stderr,none": 0.011374774974447468,
+      "acc,none": 0.6126224156692056,
+      "acc_stderr,none": 0.011366038083435908,
+      "acc_norm,none": 0.6229597388465724,
+      "acc_norm_stderr,none": 0.011307569752543899,
       "alias": "piqa"
     },
     "sciq": {
-      "acc,none": 0.651,
-      "acc_stderr,none": 0.015080663991563098,
-      "acc_norm,none": 0.604,
-      "acc_norm_stderr,none": 0.015473313265859406,
+      "acc,none": 0.653,
+      "acc_stderr,none": 0.015060472031706622,
+      "acc_norm,none": 0.605,
+      "acc_norm_stderr,none": 0.015466551464829342,
       "alias": "sciq"
     },
     "winogrande": {
-      "acc,none": 0.5295974743488555,
-      "acc_stderr,none": 0.014027843827840085,
+      "acc,none": 0.5169692186266772,
+      "acc_stderr,none": 0.014044390401612972,
       "alias": "winogrande"
     }
   },
@@ -337,7 +337,7 @@
   },
   "config": {
     "model": "hf",
-    "model_args": "pretrained=/matx/u/lukeai/ckpt/llama_7b_hf_relu_refined_web_relu_no_adapter,trust_remote_code=True",
+    "model_args": "pretrained=/matx/u/lukeai/ckpt/relu_llama_7b_hf_fp16_refined_web_relu_no_adapter,trust_remote_code=True",
     "batch_size": "16",
     "batch_sizes": [],
     "device": null,
@@ -346,5 +346,5 @@
     "bootstrap_iters": 100000,
     "gen_kwargs": null
   },
-  "git_hash": "9f685ff"
+  "git_hash": "37e6ca5"
 }

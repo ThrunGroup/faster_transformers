@@ -16,23 +16,19 @@ def plot(
     sparse_model_name,
     relu_model_name,
 ):
-    # List to store directory names
     directories = []
 
-    # Automatically find directories that match the naming convention
     for parent_directory in parent_directories:
         for entry in os.scandir(parent_directory):
             if entry.is_dir() and any(
                 model_name in entry.name for model_name in [base_model_name, sparse_model_name, relu_model_name]
             ):
                 directories.append(entry.path)
-    print("directories: ", directories)
+    print("Directories:", directories)
 
-    # Initialize dictionary to store accuracies
     model_accuracies = {}
     base_model_accuracy = 0
 
-    # Loop through directories to read and process each results.json
     for directory in directories:
         if os.path.exists(os.path.join(directory, "results.json")):
             with open(os.path.join(directory, "results.json"), "r") as file:
@@ -46,46 +42,45 @@ def plot(
 
                 if base_model_name in directory:
                     base_model_accuracy = avg_acc
-                    print("Base model acc: ", base_model_accuracy)
+                    print("Base model accuracy:", base_model_accuracy)
                 else:
-                    # Extract step number and model type from directory name
                     parts = directory.split("_")
-                    if relu_model_name in directory:
-                        model_type = "relu"
-                    else:
-                        model_type = parts[3]  # Adjusted for the full path
+                    model_type = "relu" if relu_model_name in directory else parts[3]
                     step = int(parts[-1].replace("steps", ""))
-
-                    if model_type not in model_accuracies:
-                        model_accuracies[model_type] = {}
+                    model_accuracies[model_type] = model_accuracies.get(model_type, {})
                     model_accuracies[model_type][step] = avg_acc
 
-    # print(model_accuracies)
-    # return
-
-    # Plotting the results
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(8, 6))
     for model_type, accuracies in model_accuracies.items():
         steps = sorted(accuracies.keys())
         values = [accuracies[step] for step in steps]
-        plt.plot(steps, values, label=model_type, marker="o")
-        for step in steps:
-            print("model type: ", model_type, "step: ", step, "accuracy: ", accuracies[step])
+        plt.plot(steps, values, label=model_type.capitalize(), marker="o", linewidth=2)
+        for step, accuracy in accuracies.items():
+            plt.annotate(f"{accuracy:.4f}", (step, accuracy), textcoords="offset points", xytext=(0, 10), ha="center")
 
     if base_model_accuracy > 0:
-        plt.plot(steps, [base_model_accuracy for _ in steps], label="Base Mistral")
+        plt.plot(
+            steps, [base_model_accuracy] * len(steps), label="Llama2 7B", linestyle="--", color="gray", linewidth=2
+        )
+        plt.annotate(
+            f"{base_model_accuracy:.4f}",
+            (steps[0], base_model_accuracy),
+            textcoords="offset points",
+            xytext=(0, 10),
+            ha="center",
+        )
+    plt.xlabel("Finetuning Steps (batch size 4)", fontsize=14)
+    plt.ylabel("Average 0-Shot Accuracy", fontsize=14)
+    # plt.title("Average 0-Shot Accuracy", fontsize=16)
+    plt.legend(fontsize=12)
+    plt.grid(True, which="both", linestyle="--", linewidth=0.5, color="gray")
+    plt.tight_layout()
 
-    plt.xlabel("Steps (batch size 16)")
-    plt.ylabel("Average Accuracy")
-    plt.title("Average 0-shot Accuracy Comparison")
-    plt.legend()
-    plt.show()
-
-    # Save the figure
     dirname = "/matx/u/lukeai/sparse_silu/figures"
     os.makedirs(dirname, exist_ok=True)
-    plt.savefig(f"{dirname}/{date.today()}_Model Comparisons zero shot accuracy.png")
-    print(f"{dirname}/{date.today()}_Model Comparisons zero shot accuracy.png")
+    plt.savefig(f"{dirname}/llama_training_steps_vs_zero shot_accuracy", dpi=300)
+    plt.show()
+    print(f"Figure saved: {dirname}/Model_Comparisons_zero_shot_accuracy_Llama.png")
 
 
 if __name__ == "__main__":

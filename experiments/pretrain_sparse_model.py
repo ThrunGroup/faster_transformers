@@ -289,6 +289,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         gradient_checkpointing=gradient_checkpointing,
         gradient_checkpointing_kwargs={"use_reentrant": False},
         bf16=True if not is_debugging else False,
+        # fp16=True if not is_debugging else False,
         hub_model_id=f"thrunlab/{run_name}",
         push_to_hub=push_to_hub,
         seed=exp_config.seed,
@@ -337,7 +338,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             load_act_hist(base_model, act_hist_path)
         elif not exp_config.use_relu:
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
-            trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
+            trainer.is_deepspeed_enabled = (
+                False  # A way to go around the value error when using ds stage 2 for evaluation
+            )
             trainer.evaluate(sampled_train_dataset)
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(base_model, act_hist_path)
@@ -381,7 +384,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             disable_sparse_predictor(base_model)
 
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
-            trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
+            trainer.is_deepspeed_enabled = (
+                False  # A way to go around the value error when using ds stage 2 for evaluation
+            )
             print(trainer.evaluate(test_dataset))
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
 
@@ -423,7 +428,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             thresholds = [float(m.mlp.dead_threshold) for m in model.model.layers]
             model.config.thresholds = thresholds
         # model.config.save_pretrained(output_dir)
-        no_adapter_output_dir = output_dir + "_no_adapter"
+        no_adapter_output_dir = output_dir + f"_no_adapter_{exp_config.max_steps}steps"
         with open("model_directory.txt", "w") as f:
             f.write(no_adapter_output_dir)
         model.save_pretrained(no_adapter_output_dir)
