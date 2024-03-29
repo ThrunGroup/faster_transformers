@@ -72,8 +72,8 @@ def benchmark_decode(B, bm, method, gen_len):
     model = AutoModelForCausalLM.from_pretrained(
         path,
         trust_remote_code=True,
-        torch_dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2",
+        torch_dtype=torch.float32,
+        # attn_implementation="flash_attention_2",
         device_map='auto',
     ).to('cuda')
     print(model.hf_device_map)
@@ -93,11 +93,13 @@ def benchmark_decode(B, bm, method, gen_len):
         # m.mlp.use_flash_gemv = True
         if method == 0:
             m.mlp.sp_method = 0
+            print(m.mlp.down_proj.weight.dtype)
         elif method == 1:
             m.mlp.sp_method = 1
         elif method == 2:
             m.mlp.sp_method = 2
             m.mlp.wdown_t = m.mlp.down_proj.weight.t().contiguous()
+            print(m.mlp.down_proj.weight.dtype)
     # Generate tokens in batch
     model.eval()  # Set the model to evaluation mode
     with torch.no_grad():
@@ -115,6 +117,7 @@ def benchmark_decode(B, bm, method, gen_len):
                     num_beams=bm
                 ) 
             except RuntimeError as _:
+                print("Time interval is too short!")
                 continue
 
 

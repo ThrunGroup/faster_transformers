@@ -29,8 +29,8 @@ def sparse_inference():
     model = AutoModelForCausalLM.from_pretrained(
         path,
         trust_remote_code=True,
-        torch_dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2",
+        torch_dtype=torch.float32,
+        # attn_implementation="flash_attention_2",
         # low_cpu_mem_usage=True,
         device_map='auto',
     ).to('cuda')

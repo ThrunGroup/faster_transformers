@@ -2934,13 +2934,14 @@ class GenerationMixin:
             if stopping_criteria(input_ids, scores):
                 this_peer_finished = True
 
-            if this_peer_finished and not synced_gpus:
+            # if this_peer_finished and not synced_gpus:
+            if count == stopping_criteria.max_length - context_length:
                 end_event.record()
                 torch.cuda.synchronize()
                 elapsed_time_ms = start_event.elapsed_time(end_event)
                 count = count - 1
                 print("Context Length: {}; Generation Length: {}; Elapsed time: {} ms; Throughput: {:.2f} tokens/s".format(context_length, count, elapsed_time_ms, count / (elapsed_time_ms / 1000)))
-                with open(f'/sailhome/zgh23/kernel/faster_transformers/experiments/latency_data/dense-{input_ids.shape[0]}-{count}.csv', 'a') as f:
+                with open(f'/sailhome/zgh23/kernel/faster_transformers/experiments/latency_data/dense-fp32-{input_ids.shape[0]}-{count}.csv', 'a') as f:
                     f.write(f'{context_length},{count},{elapsed_time_ms},{count / (elapsed_time_ms / 1000)}\n')
                 break
 
@@ -3632,7 +3633,7 @@ class GenerationMixin:
                     elapsed_time_ms = start_event.elapsed_time(end_event)
                     count = count - 1
                     print("Context Length: {}; Generation Length: {}; Elapsed time: {} ms; Throughput: {:.2f} tokens/s".format(context_length, count, elapsed_time_ms, count / (elapsed_time_ms / 1000)))
-                    with open(f'/sailhome/zgh23/kernel/faster_transformers/experiments/latency_data/dense-{input_ids.shape[0]}-{count}.csv', 'a') as f:
+                    with open(f'/sailhome/zgh23/kernel/faster_transformers/experiments/latency_data/dense-fp32-{input_ids.shape[0]}-{count}.csv', 'a') as f:
                         f.write(f'{context_length},{count},{elapsed_time_ms},{count / (elapsed_time_ms / 1000)}\n')
                     break
                 else:
