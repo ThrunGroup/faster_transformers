@@ -21,5 +21,5 @@ deepspeed --master_port 12330 experiments/pretrain_sparse_model.py \
   --ds_config_path ds_config.json --max_seq_length 1024  \
   --output_dir $1 --is_first_training 1 \
   --gradient_checkpointing \
-  --model_name "Mistral_Sparse3" \
+  --model_name "sparse_mistral_7b" \
   --base_model_repo_id "mistralai/Mistral-7B-v0.1"

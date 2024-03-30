@@ -18,10 +18,11 @@ export CATS_ACTPATH=$act_path
 export CATS_CKPTPATH=$ckpt_path
 export CATS_RESPATH=$result_path
 
+cd scripts
 # Collect the statistics before General finetuning
 bash plot_mlp_histogram.sh $ckpt_path
 bash zero_shot_evaluation_without_general_finetuning.sh $ckpt_path
-bash scripts/evaluate_base_model.sh
+bash evaluate_base_model.sh
 
 # Run general finetuning
 bash general_finetuning_cats.sh $ckpt_path
