@@ -18,21 +18,20 @@ export CATS_ACTPATH=$act_path
 export CATS_CKPTPATH=$ckpt_path
 export CATS_RESPATH=$result_path
 
-cd scripts
 # Collect the statistics before General finetuning
-bash plot_mlp_histogram.sh $ckpt_path
-bash zero_shot_evaluation_without_general_finetuning.sh $ckpt_path
-bash evaluate_base_model.sh
+bash scripts/plot_mlp_histogram.sh $ckpt_path
+bash scripts/zero_shot_evaluation_without_general_finetuning.sh $ckpt_path
+bash scripts/evaluate_base_model.sh
 
 # Run general finetuning
-bash general_finetuning_cats.sh $ckpt_path
-bash general_finetuning_llama_relufication.sh $ckpt_path
+bash scripts/general_finetuning_cats.sh $ckpt_path
+bash scripts/general_finetuning_llama_relufication.sh $ckpt_path
 
-bash general_finetuning_mistral_cats.sh $ckpt_path
-bash general_finetuning_mistral_relufication.sh $ckpt_path
+bash scripts/general_finetuning_mistral_cats.sh $ckpt_path
+bash scripts/general_finetuning_mistral_relufication.sh $ckpt_path
 
 # Plot activation sparsity after general finetuning
-bash plot_post_training_activation_sparsity_per_layer.sh $ckpt_path
+bash scripts/plot_post_training_activation_sparsity_per_layer.sh $ckpt_path
 
 # Benchmark MLP Block
 cd flash_gemv/bench/
