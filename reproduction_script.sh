@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Install the requirements
+pip install -r requirements.txt
+
 # Collect the statistics before General finetuning
 bash plot_mlp_histogram.sh
 bash zero_shot_evaluation_without_general_finetuning.sh
