@@ -37,7 +37,8 @@ accelerate
 wandb
 deepspeed
 equinox # latest: 0.11.2
-transformers
+transformers==4.6.2
+triton==2.1.0
 huggingface_hub #~=0.12.0
 tokenizers #~=0.11.4
 datasets #~=2.9.0

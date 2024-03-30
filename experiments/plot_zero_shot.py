@@ -110,7 +110,8 @@ def plot(
     plt.grid(True, which="both", linestyle="--", linewidth=0.5, color="gray")
     plt.tight_layout()
 
-    dirname = "/matx/u/lukeai/sparse_silu/figures"
+    result_root = os.getenv("CATS_RESPATH")
+    dirname = os.path.join(result_root, "sparse_silu/figures")
     os.makedirs(dirname, exist_ok=True)
     plt.savefig(f"{dirname}/{model_name}_training_steps_vs_zero_shot_accuracy.png", dpi=300)
     print(f"{dirname}/{model_name}_training_steps_vs_zero_shot_accuracy.png")

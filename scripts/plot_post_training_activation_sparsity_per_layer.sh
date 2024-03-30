@@ -17,7 +17,7 @@ for ((i=1; i<=max_iterations; i++)); do
       --max_steps $current_steps \
       --train_batch_size 1 --test_batch_size 4 --use_flash_attn --gradient_accumulation_steps 8 \
       --ds_config_path ds_config.json --max_seq_length 1024  \
-      --output_dir /matx/u/lukeai/ckpt --is_first_training $is_first_training \
+      --output_dir $1 --is_first_training $is_first_training \
       --gradient_checkpointing \
       --model_name "sparse_llama_7b_hf2" \
       --base_model_repo_id "meta-llama/Llama-2-7b-hf"
@@ -40,7 +40,7 @@ for ((i=1; i<=max_iterations; i++)); do
       --max_steps $current_steps \
       --train_batch_size 1 --test_batch_size 4 --use_flash_attn --gradient_accumulation_steps 8 \
       --ds_config_path ds_config.json --max_seq_length 1024  \
-      --output_dir /matx/u/lukeai/ckpt --is_first_training $is_first_training \
+      --output_dir $1 --is_first_training $is_first_training \
       --gradient_checkpointing \
       --model_name "sparse_llama_7b_hf2" \
       --base_model_repo_id "meta-llama/Llama-2-7b-hf"
@@ -63,7 +63,7 @@ for ((i=1; i<=max_iterations; i++)); do
       --max_steps $current_steps \
       --train_batch_size 1 --test_batch_size 4 --use_flash_attn --gradient_accumulation_steps 8 \
       --ds_config_path ds_config.json --max_seq_length 1024  \
-      --output_dir /matx/u/lukeai/ckpt --is_first_training $is_first_training \
+      --output_dir $1 --is_first_training $is_first_training \
       --gradient_checkpointing \
       --model_name "sparse_llama_7b_hf2" \
       --base_model_repo_id "meta-llama/Llama-2-7b-hf"

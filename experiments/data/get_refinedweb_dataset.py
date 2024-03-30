@@ -32,9 +32,11 @@ class RefinedWeb(Dataset):
             prefix = f"{self.model_type}_{self.dataset_type}"
         else:
             prefix = f"{self.model_type}_{self.dataset_type}_seq{self.max_seq_length}_seed{self.seed}_"
-        train_path = f"/matx/u/lukeai/datasets/{prefix}_train.pkl"
-        test_path = f"/matx/u/lukeai/datasets/{prefix}_test.pkl"
-        validation_path = f"/matx/u/lukeai/datasets/{prefix}_validation.pkl"
+        
+        result_root = os.getenv("CATS_RESPATH")
+        train_path = f"{result_root}/datasets/{prefix}_train.pkl"
+        test_path = f"{result_root}/datasets/{prefix}_test.pkl"
+        validation_path = f"{result_root}/datasets/{prefix}_validation.pkl"
 
         for path in [train_path, test_path, validation_path]:
             os.makedirs(os.path.dirname(path), exist_ok=True)
