@@ -261,62 +261,108 @@ def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
                 layer.mlp.regularization_threshold = layer.mlp.dead_threshold * 1.2  # TODO: find better param
 
 
-# def plot_histogram(
-#     bin_edges,
-#     histogram_counts: torch.tensor,
-#     title: str = "Activation Distribution",
-#     fig_dir: str = "figures",
-# ):
-#     plt.bar(bin_edges[:-1], histogram_counts, width=np.diff(bin_edges), edgecolor="black")
-#     plt.title(title)
-#     plt.xlabel("Activation Value")
-#     plt.ylabel("Frequency")
-#     os.makedirs(fig_dir, exist_ok=True)
-#     plt.savefig(f"{fig_dir}/{title}.png")
-#     # plt.show()
-#     plt.clf()
-
-
 def plot_histogram(
     bin_edges,
     histogram_counts: torch.tensor,
+    threshold: float = 0.5,
     title: str = "Activation Distribution",
     fig_dir: str = "figures",
-    figsize: tuple = (8, 6),
-    fontsize: int = 14,
+    layer_index: int = 0,
 ):
-    # Create a figure and axis
-    fig, ax = plt.subplots(figsize=figsize)
+    if layer_index not in [0, 15, 31]:
+        return
 
-    # Plot the histogram with custom colors
-    ax.bar(
+    if is_mainprocess():
+        torch.save(bin_edges, f"{fig_dir}/bin_edges_{layer_index}.pt")
+        torch.save(histogram_counts, f"{fig_dir}/histogram_counts_{layer_index}.pt")
+
+    plt.bar(
         bin_edges[:-1],
         histogram_counts,
         width=np.diff(bin_edges),
-        edgecolor="black",
-        color="4CA64C",
-        alpha=0.8,
+        color="#227CF6",
     )
 
-    # Set title and axis labels with custom font size
-    ax.set_title(title, fontsize=fontsize + 2)
-    ax.set_xlabel("Activation Value", fontsize=fontsize)
-    ax.set_ylabel("Frequency", fontsize=fontsize)
+    plt.axvline(x=threshold, color="#227CF6", linestyle="--", label=f"Threshold ({threshold})")
+    plt.axvline(x=-threshold, color="#227CF6", linestyle="--", label=f"Threshold ({threshold})")
 
-    # Set grid and tick parameters
-    ax.grid(True, linestyle="--", alpha=0.5)
-    ax.tick_params(axis="both", which="major", labelsize=fontsize - 2)
-
-    # Adjust plot spacing
-    fig.tight_layout()
-
-    # Save the figure
+    plt.title(title)
+    plt.xlabel("Activation Value")
+    plt.ylabel("Frequency")
     os.makedirs(fig_dir, exist_ok=True)
-    plt.savefig(f"{fig_dir}/{title}.png", dpi=300, bbox_inches="tight")
-
-    # Clear the figure
+    plt.savefig(f"{fig_dir}/{title}.png")
     plt.clf()
-    plt.close(fig)
+
+
+# def plot_histogram(
+#     bin_edges,
+#     histogram_counts: torch.tensor,
+#     threshold: float = 0.5,
+#     title: str = "Activation Distribution",
+#     fig_dir: str = "figures",
+#     layer_index: int = 0,
+# ):
+#     if is_mainprocess():
+#         torch.save(bin_edges, f"{fig_dir}/bin_edges_{layer_index}.pt")
+#         torch.save(histogram_counts, f"{fig_dir}/histogram_counts_{layer_index}.pt")
+#
+#     fig, ax = plt.subplots()
+#
+#     # Plot the bars for activations within the threshold
+#     within_threshold_mask = (bin_edges[:-1] >= -threshold) & (bin_edges[:-1] <= threshold)
+#     ax.bar(
+#         bin_edges[:-1][within_threshold_mask][:-1],
+#         histogram_counts[within_threshold_mask][:-1],
+#         width=np.diff(bin_edges[:-1][within_threshold_mask]),
+#         # edgecolor="black",
+#         color="#227CF6",
+#         alpha=0.2,
+#         label="Within Threshold",
+#     )
+#
+#     # # Plot the bars for activations outside the threshold
+#     outside_threshold_mask = ~within_threshold_mask
+#     ax.bar(
+#         bin_edges[:-1][outside_threshold_mask][:-1],
+#         histogram_counts[outside_threshold_mask][:-1],
+#         width=np.diff(bin_edges[:-1][outside_threshold_mask]),
+#         # edgecolor="black",
+#         color="#227CF6",
+#         alpha=1.0,
+#         label="Outside Threshold",
+#         clip_on=False,
+#     )
+#
+#     # Plot the threshold lines
+#     ax.axvline(
+#         x=threshold,
+#         color="#227CF6",
+#         alpha=0.6,
+#         linestyle="--",
+#         label="Threshold",
+#     )
+#     # ax.axvline(x=-threshold, color="#227CF6", alpha=0.3, linestyle="--")
+#     ax.axvline(x=0, color="#227CF6", alpha=0.3, linestyle="--")
+#
+#     # Set the title and labels
+#     # ax.set_title(title)
+#     ax.set_xlabel("Activation Value")
+#     ax.set_ylabel("Frequency")
+#
+#     ax.set_xlim(-0.7, 0.7)
+#
+#     # Add legend
+#     ax.legend()
+#
+#     # Create the figures directory if it doesn't exist
+#     os.makedirs(fig_dir, exist_ok=True)
+#
+#     # Save the figure
+#     plt.savefig(f"{fig_dir}/{title}.png")
+#     # plt.show()
+#
+#     # Close the figure to free memory
+#     plt.close(fig)
 
 
 def plot_act(model, fig_dir: str = "figures"):
@@ -326,11 +372,18 @@ def plot_act(model, fig_dir: str = "figures"):
         if (
             isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats
         ):  # Can set the threshold only the relevant statistics is collected.
-            plot_title = f"Layer: {i} Pre-Activation Distribution"
-            plot_histogram(layer.mlp.histogram_bins, layer.mlp.pre_act_hist_counts, plot_title)
+            # plot_title = f"Layer: {i} Pre-Activation Distribution"
+            # plot_histogram(layer.mlp.histogram_bins, layer.mlp.pre_act_hist_counts, plot_title, fig_dir, layer_index=i)
 
             plot_title = f"Layer: {i} Post-Activation Absolute Distribution"
-            plot_histogram(layer.mlp.histogram_bins, layer.mlp.post_act_hist_counts, plot_title)
+            plot_histogram(
+                layer.mlp.histogram_bins,
+                layer.mlp.post_act_hist_counts,
+                layer.mlp.dead_threshold,
+                plot_title,
+                fig_dir,
+                layer_index=i,
+            )
 
 
 def save_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"):
@@ -428,6 +481,7 @@ class MistralSparseSiluMLP(MistralMLP):
         self.histogram_bins = torch.linspace(-1, 1, num_bins - 2)
         self.histogram_bins = torch.cat([torch.tensor([-torch.inf]), self.histogram_bins, torch.tensor([torch.inf])])
         self.pre_act_hist_counts = torch.zeros(num_bins - 1)
+        self.abs_post_act_hist_counts = torch.zeros(num_bins - 1)
         self.post_act_hist_counts = torch.zeros(num_bins - 1)
         self.t = 0
         self.count = 0
@@ -453,6 +507,7 @@ class MistralSparseSiluMLP(MistralMLP):
         # self.histogram_bins=self.histogram_bins.to(pre_activation.device).type(pre_activation.dtype)
         self.pre_act_hist_counts += torch.histogram(pre_activation, bins=self.histogram_bins)[0]
         self.post_act_hist_counts += torch.histogram(torch.abs(post_activation), bins=self.histogram_bins)[0]
+        # self.post_act_hist_counts += torch.histogram(post_activation, bins=self.histogram_bins)[0]
         self.t += time.time() - start_time
         # if self.visit_counts % 30 == 0:
         #     print(f"Time taken to collect stats: {self.t}s.")
@@ -758,6 +813,7 @@ class LlamaSparseSiluMLP(LlamaMLP):
         self.histogram_bins = torch.linspace(-1, 1, num_bins - 2)
         self.histogram_bins = torch.cat([torch.tensor([-torch.inf]), self.histogram_bins, torch.tensor([torch.inf])])
         self.pre_act_hist_counts = torch.zeros(num_bins - 1)
+        self.abs_post_act_hist_counts = torch.zeros(num_bins - 1)
         self.post_act_hist_counts = torch.zeros(num_bins - 1)
         self.t = 0
         self.count = 0
@@ -783,6 +839,7 @@ class LlamaSparseSiluMLP(LlamaMLP):
         # self.histogram_bins=self.histogram_bins.to(pre_activation.device).type(pre_activation.dtype)
         self.pre_act_hist_counts += torch.histogram(pre_activation, bins=self.histogram_bins)[0]
         self.post_act_hist_counts += torch.histogram(torch.abs(post_activation), bins=self.histogram_bins)[0]
+        # self.post_act_hist_counts += torch.histogram(post_activation, bins=self.histogram_bins)[0]
         self.t += time.time() - start_time
         # if self.visit_counts % 30 == 0:
         # print(f"Time taken to collect stats: {self.t}s.")
@@ -845,8 +902,6 @@ class LlamaSparseSiluMLP(LlamaMLP):
             post_act = self.act_fn(pre_act)
             if self.kill_sparse_swish_outputs:
                 dead_neurons = post_act.abs() <= self.dead_threshold
-                # print("pre act sparsity: ", (pre_act==0).float().mean())
-
                 dead_percentage = dead_neurons.float().mean()
                 agg_sparsity = dead_neurons.all(dim=0).float().mean()
 
@@ -860,7 +915,8 @@ class LlamaSparseSiluMLP(LlamaMLP):
                     self.a = dead_percentage
 
                     # Collect histogram stats
-                    if self.is_collect_histogram and pre_act.eq(0).float().mean() < 0.99:  # Padded dataset
+                    # if self.is_collect_histogram and pre_act.eq(0).float().mean() < 0.99:  # Padded dataset
+                    if self.is_collect_histogram:  # Padded dataset
                         self.collect_stats(pre_act, post_act)
 
                 if self.count <= 1:

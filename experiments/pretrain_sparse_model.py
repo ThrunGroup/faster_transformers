@@ -254,7 +254,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     ds_print(f"Output directory: {output_dir}")
 
     # Use only 500 samples of training dataset to collect statistics
-    sampled_train_dataset = train_dataset.select(range(500))
+    sampled_train_dataset = train_dataset.select(range(100))
 
     if use_wandb:
         if is_debugging:
@@ -347,6 +347,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(base_model, act_hist_path)
 
+        print("Setting sparse threshold")
         if exp_config.use_relu:
             set_sparse_threshold(base_model, 0, True)
         else:
@@ -368,6 +369,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     # Plot activation histograms
     if is_plot:
         fig_dir = f"figures/{run_name}"
+        os.makedirs(fig_dir, exist_ok=True)
         if is_running_deepspeed():
             if is_mainprocess():
                 plot_act(base_model, fig_dir=fig_dir)
