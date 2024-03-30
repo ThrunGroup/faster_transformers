@@ -22,7 +22,7 @@ from typing import Any, Dict, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import flash_gemv
 # from experiments.models.sparse_silu.utils import get_mlp_class, get_decoder_class
 
 
@@ -469,7 +469,24 @@ class MistralSparseSiluMLP(MistralMLP):
             return self.down_proj(
                 self.sparse_act_fn(self.gate_proj(x) * sp_mask) * self.up_proj(x)
             )  # Todo: This doesn't accelerate runtime (instead slowing down)
-
+        
+        if self.is_profile:
+            if x.shape[1] == 1:
+                if self.sp_method == 1:
+                    return flash_gemv.flag_gemv_gemv_inner_bf16(x, self.gate_proj.weight, self.up_proj.weight, self.down_proj.weight, self.dead_threshold)
+                elif self.sp_method == 2:
+                    return flash_gemv.gemv_gemv_triton(x, self.act_fn(self.gate_proj(x)), self.up_proj.weight, self.wdown_t, self.dead_threshold)
+                else:
+                    post_act = self.act_fn(self.gate_proj(x))
+                    dead_neurons = post_act.abs() <= self.dead_threshold
+                    post_act[dead_neurons] = 0
+                    return self.down_proj(post_act * self.up_proj(x))                    
+            else:
+                post_act = self.act_fn(self.gate_proj(x))
+                dead_neurons = post_act.abs() <= self.dead_threshold
+                post_act[dead_neurons] = 0
+                return self.down_proj(post_act * self.up_proj(x))
+            
         elif self.use_relu:
             post_act = self.relu(self.gate_proj(x))
             self.count += 1
@@ -782,6 +799,23 @@ class LlamaSparseSiluMLP(LlamaMLP):
             return self.down_proj(
                 self.sparse_act_fn(self.gate_proj(x) * sp_mask) * self.up_proj(x)
             )  # Todo: This doesn't accelerate runtime (instead slowing down)
+    
+        if self.is_profile:
+            if x.shape[1] == 1:
+                if self.sp_method == 1:
+                    return flash_gemv.flag_gemv_gemv_inner_bf16(x, self.gate_proj.weight, self.up_proj.weight, self.down_proj.weight, self.dead_threshold)
+                elif self.sp_method == 2:
+                    return flash_gemv.gemv_gemv_triton(x, self.act_fn(self.gate_proj(x)), self.up_proj.weight, self.wdown_t, self.dead_threshold)
+                else:
+                    post_act = self.act_fn(self.gate_proj(x))
+                    dead_neurons = post_act.abs() <= self.dead_threshold
+                    post_act[dead_neurons] = 0
+                    return self.down_proj(post_act * self.up_proj(x))                    
+            else:
+                post_act = self.act_fn(self.gate_proj(x))
+                dead_neurons = post_act.abs() <= self.dead_threshold
+                post_act[dead_neurons] = 0
+                return self.down_proj(post_act * self.up_proj(x))
 
         elif self.use_relu:
             post_act = self.relu(self.gate_proj(x))
