@@ -80,7 +80,13 @@ def dict_to_string(dic: dict) -> str:
 class BooleanOptionalAction(argparse.Action):
     def __init__(self, option_strings, dest, default=None, required=False, help=None):
         super(BooleanOptionalAction, self).__init__(
-            option_strings=option_strings, dest=dest, nargs="?", const=True, default=default, required=required, help=help
+            option_strings=option_strings,
+            dest=dest,
+            nargs="?",
+            const=True,
+            default=default,
+            required=required,
+            help=help,
         )
 
     def __call__(self, parser, namespace, values, option_string=None):
@@ -96,7 +102,9 @@ def parse_args():
         default=0,
         help="Random Seed",
     )
-    parser.add_argument("--base_model_repo_id", type=str, default=None, help="Base Model Repo ID (e.g. meta-llama/Llama-2-7b")
+    parser.add_argument(
+        "--base_model_repo_id", type=str, default=None, help="Base Model Repo ID (e.g. meta-llama/Llama-2-7b"
+    )
     parser.add_argument("--model_name", type=str, default="Mistral_Sparse", help="Name of the model")
     parser.add_argument("--dataset_type", type=str, default="cola", help="Dataset Type")
     parser.add_argument("--output_dir", type=str, default="/scr/jay/ckpt", help="Output Directory")
@@ -194,6 +202,12 @@ def parse_args():
         help="Targeted Sparsity of the sparse mlp layers in Mistral.",
     )
     parser.add_argument(
+        "--process_index",
+        type=int,
+        default=2,
+        help="Targeted Sparsity of the sparse mlp layers in Mistral.",
+    )
+    parser.add_argument(
         "--use_sparse_model",
         action="store_true",
         default=False,
@@ -204,6 +218,12 @@ def parse_args():
         action="store_true",
         default=False,
         help="Whether to use sparse regularization",
+    )
+    parser.add_argument(
+        "--do_training",
+        action="store_true",
+        default=True,
+        help="Whether to train a model (Useful for printing pre-training sparsity)",
     )
     parser.add_argument(
         "--use_wandb",

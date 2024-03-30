@@ -31,7 +31,13 @@ from utils.constants import MISTRAL
 from transformers.configuration_utils import PretrainedConfig
 
 # Mistral
-from transformers.models.mistral.modeling_mistral import MistralMLP, MistralDecoderLayer, MistralConfig, MistralForCausalLM, MistralModel
+from transformers.models.mistral.modeling_mistral import (
+    MistralMLP,
+    MistralDecoderLayer,
+    MistralConfig,
+    MistralForCausalLM,
+    MistralModel,
+)
 from experiments.models.sparse_mistral.svd_router import (
     low_rank_approximation,
 )
@@ -200,8 +206,8 @@ def print_dead_neuron_stats(model):
         if isinstance(layer.mlp, SparseMLP):
             dead_percentage = layer.mlp.dead_percentage * 100
             agg_sparsity = layer.mlp.agg_sparsity * 100
-            # ds_print(f"layer {i} sparsity: {dead_percentage:.3f}%")
-            # ds_print(f"layer {i} agg sparsity: {agg_sparsity:.3f}%")
+            ds_print(f"layer {i} sparsity: {dead_percentage:.3f}%")
+            ds_print(f"layer {i} agg sparsity: {agg_sparsity:.3f}%")
             total_sparsity += dead_percentage
             counts += 1
 
@@ -215,8 +221,12 @@ def get_sparse_layers(model):
     return sparse_layers
 
 
-def get_threshold(bin_edges: torch.tensor, histogram_counts: torch.tensor, sparsity_level: float):  # Only for L1 Regularization
-    assert len(bin_edges.shape) == len(histogram_counts.shape) == 1, "bin_edges and histogram are expected to be 1-dimensional."
+def get_threshold(
+    bin_edges: torch.tensor, histogram_counts: torch.tensor, sparsity_level: float
+):  # Only for L1 Regularization
+    assert (
+        len(bin_edges.shape) == len(histogram_counts.shape) == 1
+    ), "bin_edges and histogram are expected to be 1-dimensional."
     histogram_counts /= histogram_counts.sum()
     threshold_idx = torch.searchsorted(histogram_counts.cumsum(0), sparsity_level, side="right")
 
@@ -226,14 +236,18 @@ def get_threshold(bin_edges: torch.tensor, histogram_counts: torch.tensor, spars
 def set_regularization_threshold(model, threshold: float = 0.1):
     SparseMLP = get_mlp_class(model)
     for i, layer in enumerate(model.model.layers):
-        if isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats:  # Can set the threshold only the relevant statistics is collected.
+        if (
+            isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
             layer.mlp.regularization_threshold = threshold  # TODO: find better param
 
 
 def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
     SparseMLP = get_mlp_class(model)
     for i, layer in enumerate(model.model.layers):
-        if isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats:  # Can set the threshold only the relevant statistics is collected.
+        if (
+            isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
             if use_relu:
                 layer.mlp.sparse_act_fn = nn.ReLU()
                 layer.mlp.use_relu = True
@@ -247,27 +261,71 @@ def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
                 layer.mlp.regularization_threshold = layer.mlp.dead_threshold * 1.2  # TODO: find better param
 
 
+# def plot_histogram(
+#     bin_edges,
+#     histogram_counts: torch.tensor,
+#     title: str = "Activation Distribution",
+#     fig_dir: str = "figures",
+# ):
+#     plt.bar(bin_edges[:-1], histogram_counts, width=np.diff(bin_edges), edgecolor="black")
+#     plt.title(title)
+#     plt.xlabel("Activation Value")
+#     plt.ylabel("Frequency")
+#     os.makedirs(fig_dir, exist_ok=True)
+#     plt.savefig(f"{fig_dir}/{title}.png")
+#     # plt.show()
+#     plt.clf()
+
+
 def plot_histogram(
     bin_edges,
     histogram_counts: torch.tensor,
     title: str = "Activation Distribution",
     fig_dir: str = "figures",
+    figsize: tuple = (8, 6),
+    fontsize: int = 14,
 ):
-    plt.bar(bin_edges[:-1], histogram_counts, width=np.diff(bin_edges), edgecolor="black")
-    plt.title(title)
-    plt.xlabel("Activation Value")
-    plt.ylabel("Frequency")
+    # Create a figure and axis
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # Plot the histogram with custom colors
+    ax.bar(
+        bin_edges[:-1],
+        histogram_counts,
+        width=np.diff(bin_edges),
+        edgecolor="black",
+        color="4CA64C",
+        alpha=0.8,
+    )
+
+    # Set title and axis labels with custom font size
+    ax.set_title(title, fontsize=fontsize + 2)
+    ax.set_xlabel("Activation Value", fontsize=fontsize)
+    ax.set_ylabel("Frequency", fontsize=fontsize)
+
+    # Set grid and tick parameters
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.tick_params(axis="both", which="major", labelsize=fontsize - 2)
+
+    # Adjust plot spacing
+    fig.tight_layout()
+
+    # Save the figure
     os.makedirs(fig_dir, exist_ok=True)
-    plt.savefig(f"{fig_dir}/{title}.png")
-    # plt.show()
+    plt.savefig(f"{fig_dir}/{title}.png", dpi=300, bbox_inches="tight")
+
+    # Clear the figure
     plt.clf()
+    plt.close(fig)
 
 
 def plot_act(model, fig_dir: str = "figures"):
     SparseMLP = get_mlp_class(model)
 
     for i, layer in enumerate(model.model.layers):
-        if isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats:  # Can set the threshold only the relevant statistics is collected.
+        if (
+            isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
             plot_title = f"Layer: {i} Pre-Activation Distribution"
             plot_histogram(layer.mlp.histogram_bins, layer.mlp.pre_act_hist_counts, plot_title)
 
@@ -280,7 +338,9 @@ def save_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     act_dict = {}
     for i, layer in enumerate(model.model.layers):
-        if isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats:  # Can set the threshold only the relevant statistics is collected.
+        if (
+            isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
             act_dict[i] = (
                 layer.mlp.histogram_bins,
                 layer.mlp.pre_act_hist_counts,
@@ -291,14 +351,18 @@ def save_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act
 
 
 def load_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"):
-    assert os.path.exists(filename), f"{filename} does not exist when loading pre/post-activation histogram of SparseMistralSiluMLP."
+    assert os.path.exists(
+        filename
+    ), f"{filename} does not exist when loading pre/post-activation histogram of SparseMistralSiluMLP."
     SparseMLP = get_mlp_class(model)
 
     print("Loading activation histograms...\n\n\n")
 
     act_dict = torch.load(filename)
     for i, layer in enumerate(model.model.layers):
-        if isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats:  # Can set the threshold only the relevant statistics is collected.
+        if (
+            isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
             (
                 layer.mlp.histogram_bins,
                 layer.mlp.pre_act_hist_counts,
@@ -417,7 +481,9 @@ class MistralSparseSiluMLP(MistralMLP):
                 dead_percentage = dead_neurons.float().mean()
                 agg_sparsity = dead_neurons.all(dim=0).float().mean()
 
-                self.dead_percentage = (self.dead_percentage * self.visit_counts + dead_percentage) / (self.visit_counts + 1)
+                self.dead_percentage = (self.dead_percentage * self.visit_counts + dead_percentage) / (
+                    self.visit_counts + 1
+                )
                 self.agg_sparsity = (self.agg_sparsity * self.visit_counts + agg_sparsity) / (self.visit_counts + 1)
                 self.visit_counts += 1
 
@@ -437,7 +503,9 @@ class MistralSparseSiluMLP(MistralMLP):
                 agg_sparsity = dead_neurons.all(dim=0).float().mean()
 
                 if self.is_stats:
-                    self.dead_percentage = (self.dead_percentage * self.visit_counts + dead_percentage) / (self.visit_counts + 1)
+                    self.dead_percentage = (self.dead_percentage * self.visit_counts + dead_percentage) / (
+                        self.visit_counts + 1
+                    )
                     self.agg_sparsity = (self.agg_sparsity * self.visit_counts + agg_sparsity) / (self.visit_counts + 1)
                     self.visit_counts += 1
 
@@ -454,9 +522,13 @@ class MistralSparseSiluMLP(MistralMLP):
             out = self.down_proj(post_act * self.up_proj(x))
             if self.use_sparse_regularization:
                 if self.regularization_type == "L1 regularization":
-                    self.activation_norm = torch.abs(post_act)[torch.abs(post_act) < self.regularization_threshold].mean()
+                    self.activation_norm = torch.abs(post_act)[
+                        torch.abs(post_act) < self.regularization_threshold
+                    ].mean()
                 elif self.regularization_type == "L2 regularization":
-                    self.activation_norm = torch.sqrt(torch.square(post_act)[torch.abs(post_act) < self.regularization_threshold]).mean()
+                    self.activation_norm = torch.sqrt(
+                        torch.square(post_act)[torch.abs(post_act) < self.regularization_threshold]
+                    ).mean()
 
             return out
 
@@ -471,7 +543,9 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
         *args,
         **kwargs,
     ):
-        assert isinstance(decoder_layer.mlp, MistralSparseSiluMLP), f"{type(decoder_layer.mlp)} should MistralSparseSiluMLP."
+        assert isinstance(
+            decoder_layer.mlp, MistralSparseSiluMLP
+        ), f"{type(decoder_layer.mlp)} should MistralSparseSiluMLP."
 
         super().__init__(config, layer_idx)
         self.hidden_size = config.hidden_size
@@ -720,7 +794,9 @@ class LlamaSparseSiluMLP(LlamaMLP):
                 dead_percentage = dead_neurons.float().mean()
                 agg_sparsity = dead_neurons.all(dim=0).float().mean()
 
-                self.dead_percentage = (self.dead_percentage * self.visit_counts + dead_percentage) / (self.visit_counts + 1)
+                self.dead_percentage = (self.dead_percentage * self.visit_counts + dead_percentage) / (
+                    self.visit_counts + 1
+                )
                 self.agg_sparsity = (self.agg_sparsity * self.visit_counts + agg_sparsity) / (self.visit_counts + 1)
                 self.visit_counts += 1
 
@@ -741,7 +817,9 @@ class LlamaSparseSiluMLP(LlamaMLP):
                 agg_sparsity = dead_neurons.all(dim=0).float().mean()
 
                 if self.is_stats:
-                    self.dead_percentage = (self.dead_percentage * self.visit_counts + dead_percentage) / (self.visit_counts + 1)
+                    self.dead_percentage = (self.dead_percentage * self.visit_counts + dead_percentage) / (
+                        self.visit_counts + 1
+                    )
                     self.agg_sparsity = (self.agg_sparsity * self.visit_counts + agg_sparsity) / (self.visit_counts + 1)
                     self.visit_counts += 1
 
@@ -758,9 +836,13 @@ class LlamaSparseSiluMLP(LlamaMLP):
             out = self.down_proj(post_act * self.up_proj(x))
             if self.use_sparse_regularization:
                 if self.regularization_type == "L1 regularization":
-                    self.activation_norm = torch.abs(post_act)[torch.abs(post_act) < self.regularization_threshold].mean()
+                    self.activation_norm = torch.abs(post_act)[
+                        torch.abs(post_act) < self.regularization_threshold
+                    ].mean()
                 elif self.regularization_type == "L2 regularization":
-                    self.activation_norm = torch.sqrt(torch.square(post_act)[torch.abs(post_act) < self.regularization_threshold]).mean()
+                    self.activation_norm = torch.sqrt(
+                        torch.square(post_act)[torch.abs(post_act) < self.regularization_threshold]
+                    ).mean()
 
             return out
 
@@ -775,7 +857,9 @@ class LlamaSparseDecoderLayer(LlamaDecoderLayer):
         *args,
         **kwargs,
     ):
-        assert isinstance(decoder_layer.mlp, LlamaSparseSiluMLP), f"{type(decoder_layer.mlp)} should be LlamaSparseSiluMLP."
+        assert isinstance(
+            decoder_layer.mlp, LlamaSparseSiluMLP
+        ), f"{type(decoder_layer.mlp)} should be LlamaSparseSiluMLP."
 
         super().__init__(config, layer_idx)
         self.hidden_size = config.hidden_size

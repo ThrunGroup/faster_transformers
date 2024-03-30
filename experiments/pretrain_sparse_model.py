@@ -177,6 +177,7 @@ def prepare_sparse_model(
 
 
 def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
+    ds_print(f"saving to model_directory{exp_config.process_index}.txt")
     ds_print(f"Config: {exp_config}")
     if use_wandb and is_mainprocess():
         wandb.init()
@@ -394,7 +395,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         else:
             warnings.warn("use_spm arg is ignored as use_spare_model arg is not activated.")
 
-    trainer.train(resume_from_checkpoint=not is_first_training)
+    if exp_config.do_training:
+        trainer.train(resume_from_checkpoint=not is_first_training)
 
     # Evaluate on test dataset
     if exp_config.use_lora:
@@ -409,7 +411,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
-    eval_result = trainer.evaluate(sampled_train_dataset)
+
+    eval_result = trainer.evaluate(test_dataset)
     print("===Test Result==")
     print(eval_result)
     log_dict = {}
@@ -428,13 +431,14 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             thresholds = [float(m.mlp.dead_threshold) for m in model.model.layers]
             model.config.thresholds = thresholds
         # model.config.save_pretrained(output_dir)
-        no_adapter_output_dir = output_dir + f"_no_adapter_{exp_config.max_steps}steps"
-        with open("model_directory.txt", "w") as f:
+        if exp_config.use_relu:
+            no_adapter_output_dir = output_dir + f"_no_adapter"
+        else:
+            no_adapter_output_dir = output_dir + f"_no_adapter_{exp_config.max_steps}steps"
+        with open(f"model_directory{exp_config.process_index}.txt", "w") as f:
             f.write(no_adapter_output_dir)
         model.save_pretrained(no_adapter_output_dir)
         tokenizer.save_pretrained(no_adapter_output_dir)
-        # model.save_pretrained(output_dir)
-        # tokenizer.save_pretrained(output_dir)
 
     if push_to_hub:
         trainer.model = model

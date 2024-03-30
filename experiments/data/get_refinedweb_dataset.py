@@ -78,7 +78,7 @@ class RefinedWeb(Dataset):
 
             train_dataset = D.from_list(list(tokenized_dataset.skip(10000).take(100000)))
             val_dataset = D.from_list(list(tokenized_dataset.take(50)))
-            test_dataset = D.from_list(list(tokenized_dataset.skip(1000).take(50)))
+            test_dataset = D.from_list(list(tokenized_dataset.skip(1000).take(500)))
             # train_dataset = tokenized_dataset
 
             print(train_dataset)
