@@ -21,4 +21,6 @@ Ensure you have the following prerequisites installed:
 2. Run the following command:
 
 ```bash
-bash reproduction_script.sh
+bash reproduction_script.sh [path1] [path2]
+
+`path1` will store the activation histogram for calculating the thresholds. `path2` will store the weights for fine-tuned models.

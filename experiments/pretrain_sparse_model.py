@@ -209,10 +209,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     print("FIRST TRAINING? : ", is_first_training)
 
+    hist_root = os.getenv("CATS_ACTPATH")
     if is_debugging:
-        act_hist_path = f"/matx/u/lukeai/act_hist/debugging_{model_name}/{dataset_type}.pt"
+        act_hist_path = os.path.join(hist_root, "debugging_{model_name}/{dataset_type}.pt")
     else:
-        act_hist_path = f"/matx/u/lukeai/act_hist/{model_name}/{dataset_type}.pt"
+        act_hist_path = os.path.join(hist_root, "{model_name}/{dataset_type}.pt")
     print("Act hist path: ", act_hist_path)
 
     # If not using sparse Mistral model, all flags related to sparse model should be set as zero or false.
