@@ -28,8 +28,10 @@ bash general_finetuning_mistral_relufication.sh
 bash plot_post_training_activation_sparsity_per_layer.sh
 
 # Benchmark MLP Block
-bash flash_gemv/bench/final_profile_llama7B.sh
-bash flash_gemv/bench/final_profile_mistral7B.sh
+cd flash_gemv/bench/
+bash final_profile_llama7B.sh
+bash final_profile_mistral7B.sh
+cd $project_path
 
 # Benchmark Generation
 bash scripts/bench_generation_llama7B.sh $project_path
