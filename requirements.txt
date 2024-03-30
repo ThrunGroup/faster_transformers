@@ -44,3 +44,4 @@ tokenizers #~=0.11.4
 datasets #~=2.9.0
 testresources
 mpi4py
+seaborn
