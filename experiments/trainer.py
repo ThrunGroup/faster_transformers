@@ -3,16 +3,25 @@ from typing import Any, Dict, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from experiments.models.sparse_silu.utils import get_mlp_class, get_decoder_class
+from experiments.models.sparse_silu.utils import (
+    get_mlp_class,
+    get_decoder_class,
+)
 
 
 class SparseTrainer(Trainer):
     def __init__(self, *args, **kwargs):
-        self.regularization_coefficient = kwargs.pop("regularization_coefficient", 10)
-        self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", False)
+        self.regularization_coefficient = kwargs.pop(
+            "regularization_coefficient", 10
+        )
+        self.use_sparse_regularization = kwargs.pop(
+            "use_sparse_regularization", False
+        )
         self.use_spm_loss = False
         self.freeze_original_weights = False
-        self.regularization_type = kwargs.pop("regularization_type", "L1 positive activation")
+        self.regularization_type = kwargs.pop(
+            "regularization_type", "L1 positive activation"
+        )
         assert self.regularization_type in [
             "L2 activation",
             "L1 positive activation",
@@ -23,13 +32,19 @@ class SparseTrainer(Trainer):
 
     def initialize_sparse_silu_layers(self, model):
         SparseMLP = get_mlp_class(model)
-        self.sparse_layers = [m for m in model.modules() if isinstance(m, SparseMLP)]
+        self.sparse_layers = [
+            m for m in model.modules() if isinstance(m, SparseMLP)
+        ]
 
     def initialize_sparse_decoder_layers(self, model):
         SparseDecoder = get_decoder_class(model)
-        self.sparse_decoder_layers = [m for m in model.modules() if isinstance(m, SparseDecoder)]
+        self.sparse_decoder_layers = [
+            m for m in model.modules() if isinstance(m, SparseDecoder)
+        ]
 
-    def training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]) -> torch.Tensor:
+    def training_step(
+        self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
+    ) -> torch.Tensor:
         """
         Override the huggingface's training_step function to add a regularization term.
         A regularization term is computed with intermediate values, which are freed after "backward()."
@@ -42,7 +57,9 @@ class SparseTrainer(Trainer):
             loss = self.compute_loss(model, inputs)
 
         if self.args.n_gpu > 1:
-            loss = loss.mean()  # mean() to average on multi-gpu parallel training
+            loss = (
+                loss.mean()
+            )  # mean() to average on multi-gpu parallel training
 
         if not self.freeze_original_weights:
             if loss is not None:
@@ -53,7 +70,9 @@ class SparseTrainer(Trainer):
             if self.args.n_gpu > 1:
                 regularization_loss = regularization_loss.mean()
             if regularization_loss is not None:
-                self.accelerator.backward(regularization_loss, retain_graph=True)
+                self.accelerator.backward(
+                    regularization_loss, retain_graph=True
+                )
             loss += regularization_loss
 
         if self.use_spm_loss:
@@ -129,7 +148,10 @@ class SparseSiLUTrainer(Trainer):
 
                 count += 1
 
-                if mlp_layer.routing_probs is None or mlp_layer.activation is None:
+                if (
+                    mlp_layer.routing_probs is None
+                    or mlp_layer.activation is None
+                ):
                     continue
 
                 layer_loss = self.router_loss(
@@ -227,7 +249,10 @@ class MARETrainer(Trainer):
 
                 count += 1
 
-                if mlp_layer.routing_probs is None or mlp_layer.activation is None:
+                if (
+                    mlp_layer.routing_probs is None
+                    or mlp_layer.activation is None
+                ):
                     continue
 
                 layer_loss = self.router_loss(
