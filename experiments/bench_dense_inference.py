@@ -14,7 +14,9 @@ def benchmark_decode(B, bm, gen_len):
     model = AutoModelForCausalLM.from_pretrained(
         path, 
         trust_remote_code=True,
-        torch_dtype=torch.float32,
+        # torch_dtype=torch.float32,
+        torch_dtype=torch.bfloat16,
+        attn_implementation="flash_attention_2",
         device_map='auto'
     )
     tokenizer = AutoTokenizer.from_pretrained(path)
