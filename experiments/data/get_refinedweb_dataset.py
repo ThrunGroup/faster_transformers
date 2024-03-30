@@ -31,7 +31,8 @@ class RefinedWeb(Dataset):
         if self.max_seq_length == 8096:
             prefix = f"{self.model_type}_{self.dataset_type}"
         else:
-            prefix = f"{self.model_type}_{self.dataset_type}_seq{self.max_seq_length}_seed{self.seed}"
+            # prefix = f"{self.model_type}_{self.dataset_type}_seq{self.max_seq_length}_seed{self.seed}"
+            prefix = f"{self.model_type}_{self.dataset_type}_seq1024_seed{self.seed}"
         train_path = f"/scr/jay/datasets/{prefix}_train_100k_small.pkl"
         test_path = f"/scr/jay/datasets/{prefix}_test_100_small.pkl"
         validation_path = f"/scr/jay/datasets/{prefix}_validation_100_small.pkl"
@@ -95,7 +96,10 @@ class RefinedWeb(Dataset):
             with open(validation_path, "wb") as f:
                 pickle.dump(val_dataset, f)
             print("Preprocessed and saved data to disk.")
-        train_dataset.filter(lambda item: len(item["input_ids"]) < self.max_seq_length)
+        train_dataset = train_dataset.filter(lambda item: len(item["input_ids"]) < self.max_seq_length)
+        longest_element = max(train_dataset, key=lambda x: len(x["input_ids"]))
+        print(f"Length of the longest 'input_ids': {len(longest_element['input_ids'])}")
+        print(len(train_dataset))
         train_dataset.shuffle()
         return train_dataset, val_dataset, test_dataset
 

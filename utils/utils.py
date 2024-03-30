@@ -33,7 +33,7 @@ def ds_print(*args, **kwargs):
 
 
 def is_mainprocess():
-    return int(os.environ["LOCAL_RANK"]) == 0
+    return not is_running_deepspeed() or int(os.environ["LOCAL_RANK"]) == 0
 
 
 def get_datetime(only_date: bool = False):

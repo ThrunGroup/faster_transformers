@@ -148,9 +148,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         run_name += f"_{int(exp_config.targeted_sparsity * 100)}p"
 
     if exp_config.cut_pre_mlp:
-        run_name += "cut_pre_mlp"
+        run_name += "_cut_pre_mlp"
     if exp_config.cut_pre_attn:
-        run_name += "cut_pre_attn"
+        run_name += "_cut_pre_attn"
 
     # Load model
     model, tokenizer, config = prepare_sparse_model(
@@ -186,7 +186,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         output_dir = os.path.join(exp_config.output_dir, run_name)
 
     # Use only 500 samples of training dataset to collect statistics
-    sampled_train_dataset = train_dataset.select(range(500))
+    sampled_train_dataset = train_dataset.select(range(1000))
 
     if use_wandb:
         if is_debugging:
@@ -222,7 +222,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         weight_decay=0.01,
         num_train_epochs=num_epochs,
         logging_dir="exp_logs",
-        save_total_limit=1,
+        save_total_limit=11,
         # load_best_model_at_end=True,
         # metric_for_best_model="eval_loss",
         greater_is_better=False,
@@ -292,16 +292,22 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     # Collect statistics and find the threshold for given sparsity
     if not use_graceful_regularization and exp_config.set_sparsity_aware_threshold:
         if is_debugging:
-            act_hist_path = "/tmp/pre_finetune__act_hist.pt"
+            act_hist_path = "/tmp/pre_finetune__act_hist"
         else:
             act_hist_path = (
-                f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist.pt"
+                f"/scr/jay/exps/pre_finetune/{model_name}/{dataset_type}_act_hist"
             )
+
+            if exp_config.cut_pre_mlp:
+                act_hist_path += "_cut_pre_mlp"
+            if exp_config.cut_pre_attn:
+                act_hist_path += "_cut_pre_attn"
 
         activate_stats(base_model)
         if os.path.exists(act_hist_path):
             load_act_hist(base_model, act_hist_path)
         elif not exp_config.use_relu:
+            print("Collecting Statistics...")
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
             trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
             trainer.evaluate(sampled_train_dataset)
@@ -324,13 +330,21 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
         is_deepspeed_enabled = trainer.is_deepspeed_enabled
         trainer.is_deepspeed_enabled = False
-        eval_result = trainer.evaluate(sampled_train_dataset)
+        eval_result = trainer.evaluate(test_dataset)
         trainer.is_deepspeed_enabled = is_deepspeed_enabled
 
         print("===Pre-training test Result==")
         print(eval_result)
         total_sparsity = print_dead_neuron_stats(base_model)
         print(f"pre-training sparsity: {total_sparsity}")
+
+        # if exp_config.set_sparsity_aware_threshold:
+        #     if exp_config.use_relu:
+        #         set_sparse_threshold(base_model, 0, use_relu=True)
+        #     elif exp_config.use_resilu:
+        #         set_sparse_threshold(base_model, 0, use_resilu=True)
+        #     else:
+        #         set_sparse_threshold(base_model, exp_config.targeted_sparsity)
 
     # Plot activation histograms
     if is_plot:
@@ -379,7 +393,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
-    eval_result = trainer.evaluate(sampled_train_dataset)
+    eval_result = trainer.evaluate(test_dataset)
     print("===Test Result==")
     print(eval_result)
     log_dict = {}
@@ -390,11 +404,17 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     if exp_config.print_act_stats:
         if is_debugging:
-            act_hist_path = "/tmp/post_finetune__act_hist.pt"
+            act_hist_path = "/tmp/post_finetune__act_hist"
         else:
             act_hist_path = (
-                "/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist.pt"
+                f"/scr/jay/exps/post_finetune/{model_name}/{dataset_type}_act_hist"
             )
+
+        if exp_config.cut_pre_mlp:
+            act_hist_path += "_cut_pre_mlp"
+        if exp_config.cut_pre_attn:
+            act_hist_path += "_cut_pre_attn"
+
         save_act_hist(model, act_hist_path)
         plot_act(model)
 
@@ -412,13 +432,13 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
             if exp_config.cut_pre_attn:
                 pre_attn_thresholds = [
-                    float(m.self_att .pre_attn_threshold) for m in model.model.layers
+                    float(m.self_attn.pre_attn_threshold) for m in model.model.layers
                 ]
                 model.config.pre_attn_thresholds = pre_attn_thresholds
 
         # model.config.save_pretrained(output_dir)
-        model.save_pretrained(output_dir + "_no_adapter")
-        tokenizer.save_pretrained(output_dir + "_no_adapter")
+        model.save_pretrained(output_dir + f"_no_adapter_steps_{exp_config.max_steps}")
+        tokenizer.save_pretrained(output_dir + f"_no_adapter_steps_{exp_config.max_steps}")
 
     if push_to_hub:
         trainer.model = model

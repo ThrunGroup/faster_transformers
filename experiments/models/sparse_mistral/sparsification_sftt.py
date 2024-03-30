@@ -17,6 +17,7 @@ import numpy as np
 import time
 import os
 import copy
+import torchist
 
 from transformers.models.mistral.modeling_mistral import (
     MistralMLP,
@@ -371,10 +372,25 @@ class SparseMistralFlashAttention(MistralFlashAttention2):
         self.pre_attn_std = 0
         self.pre_attn_threshold = 0
 
+        # Activation Histograms
+        self.is_collect_histogram = False
+        num_bins = 20000
+        self.num_bins = num_bins
+        self.hist_min = -2
+        self.hist_max = 2
+        self.histogram_bins = torch.linspace(self.hist_min, self.hist_max, num_bins - 2)
+        self.histogram_bins = torch.cat(
+            [torch.tensor([-torch.inf]), self.histogram_bins, torch.tensor([torch.inf])]
+        )
+        self.pre_mlp_std = 0
+        self.pre_mlp_hist_counts = torch.zeros(num_bins - 1)
+        self.pre_act_hist_counts = torch.zeros(num_bins - 1)
+        self.post_act_hist_counts = torch.zeros(num_bins - 1)
+
     def activate_stats(self):
         self.is_stats = True
         self.visit_counts = 0
-        self.pre_attn_sparsity = 0
+        # self.pre_attn_sparsity = 0
         self.pre_attn_std = 0
 
     def deactivate_stats(self):
@@ -407,9 +423,9 @@ class SparseMistralFlashAttention(MistralFlashAttention2):
                 self.pre_attn_sparsity * self.visit_counts
                 + (hidden_states == 0).float().mean()
             ) / (self.visit_counts + 1)
-            self.pre_attn_std = (self.pre_attn_std + 0.6 * hidden_states.std()) / (
-                self.visit_counts + 1
-            )
+            self.pre_attn_std = (
+                self.pre_attn_std * self.visit_counts + 0.5 * hidden_states.std()
+            ) / (self.visit_counts + 1)
             self.visit_counts += 1
             self.counts -= 1
 
@@ -718,8 +734,35 @@ class SparseMistralFlashAttention(MistralFlashAttention2):
 class SparseMistralAttention(MistralAttention):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         self.counts = 0
+        self.pre_attn_sparsity = 0
+        self.visit_counts = 0
+        self.is_stats = False
+        self.pre_attn_std = 0
+        self.pre_attn_threshold = 0
+
+        # Activation Histograms
+        self.is_collect_histogram = False
+        num_bins = 20000
+        self.num_bins = num_bins
+        self.hist_min = -2
+        self.hist_max = 2
+        self.histogram_bins = torch.linspace(self.hist_min, self.hist_max, num_bins - 2)
+        self.histogram_bins = torch.cat(
+            [torch.tensor([-torch.inf]), self.histogram_bins, torch.tensor([torch.inf])]
+        )
+        self.pre_mlp_std = 0
+        self.pre_attn_hist_counts = torch.zeros(num_bins - 1)
+        self.post_qk_hist_counts = torch.zeros(num_bins - 1)
+
+    def activate_stats(self):
+        self.is_stats = True
+        self.visit_counts = 0
+        self.pre_attn_sparsity = 0
+        self.pre_attn_std = 0
+
+    def deactivate_stats(self):
+        self.is_stats = False
 
     def forward(
         self,
@@ -736,11 +779,28 @@ class SparseMistralAttention(MistralAttention):
                 "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
             )
         bsz, q_len, _ = hidden_states.size()
-        mask = abs(hidden_states - hidden_states.mean()) < 0.6 * hidden_states.std()
+        mask = abs(hidden_states - hidden_states.mean()) < self.pre_attn_threshold
         hidden_states[mask] = 0
+
+        if self.is_stats:
+            self.pre_attn_hist_counts += torch.cat(
+                (
+                    (hidden_states < self.hist_min).sum().unsqueeze(0),
+                    torch.histc(
+                        hidden_states.float(),
+                        bins=self.num_bins - 3,
+                        min=self.hist_min,
+                        max=self.hist_max,
+                    ),
+                    (hidden_states > self.hist_max).sum().unsqueeze(0),
+                )
+            ).cpu()
+
         self.counts += 1
-        if 10 <= self.counts <= 11:
-            print(f"Attention {self.layer_idx}: ", (hidden_states == 0).float().mean())
+        if self.counts == 10:
+            print(
+                f"Attention {self.layer_idx}: {float((hidden_states == 0).float().mean()) * 100 : .3f}"
+            )
             self.counts += 1
 
         query_states = self.q_proj(hidden_states)
@@ -806,6 +866,19 @@ class SparseMistralAttention(MistralAttention):
         attn_weights = nn.functional.dropout(
             attn_weights, p=self.attention_dropout, training=self.training
         )
+        if self.is_stats:
+            self.post_qk_hist_counts += torch.cat(
+                (
+                    (attn_weights < self.hist_min).sum().unsqueeze(0),
+                    torch.histc(
+                        attn_weights.float(),
+                        bins=self.num_bins - 3,
+                        min=self.hist_min,
+                        max=self.hist_max,
+                    ),
+                    (attn_weights > self.hist_max).sum().unsqueeze(0),
+                )
+            ).cpu()
         attn_output = torch.matmul(attn_weights, value_states)
 
         if attn_output.size() != (bsz, self.num_heads, q_len, self.head_dim):
@@ -854,15 +927,24 @@ class MistralSparseSiluMLP(MistralMLP):
 
         # Activation Histograms
         self.is_collect_histogram = False
-        num_bins = 1000
-        self.histogram_bins = torch.linspace(-1, 1, num_bins - 2)
+        num_bins = 20000
+        self.num_bins = num_bins
+        self.hist_min = -2
+        self.hist_max = 2
+        self.histogram_bins = torch.linspace(self.hist_min, self.hist_max, num_bins - 2)
         self.histogram_bins = torch.cat(
             [torch.tensor([-torch.inf]), self.histogram_bins, torch.tensor([torch.inf])]
         )
         self.pre_mlp_std = 0
-        # self.pre_mlp_hist_counts = torch.zeros(num_bins - 1)
-        self.pre_act_hist_counts = torch.zeros(num_bins - 1)
-        self.post_act_hist_counts = torch.zeros(num_bins - 1)
+        self.pre_mlp_hist_counts = torch.zeros(num_bins - 1).to(
+            self.gate_proj.weight.device
+        )
+        self.pre_act_hist_counts = torch.zeros(num_bins - 1).to(
+            self.gate_proj.weight.device
+        )
+        self.post_act_hist_counts = torch.zeros(num_bins - 1).to(
+            self.gate_proj.weight.device
+        )
         self.t = 0
         self.count = 0
         self.agg_sparsity = 0
@@ -887,16 +969,60 @@ class MistralSparseSiluMLP(MistralMLP):
         post_activation,
     ):
         start_time = time.time()
-        pre_activation = pre_activation.float().cpu().detach()
-        post_activation = post_activation.float().cpu().detach()
+        pre_mlp = pre_mlp.float()
+        pre_activation = pre_activation.float()
+        post_activation = torch.abs(post_activation.float())
         # self.histogram_bins=self.histogram_bins.to(pre_activation.device).type(pre_activation.dtype)
         # self.pre_mlp_hist_counts = torch.histogram(pre_mlp, bins=self.histogram_bins)[0]
-        self.pre_act_hist_counts += torch.histogram(
-            pre_activation, bins=self.histogram_bins
-        )[0]
-        self.post_act_hist_counts += torch.histogram(
-            torch.abs(post_activation), bins=self.histogram_bins
-        )[0]
+        if torch.cuda.is_available():
+            self.pre_mlp_hist_counts += torch.cat(
+                (
+                    (pre_mlp < self.hist_min).sum().unsqueeze(0),
+                    torch.histc(
+                        pre_mlp,
+                        bins=self.num_bins - 3,
+                        min=self.hist_min,
+                        max=self.hist_max,
+                    ),
+                    (pre_mlp > self.hist_max).sum().unsqueeze(0),
+                )
+            ).cpu()
+            self.pre_act_hist_counts += torch.cat(
+                (
+                    (pre_activation < self.hist_min).sum().unsqueeze(0),
+                    torch.histc(
+                        pre_activation,
+                        bins=self.num_bins - 3,
+                        min=self.hist_min,
+                        max=self.hist_max,
+                    ),
+                    (pre_activation > self.hist_max).sum().unsqueeze(0),
+                )
+            ).cpu()
+            if torch.cuda.is_available():
+                self.post_act_hist_counts += torch.cat(
+                    (
+                        (post_activation < self.hist_min).sum().unsqueeze(0),
+                        torch.histc(
+                            post_activation,
+                            bins=self.num_bins - 3,
+                            min=self.hist_min,
+                            max=self.hist_max,
+                        ),
+                        (pre_activation > self.hist_max).sum().unsqueeze(0),
+                    )
+                ).cpu()
+        else:
+            self.pre_mlp_hist_counts = torch.histogram(
+                pre_mlp, bins=self.histogram_bins
+            )[0]
+            self.pre_act_hist_counts += torch.histogram(
+                pre_activation, bins=self.histogram_bins
+            )[0]
+            self.post_act_hist_counts += torch.histogram(
+                post_activation, bins=self.histogram_bins
+            )[0]
+
         self.t += time.time() - start_time
         if self.visit_counts % 30 == 0:
             print(f"Time taken to collect stats: {self.t}s.")
@@ -945,16 +1071,12 @@ class MistralSparseSiluMLP(MistralMLP):
                 if (
                     self.is_stats
                 ):  # collect statistics for deciding threhold value to cut values of hidden vec before mlp
-                    self.pre_mlp_std = (x.std() + 0.6 * self.pre_mlp_std) / (
-                        self.visit_counts + 1
-                    )
-                    x[abs(x) < self.pre_mlp_threshold] = 0
+                    self.pre_mlp_std = (
+                        x.std() * 0.6 + self.visit_counts * self.pre_mlp_std
+                    ) / (self.visit_counts + 1)
                     self.count -= 1
+                x[abs(x) < self.pre_mlp_threshold] = 0
 
-            if self.count <= 1:
-                print("USING SparseSILU!!!!")
-                # print(x.mean(), x.std(), x.max(), x.min())
-                # print(f"pre mlp sparsity: {(x==0).float().mean()}")
             pre_act = self.gate_proj(x)
             post_act = self.act_fn(pre_act)
             if self.kill_sparse_swish_outputs:
@@ -1140,7 +1262,9 @@ class SparseMistralforCausalLM(MistralForCausalLM):
                 for idx, m in enumerate(self.model.layers):
                     if isinstance(m.mlp, MistralSparseSiluMLP):
                         m.mlp.dead_threshold = config.thresholds[idx]
-                        m.mlp.pre_mlp_threshold = config.pre_mlp_thresholds[idx]
+                        m.mlp.pre_mlp_threshold = getattr(
+                            config, "pre_mlp_thresholds", [0] * len(self.model.layers)
+                        )[idx]
                         m.mlp.sparse_act_fn.set_new_threshold(m.mlp.dead_threshold)
                         m.mlp.kill_sparse_swish_outputs = True
                         m.mlp.use_relu = getattr(config, "use_relu", False)
@@ -1149,7 +1273,7 @@ class SparseMistralforCausalLM(MistralForCausalLM):
                         m.self_attn,
                         (SparseMistralAttention, SparseMistralFlashAttention),
                     ):
-                        m.self_attn.pre_mlp_threshold = config.pre_attn_thresholds[idx]
+                        m.self_attn.pre_attn_threshold = config.pre_attn_thresholds[idx]
         if config.use_sparse_predictor:
             self.apply_sparse_predictor(init_svd=config.init_svd)
 
@@ -1158,8 +1282,8 @@ class SparseMistralforCausalLM(MistralForCausalLM):
             self,
             config=self.config,
             use_sparse_regularization=self.config.use_sparse_regularization,
-            cut_pre_mlp=self.config.cut_pre_mlp,
-            cut_pre_attn=self.config.cut_pre_attn,
+            cut_pre_mlp=getattr(self.config, "cut_pre_mlp", False),
+            cut_pre_attn=getattr(self.config, "cut_pre_attn", False),
         )
 
     def apply_sparse_predictor(self, init_svd: bool = True):
@@ -1414,7 +1538,9 @@ def activate_stats(model, is_collect_histogram: bool = True):
     for layer in model.model.layers:
         if isinstance(layer.mlp, MistralSparseSiluMLP):
             layer.mlp.activate_stats(is_collect_histogram=is_collect_histogram)
-        if isinstance(layer.self_attn, SparseMistralAttention):
+        if isinstance(
+            layer.self_attn, (SparseMistralAttention, SparseMistralFlashAttention)
+        ):
             layer.self_attn.activate_stats()
 
 
@@ -1422,6 +1548,10 @@ def deactivate_stats(model):
     for layer in model.model.layers:
         if isinstance(layer.mlp, MistralSparseSiluMLP):
             layer.mlp.deactivate_stats()
+        if isinstance(
+            layer.self_attn, (SparseMistralAttention, SparseMistralFlashAttention)
+        ):
+            layer.self_attn.deactivate_stats()
 
 
 def enable_sparse_silu(model):
@@ -1439,20 +1569,20 @@ def print_dead_neuron_stats(model):
             dead_percentage = layer.mlp.dead_percentage * 100
             agg_sparsity = layer.mlp.agg_sparsity * 100
             pre_mlp_sparsity = layer.mlp.pre_mlp_sparsity * 100
-            print(f"layer {i} sparsity: {dead_percentage:.3f}%")
-            print(f"layer {i} agg sparsity: {agg_sparsity:.3f}%")
-            print(f"layer {i} pre_mlp_sparsity: {pre_mlp_sparsity:.3f}%")
+            ds_print(f"layer {i} sparsity: {dead_percentage:.3f}%")
+            ds_print(f"layer {i} agg sparsity: {agg_sparsity:.3f}%")
+            ds_print(f"layer {i} pre_mlp_sparsity: {pre_mlp_sparsity:.3f}%")
 
             total_sparsity += dead_percentage
             counts += 1
         if isinstance(layer.self_attn, SparseMistralAttention) or isinstance(
             layer.self_attn, SparseMistralFlashAttention
         ):
-            print(
+            ds_print(
                 f"Attention layer {i} sparsity: {layer.self_attn.pre_attn_sparsity * 100: .3f}%"
             )
 
-    print(f"Total sparsity: {total_sparsity/counts: .3f}%")
+    ds_print(f"Total sparsity: {total_sparsity/counts: .3f}%")
     return total_sparsity / counts
 
 
@@ -1486,7 +1616,11 @@ def set_regularization_threshold(model, threshold: float = 0.1):
 
 
 def set_sparse_threshold(
-    model, sparsity_level: float, use_relu: bool = False, use_resilu: bool = False
+    model,
+    sparsity_level: float,
+    use_relu: bool = False,
+    use_resilu: bool = False,
+    use_adaptive: bool = True,
 ):
     assert not (use_relu and use_resilu), "It's not allowed to use both relu and resilu"
     for i, layer in enumerate(model.model.layers):
@@ -1513,12 +1647,22 @@ def set_sparse_threshold(
                 )  # TODO: find better param
 
             if layer.mlp.cut_pre_mlp:
-                layer.mlp.pre_mlp_threshold = layer.mlp.pre_mlp_std
+                layer.mlp.pre_mlp_threshold = get_threshold(
+                    layer.mlp.histogram_bins,
+                    layer.mlp.pre_mlp_hist_counts,
+                    sparsity_level,
+                )
+                print(f"layer {i} pre-mlp threshold: {layer.mlp.pre_mlp_threshold}")
 
         if isinstance(
             layer.self_attn, (SparseMistralAttention, SparseMistralFlashAttention)
         ):
-            layer.self_attn.pre_attn_threshold = layer.self_attn.pre_attn_std
+            layer.self_attn.pre_attn_threshold = get_threshold(
+                layer.self_attn.histogram_bins,
+                layer.self_attn.pre_attn_hist_counts,
+                sparsity_level,
+            )
+            print(f"layer {i} pre-attn threshold: {layer.self_attn.pre_attn_threshold}")
 
 
 def plot_histogram(
@@ -1526,10 +1670,27 @@ def plot_histogram(
     histogram_counts: torch.tensor,
     title: str = "Activation Distribution",
     fig_dir: str = "figures",
+    y_logscale: bool = False,
 ):
     plt.bar(
         bin_edges[:-1], histogram_counts, width=np.diff(bin_edges), edgecolor="black"
     )
+    if y_logscale:
+        plt.yscale("log")
+        # Find the indices of the histogram counts that are not zero
+        non_zero_indices = np.nonzero(histogram_counts)
+        if non_zero_indices[0] > 0:
+            # Find the left boundary as the first non-zero bin edge
+            first_non_zero_index = non_zero_indices[0]
+            left = bin_edges[first_non_zero_index]  # This is your left boundary
+            # Find the right boundary as the last non-zero bin edge
+            last_non_zero_index = non_zero_indices[-1]
+            right = bin_edges[last_non_zero_index + 1]  # This is your right boundary
+        else:
+            # Default to the first and last bin edge if all counts are zero
+            left = bin_edges[0]
+            right = bin_edges[-1]
+        plt.xlim(left, right)
     plt.title(title)
     plt.xlabel("Activation Value")
     plt.ylabel("Frequency")
@@ -1540,25 +1701,54 @@ def plot_histogram(
 
 
 def plot_act(model, fig_dir: str = "figures"):
+    # for i, layer in enumerate(model.model.layers):
+    #     if (
+    #         isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
+    #     ):  # Can set the threshold only the relevant statistics is collected.
+            # plot_title = f"Layer: {i} Pre-Activation Distribution"
+            # plot_histogram(
+            #     layer.mlp.histogram_bins, layer.mlp.pre_act_hist_counts, plot_title
+            # )
+            #
+            # plot_title = f"Layer: {i} Post-Activation Distribution"
+            # plot_histogram(
+            #     torch.nn.functional.silu(layer.mlp.histogram_bins),
+            #     layer.mlp.pre_act_hist_counts,
+            #     plot_title,
+            # )
+            #
+            # plot_title = f"Layer: {i} Post-Activation Absolute Distribution"
+            # plot_histogram(
+            #     layer.mlp.histogram_bins, layer.mlp.post_act_hist_counts, plot_title
+            # )
+
+            # plot_title = f"Layer: {i} Pre-MLP Absolute Distribution"
+            # plot_histogram(
+            #     layer.mlp.histogram_bins, layer.mlp.pre_mlp_hist_counts, plot_title
+            # )
     for i, layer in enumerate(model.model.layers):
         if (
-            isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
+            isinstance(layer.self_attn, SparseMistralAttention)
+            and layer.self_attn.is_stats
         ):  # Can set the threshold only the relevant statistics is collected.
-            plot_title = f"Layer: {i} Pre-Activation Distribution"
+            plot_title = f"Layer: {i} Pre-attention Distribution"
+            # plot_histogram(
+            #     layer.self_attn.histogram_bins,
+            #     layer.self_attn.pre_attn_hist_counts,
+            #     plot_title,
+            # )
+
+            plot_title = f"Layer: {i} Post QK_T Distribution"
             plot_histogram(
-                layer.mlp.histogram_bins, layer.mlp.pre_act_hist_counts, plot_title
+                layer.self_attn.histogram_bins,
+                layer.self_attn.post_qk_hist_counts,
+                plot_title,
+                y_logscale=True,
             )
 
-            plot_title = f"Layer: {i} Post-Activation Absolute Distribution"
-            plot_histogram(
-                layer.mlp.histogram_bins, layer.mlp.post_act_hist_counts, plot_title
-            )
 
-
-def save_act_hist(
-    model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"
-):
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
+def save_act_hist(model, dirname="/scr/jay/models/mistral/pre_finetune/cola_act_hist"):
+    os.makedirs(dirname, exist_ok=True)
     act_dict = {}
     for i, layer in enumerate(model.model.layers):
         if (
@@ -1566,32 +1756,63 @@ def save_act_hist(
         ):  # Can set the threshold only the relevant statistics is collected.
             act_dict[i] = (
                 layer.mlp.histogram_bins,
-                # layer.mlp.pre_mlp_hist_counts,
                 layer.mlp.pre_act_hist_counts,
                 layer.mlp.post_act_hist_counts,
+                layer.mlp.pre_mlp_hist_counts,
             )
     print("Saving activation histograms...\n\n\n")
-    torch.save(act_dict, filename)
+    torch.save(act_dict, dirname + "/mlp_layers.pt")
+
+    act_dict = {}
+    for i, layer in enumerate(model.model.layers):
+        if (
+            isinstance(layer.self_attn, SparseMistralAttention)
+            and layer.self_attn.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
+            act_dict[i] = (
+                layer.self_attn.histogram_bins,
+                layer.self_attn.pre_attn_hist_counts,
+                layer.self_attn.post_qk_hist_counts,
+            )
+    print("Saving activation histograms...\n\n\n")
+    torch.save(act_dict, dirname + "/attn_layers.pt")
 
 
-def load_act_hist(
-    model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"
-):
+def load_act_hist(model, dirname="/scr/jay/models/mistral/pre_finetune/cola_act_hist"):
     assert os.path.exists(
-        filename
-    ), f"{filename} does not exist when loading pre/post-activation histogram of SparseMistralSiluMLP."
+        dirname
+    ), f"{dirname} does not exist when loading pre/post-activation histogram of SparseMistralSiluMLP."
     print("Loading activation histograms...\n\n\n")
 
-    act_dict = torch.load(filename)
+    act_dict = torch.load(dirname + "/mlp_layers.pt")
     for i, layer in enumerate(model.model.layers):
         if (
             isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
         ):  # Can set the threshold only the relevant statistics is collected.
+            if len(act_dict[i]) == 4:
+                (
+                    layer.mlp.histogram_bins,
+                    layer.mlp.pre_act_hist_counts,
+                    layer.mlp.post_act_hist_counts,
+                    layer.mlp.pre_mlp_hist_counts,
+                ) = act_dict[i]
+            else:
+                (
+                    layer.mlp.histogram_bins,
+                    # layer.mlp.pre_mlp_hist_counts,
+                    layer.mlp.pre_act_hist_counts,
+                    layer.mlp.post_act_hist_counts,
+                ) = act_dict[i]
+    act_dict = torch.load(dirname + "/attn_layers.pt")
+    for i, layer in enumerate(model.model.layers):
+        if (
+            isinstance(layer.self_attn, SparseMistralAttention)
+            and layer.self_attn.is_stats
+        ):
             (
-                layer.mlp.histogram_bins,
-                # layer.mlp.pre_mlp_hist_counts,
-                layer.mlp.pre_act_hist_counts,
-                layer.mlp.post_act_hist_counts,
+                layer.self_attn.histogram_bins,
+                layer.self_attn.pre_attn_hist_counts,
+                layer.self_attn.post_qk_hist_counts,
             ) = act_dict[i]
 
 
