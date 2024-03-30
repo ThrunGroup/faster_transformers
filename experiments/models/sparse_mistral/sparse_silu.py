@@ -845,6 +845,7 @@ class MistralSparseSiluMLP(MistralMLP):
         self.pre_mlp_sparsity = 0
         self.is_stats = False
         self.visit_counts = 0
+        self.is_profile = False
 
         # Hyperparameters to tune
         self.dead_threshold = kwargs.pop("dead_threshold", 0)

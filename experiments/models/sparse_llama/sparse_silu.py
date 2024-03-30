@@ -74,6 +74,7 @@ class LlamaSparseSiluMLP(LlamaMLP):
         self.dead_percentage = 0
         self.is_stats = False
         self.visit_counts = 0
+        self.is_profile = False
 
         # Hyperparameters to tune
         self.dead_threshold = kwargs.pop("dead_threshold", 0)
