@@ -100,6 +100,6 @@ if __name__ == "__main__":
     if args.base == "None":
         print("Please input base_model_name")
         raise ValueError
-    act_path = os.path.join(args.act, "sparse_mistral_7b_hf2/refined_web.pt")
-    base_path = os.path.join(args.base, "sparse_mistral_7b_hf2_refined_web_50p_no_adapter_2600steps")
+    act_path = os.path.join(args.act, "sparse_mistral_7b/refined_web.pt")
+    base_path = os.path.join(args.base, "sparse_mistral_7b_refined_web_50p_no_adapter_2600steps")
     benchmark_decode(args.B, args.bm, args.method, args.gen, act_path, base_path)
