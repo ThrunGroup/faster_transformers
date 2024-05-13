@@ -9,7 +9,6 @@ pip install flash-attn --no-build-isolation
 cd flash_gemv
 pip install -e .
 cd ..
-echo "Hello"
 
 # Get the root folder for faster_transformer
 export PYTHONPATH=${PYTHONPATH}:$PWD
