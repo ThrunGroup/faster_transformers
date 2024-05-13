@@ -47,7 +47,7 @@ def benchmark_decode(B, bm, gen_len):
                     do_sample=True, 
                     temperature=0.7, 
                     num_beams=bm
-                ) 
+                )
             except RuntimeError as _:
                 print("Time interval is too short!")
                 continue

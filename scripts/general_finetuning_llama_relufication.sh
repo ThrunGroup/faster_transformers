@@ -16,7 +16,7 @@ for ((i=1; i<=max_iterations; i++)); do
       --use_wandb --max_steps $current_steps --model_save \
       --train_batch_size 1 --test_batch_size 2 --use_flash_attn \
       --gradient_accumulation_steps 4 --ds_config_path ds_config.json \
-      --push_to_hub --max_seq_length 1024  \
+      --max_seq_length 1024  \
       --output_dir $1 \
       --gradient_checkpointing \
       --is_first_training $is_first_training \

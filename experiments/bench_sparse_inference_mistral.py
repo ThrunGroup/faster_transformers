@@ -79,7 +79,8 @@ def benchmark_decode(B, bm, method, gen_len, act_hist_path, base_model_name):
                     do_sample=True, 
                     temperature=0.7, 
                     num_beams=bm
-                ) 
+                )
+
             except RuntimeError as _:
                 print("Time interval is too short!")
                 continue

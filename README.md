@@ -14,6 +14,7 @@ To reproduce the experimental results and figures presented in our work, please 
 Ensure you have the following prerequisites installed:
 - Bash shell (Unix/Linux/Mac)
 - Required Python packages (listed in `requirements.txt`)
+- Set accelerate configuration file based on your environment by running `accelerate config` 
 
 ### Steps
 

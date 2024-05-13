@@ -2941,6 +2941,7 @@ class GenerationMixin:
                 elapsed_time_ms = start_event.elapsed_time(end_event)
                 count = count - 1
                 print("Context Length: {}; Generation Length: {}; Elapsed time: {} ms; Throughput: {:.2f} tokens/s".format(context_length, count, elapsed_time_ms, count / (elapsed_time_ms / 1000)))
+                throughput = count / (elapsed_time_ms / 1000)
                 break
 
         if streamer is not None:

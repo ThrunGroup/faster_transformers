@@ -5,7 +5,7 @@ deepspeed --master_port 12329 experiments/pretrain_sparse_model.py \
   --use_sparse_model --targeted_sparsity 0.5 \
   --set_sparsity_aware_threshold --print_sparsity --is_plot \
   --max_steps 1 \
-  --train_batch_size 1 --test_batch_size 4 --use_flash_attn \
+  --train_batch_size 1 --test_batch_size 1 --use_flash_attn \
   --ds_config_path ds_config.json --max_seq_length 1024  \
   --output_dir $1 --is_first_training 1 \
   --gradient_checkpointing \
@@ -17,7 +17,7 @@ deepspeed --master_port 12330 experiments/pretrain_sparse_model.py \
   --use_sparse_model --targeted_sparsity 0.5 \
   --set_sparsity_aware_threshold --print_sparsity --is_plot \
   --max_steps 1 \
-  --train_batch_size 1 --test_batch_size 4 --use_flash_attn \
+  --train_batch_size 1 --test_batch_size 1 --use_flash_attn \
   --ds_config_path ds_config.json --max_seq_length 1024  \
   --output_dir $1 --is_first_training 1 \
   --gradient_checkpointing \

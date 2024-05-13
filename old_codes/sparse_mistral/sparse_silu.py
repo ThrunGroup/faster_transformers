@@ -965,8 +965,6 @@ class MistralSparseSiluMLP(MistralMLP):
             else:
                 post_act = self.resilu(self.gate_proj(x))
             self.count += 1
-            if self.count <= 1:
-                print("USING RELU or ReSiLU!!!!")
 
             if self.is_stats:
                 dead_neurons = post_act == 0
@@ -1021,8 +1019,6 @@ class MistralSparseSiluMLP(MistralMLP):
                         self.collect_stats(x, pre_act, post_act)
 
                 post_act[dead_neurons] = 0
-            if self.count == 10:
-                print(f"sparsity: {dead_percentage}/ pre-activation sparsity: {(x==0).float().mean()}")
 
             out = self.down_proj(post_act * self.up_proj(x))
             if self.use_sparse_regularization:
@@ -1405,7 +1401,7 @@ def apply_mistral_sparse_decoder_layer(
                     init_svd=init_svd,
                 )
             )
-            print(f"{layer_idx}th mlp layer activation: {layer.mlp.sparse_act_fn}")
+            ds_print(f"{layer_idx}th mlp layer activation: {layer.mlp.sparse_act_fn}")
         else:
             new_layers.append(layer)
     model.model.layers = nn.ModuleList(new_layers)
@@ -1444,7 +1440,7 @@ def deactivate_stats(model):
 
 
 def enable_sparse_silu(model):
-    print("Enabling SparseSilu")
+    ds_print("Enabling SparseSilu")
     for i, layer in enumerate(model.model.layers):
         if isinstance(layer.mlp, MistralSparseSiluMLP):
             layer.mlp.kill_sparse_swish_outputs = True
@@ -1533,7 +1529,7 @@ def set_sparse_threshold(
                     layer.mlp.pre_mlp_hist_counts,
                     sparsity_level,
                 )
-                print(f"layer {i} pre-mlp threshold: {layer.mlp.pre_mlp_threshold}")
+                ds_print(f"layer {i} pre-mlp threshold: {layer.mlp.pre_mlp_threshold}")
 
         if isinstance(layer.self_attn, (SparseMistralAttention, SparseMistralFlashAttention)):
             layer.self_attn.pre_attn_threshold = get_threshold(
@@ -1541,7 +1537,7 @@ def set_sparse_threshold(
                 layer.self_attn.pre_attn_hist_counts,
                 sparsity_level,
             )
-            print(f"layer {i} pre-attn threshold: {layer.self_attn.pre_attn_threshold}")
+            ds_print(f"layer {i} pre-attn threshold: {layer.self_attn.pre_attn_threshold}")
 
 
 def plot_histogram(
@@ -1578,31 +1574,6 @@ def plot_histogram(
 
 
 def plot_act(model, fig_dir: str = "figures"):
-    # for i, layer in enumerate(model.model.layers):
-    #     if (
-    #         isinstance(layer.mlp, MistralSparseSiluMLP) and layer.mlp.is_stats
-    #     ):  # Can set the threshold only the relevant statistics is collected.
-    # plot_title = f"Layer: {i} Pre-Activation Distribution"
-    # plot_histogram(
-    #     layer.mlp.histogram_bins, layer.mlp.pre_act_hist_counts, plot_title
-    # )
-    #
-    # plot_title = f"Layer: {i} Post-Activation Distribution"
-    # plot_histogram(
-    #     torch.nn.functional.silu(layer.mlp.histogram_bins),
-    #     layer.mlp.pre_act_hist_counts,
-    #     plot_title,
-    # )
-    #
-    # plot_title = f"Layer: {i} Post-Activation Absolute Distribution"
-    # plot_histogram(
-    #     layer.mlp.histogram_bins, layer.mlp.post_act_hist_counts, plot_title
-    # )
-
-    # plot_title = f"Layer: {i} Pre-MLP Absolute Distribution"
-    # plot_histogram(
-    #     layer.mlp.histogram_bins, layer.mlp.pre_mlp_hist_counts, plot_title
-    # )
     for i, layer in enumerate(model.model.layers):
         if (
             isinstance(layer.self_attn, SparseMistralAttention) and layer.self_attn.is_stats
@@ -1636,7 +1607,7 @@ def save_act_hist(model, dirname="/scr/jay/models/mistral/pre_finetune/cola_act_
                 layer.mlp.post_act_hist_counts,
                 layer.mlp.pre_mlp_hist_counts,
             )
-    print("Saving activation histograms...\n\n\n")
+    ds_print("Saving activation histograms...\n\n\n")
     torch.save(act_dict, dirname + "/mlp_layers.pt")
 
     act_dict = {}
@@ -1649,7 +1620,7 @@ def save_act_hist(model, dirname="/scr/jay/models/mistral/pre_finetune/cola_act_
                 layer.self_attn.pre_attn_hist_counts,
                 layer.self_attn.post_qk_hist_counts,
             )
-    print("Saving activation histograms...\n\n\n")
+    ds_print("Saving activation histograms...\n\n\n")
     torch.save(act_dict, dirname + "/attn_layers.pt")
 
 
@@ -1657,7 +1628,7 @@ def load_act_hist(model, dirname="/scr/jay/models/mistral/pre_finetune/cola_act_
     assert os.path.exists(
         dirname
     ), f"{dirname} does not exist when loading pre/post-activation histogram of SparseMistralSiluMLP."
-    print("Loading activation histograms...\n\n\n")
+    ds_print("Loading activation histograms...\n\n\n")
 
     act_dict = torch.load(dirname + "/mlp_layers.pt")
     for i, layer in enumerate(model.model.layers):
@@ -1698,7 +1669,6 @@ def enable_last_k_modules(model, start_module_idx: int):
         module.self_attn.layer_idx = new_idx
         new_modules.append(module)
         new_idx += 1
-        print(module.layer_idx)
 
     model.model.layers = nn.ModuleList(new_modules)
 
@@ -1713,6 +1683,5 @@ def enable_first_k_modules(model, end_module_idx: int):
         module.self_attn.layer_idx = new_idx
         new_modules.append(module)
         new_idx += 1
-        print(module.layer_idx)
 
     model.model.layers = nn.ModuleList(new_modules)

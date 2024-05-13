@@ -273,6 +273,12 @@ def parse_args():
         default=8096,
         help="maximum seq length of an input sequence",
     )
+    parser.add_argument(
+        "--plot_post_training_sparsity",
+        action = 'store_true',
+        default=False,
+        help="Whether to plot activation sparsity after training"
+    )
     parser.add_argument("--use_lora", action=BooleanOptionalAction)
     parser.set_defaults(use_lora=True)
 

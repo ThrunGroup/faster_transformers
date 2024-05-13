@@ -19,7 +19,7 @@ for targeted_sparsity in "${targeted_sparsity_list[@]}"; do
         --set_sparsity_aware_threshold --print_sparsity \
         --use_wandb --max_steps $current_steps --model_save \
         --train_batch_size 1 --test_batch_size 4 --use_flash_attn --gradient_accumulation_steps 8 \
-        --ds_config_path ds_config.json --push_to_hub --max_seq_length 1024  \
+        --ds_config_path ds_config.json --max_seq_length 1024  \
         --output_dir $1 --is_first_training $is_first_training \
         --gradient_checkpointing \
         --model_name $model_name \

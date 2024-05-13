@@ -71,3 +71,4 @@ if __name__ == "__main__":
     with open(args.filename, "a") as f:
         print(f"{1-k_fp32/intermediate_size},{k_fp32},{time_dense_mlp},{time_baseline},{time_direct},{time_direct_triton},{time_direct_optimal}", file=f)
 
+
