@@ -1,21 +1,30 @@
 import argparse
 import torch
+import os
 from torch.utils.data import DataLoader
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
 )
+from tqdm import tqdm
 from data.get_dataset import get_dataset
 from utils.constants import LLAMA, REFINED_WEB
 
+
 def benchmark_decode(B, bm, gen_len):
+    save_dir = os.getenv("CATS_RESPATH", "result_sub")
+    save_path = os.path.join(save_dir, "throughput.csv")
+
+    with open(save_path, "a") as f:
+        print(
+            "Llama2_base",
+            file=f,
+        )
+
     path = "meta-llama/Llama-2-7b-hf"
     device = torch.device("cuda")
     model = AutoModelForCausalLM.from_pretrained(
-        path, 
-        trust_remote_code=True,
-        torch_dtype=torch.float32,
-        device_map='auto'
+        path, trust_remote_code=True, torch_dtype=torch.float32, device_map="auto"
     )
     tokenizer = AutoTokenizer.from_pretrained(path)
     tokenizer.pad_token = tokenizer.eos_token
@@ -31,23 +40,31 @@ def benchmark_decode(B, bm, gen_len):
     for m in model.model.layers:
         print(m.mlp.down_proj.weight.dtype)
     print(len(dataloader))
+    count = 0
+    max_count = 50
     with torch.no_grad():
-        for batch in dataloader:
-            input_ids = batch["input_ids"].to(device)  # Move input tensors to the device
-            max_lengths = input_ids.size(1) + gen_len   
+        for batch in tqdm(dataloader, total=max_count):
+            count += 1
+            if count > max_count:
+                break
+            input_ids = batch["input_ids"].to(
+                device
+            )  # Move input tensors to the device
+            max_lengths = input_ids.size(1) + gen_len
             try:
                 outputs = model.generate(
                     input_ids=input_ids,
                     max_length=max_lengths,
                     pad_token_id=tokenizer.eos_token_id,
                     use_cache=True,
-                    do_sample=True, 
-                    temperature=0.7, 
-                    num_beams=bm
+                    do_sample=True,
+                    temperature=0.7,
+                    num_beams=bm,
                 )
             except RuntimeError as _:
                 print("Time interval is too short!")
                 continue
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

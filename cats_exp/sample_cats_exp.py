@@ -23,7 +23,7 @@ def ce_loss(inputs, logits):
     return loss
 
 
-def sample_cats_zero_shot(model_dir=MISTRAL_7B, wrapped_model_class_name="MistralForCausalLM", save_dir="cats/mistral_cats_zero_shot"):
+def sample_cats_zero_shot(model_dir=MISTRAL_7B, wrapped_model_class_name="MistralForCausalLM", save_dir="cats_exp/mistral_cats_zero_shot"):
     # Define model
     config = AutoConfig.from_pretrained(model_dir)
 

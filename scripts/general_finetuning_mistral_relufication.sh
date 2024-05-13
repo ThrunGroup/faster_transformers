@@ -34,7 +34,7 @@ for ((i=1; i<=max_iterations; i++)); do
         --tasks openbookqa,arc_easy,winogrande,hellaswag,arc_challenge,piqa,boolq,sciq \
         --batch_size 16 \
         --log_samples \
-        --output_path output/relu_llama_${current_steps}steps
+        --output_path output/relu_mistral_${current_steps}steps
 done
 
 

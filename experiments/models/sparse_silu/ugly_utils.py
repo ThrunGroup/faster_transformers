@@ -19,6 +19,8 @@ import os
 import copy
 from transformers import Trainer
 from typing import Any, Dict, Union
+from trl import SFTTrainer
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -587,8 +589,6 @@ class MistralSparseSiluMLP(MistralMLP):
         elif self.use_relu:
             post_act = self.relu(self.gate_proj(x))
             self.count += 1
-            if self.count <= 1:
-                print("USING RELU!!!!")
 
             if self.is_stats:
                 dead_neurons = post_act == 0
@@ -607,8 +607,6 @@ class MistralSparseSiluMLP(MistralMLP):
 
         else:
             self.count += 1
-            if self.count <= 1:
-                ds_print("USING SparseSILU!!!!")
             pre_act = self.gate_proj(x)
             post_act = self.act_fn(pre_act)
             if self.kill_sparse_swish_outputs:
@@ -707,7 +705,6 @@ class SparseMistralDecoderLayer(MistralDecoderLayer):
     ) -> Tuple[
         torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]
     ]:
-        print("hidden_states shape: ", hidden_states.shape)
         if "padding_mask" in kwargs:
             warnings.warn(
                 "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
@@ -992,8 +989,6 @@ class LlamaSparseSiluMLP(LlamaMLP):
                     if self.is_collect_histogram:  # Padded dataset
                         self.collect_stats(pre_act, post_act)
 
-                if self.count <= 1:
-                    ds_print("KILL!")
                 post_act[dead_neurons] = 0
 
             out = self.down_proj(post_act * self.up_proj(x))
@@ -1065,7 +1060,6 @@ class LlamaSparseDecoderLayer(LlamaDecoderLayer):
     ) -> Tuple[
         torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]
     ]:
-        print("hidden_states shape: ", hidden_states.shape)
         if "padding_mask" in kwargs:
             warnings.warn(
                 "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
@@ -1258,6 +1252,93 @@ class GradualSparsificationScheduler(TrainerCallback):
 
 # Trainer
 
+class SparseSFTTTrainer(SFTTrainer):
+    def __init__(self, *args, **kwargs):
+        self.regularization_coefficient = kwargs.pop("regularization_coefficient", 10)
+        self.use_sparse_regularization = kwargs.pop("use_sparse_regularization", False)
+        self.use_spm_loss = False
+        self.freeze_original_weights = False
+        self.regularization_type = kwargs.pop("regularization_type", "L1 positive activation")
+        assert self.regularization_type in [
+            "L2 activation",
+            "L1 positive activation",
+        ], f"Invalid regularization type: {self.regularization_type}"
+        self.sparse_layers = []
+        self.sparse_decoder_layers = []
+        super(SparseSFTTTrainer, self).__init__(*args, **kwargs)
+
+    def initialize_sparse_silu_layers(self, model):
+        self.sparse_layers = [m for m in model.modules() if isinstance(m, MistralSparseSiluMLP)]
+
+    def initialize_sparse_decoder_layers(self, model):
+        self.sparse_decoder_layers = [m for m in model.modules() if isinstance(m, SparseMistralDecoderLayer)]
+
+    def training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]) -> torch.Tensor:
+        """
+        Override the huggingface's training_step function to add a regularization term.
+        A regularization term is computed with intermediate values, which are freed after "backward()."
+        You need to set `retain_graph=True` inside `backward` function to keep the values.
+        """
+        model.train()
+        inputs = self._prepare_inputs(inputs)
+
+        with self.compute_loss_context_manager():
+            loss = self.compute_loss(model, inputs)
+
+        if self.args.n_gpu > 1:
+            loss = loss.mean()  # mean() to average on multi-gpu parallel training
+        if not self.freeze_original_weights:
+            if loss is not None:
+                self.accelerator.backward(loss, retain_graph=False)
+
+        if self.use_sparse_regularization:
+            regularization_loss = self.compute_regularization(model)
+            if self.args.n_gpu > 1:
+                regularization_loss = regularization_loss.mean()
+            if regularization_loss is not None:
+                self.accelerator.backward(regularization_loss, retain_graph=True)
+            loss += regularization_loss
+
+        if self.use_spm_loss:
+            spm_loss = self.compute_spm_loss(model)
+            if self.args.n_gpu > 1:
+                spm_loss = spm_loss.mean()
+            if spm_loss is not None:
+                self.accelerator.backward(spm_loss, retain_graph=False)
+            loss += spm_loss
+
+        return loss.detach() / self.args.gradient_accumulation_steps
+
+    def compute_regularization(self, model):
+        """
+        Compute a sparse regularization loss for SiLU
+        """
+        loss = 0
+        if len(self.sparse_layers) == 0:
+            self.initialize_sparse_silu_layers(model)
+        num_layers = len(self.sparse_layers)
+
+        for module in self.sparse_layers:
+            if module.activation_norm is not None:
+                loss += module.activation_norm
+
+        loss /= num_layers
+        loss *= self.regularization_coefficient
+
+        if self.state.global_step % 20 == 0 and loss != 0:
+            print("Negative relularizer loss: ", loss.item())
+        return loss
+
+    def compute_spm_loss(self, model):
+        loss = 0
+        if len(self.sparse_decoder_layers) == 0:
+            self.initialize_sparse_decoder_layers(model)
+        for module in self.sparse_decoder_layers:
+            if module.distill_loss != None:
+                loss += module.distill_loss
+        if self.state.global_step % 20 == 0 and loss != 0:
+            print("Sparse Predictor Distillation loss: ", loss.item())
+        return loss
 
 class SparseTrainer(Trainer):
     def __init__(self, *args, **kwargs):

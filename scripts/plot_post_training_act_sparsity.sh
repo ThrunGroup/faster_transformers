@@ -1,1 +1,1 @@
-python experiments plot_act_sparsity.py
+python experiments/plot_act_sparsity.py

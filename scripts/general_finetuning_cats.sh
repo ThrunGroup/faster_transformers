@@ -9,7 +9,8 @@ model_name="sparse_llama_7b_hf2"
 base_model_repo_id="meta-llama/Llama-2-7b-hf"
 
 for targeted_sparsity in "${targeted_sparsity_list[@]}"; do
-  echo "Targeted sparsity: $targeted_sparsity"
+  sparsity_percentage=$(printf "%.0f" $(echo "$targeted_sparsity * 100" | bc))
+  echo "Targeted Sparsity Percentage: $sparsity_percentage"
   for ((i=1; i<=max_iterations; i++)); do
       current_steps=$((initial_steps + i * step_increment))  # Calculate the number of steps trained so far
 
@@ -37,7 +38,7 @@ for targeted_sparsity in "${targeted_sparsity_list[@]}"; do
           --tasks openbookqa,arc_easy,winogrande,hellaswag,arc_challenge,piqa,boolq,sciq \
           --batch_size 32 \
           --log_samples \
-          --output_path output/llama_sparse_50p_${current_steps}steps2
+          --output_path output/llama_sparse_${sparsity_percentage}p_${current_steps}steps2
   done
 done
 

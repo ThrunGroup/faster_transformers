@@ -48,3 +48,4 @@ seaborn
 torch
 peft
 lm_eval
+trl

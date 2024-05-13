@@ -6,9 +6,21 @@ from torch.utils.data import DataLoader
 from utils.constants import MISTRAL_7B, REFINED_WEB
 from experiments.models.sparse_silu.ugly_utils import *
 from experiments.data.get_dataset import get_dataset
+from tqdm import tqdm
 import argparse
+import os
+
 
 def prepare_sparse_model(base_model_name):
+    save_dir = os.getenv("CATS_RESPATH", "result_sub")
+    save_path = os.path.join(save_dir, "throughput.csv")
+
+    with open(save_path, "a") as f:
+        print(
+            "Mistral_sparse",
+            file=f,
+        )
+
     BaseConfig = LlamaConfig
     SparseConfig = SparseLlamaConfig
     SparseCausalLM = SparseLlamaForCausalLM
@@ -23,7 +35,7 @@ def prepare_sparse_model(base_model_name):
         config=config,
         torch_dtype=torch.float32,
         # attn_implementation="flash_attention_2",
-        device_map='auto',
+        device_map="auto",
     )
     model.config_class = SparseConfig
     apply_sparse_silu_mlp(model, model.config, use_sparse_regularization=False)
@@ -36,6 +48,7 @@ def prepare_sparse_model(base_model_name):
     tokenizer.padding_side = "left"
 
     return model, tokenizer
+
 
 def benchmark_decode(B, bm, method, gen_len, act_hist_path, base_model_name):
     device = torch.device("cuda")
@@ -66,19 +79,26 @@ def benchmark_decode(B, bm, method, gen_len, act_hist_path, base_model_name):
             print(m.mlp.down_proj.weight.dtype)
     # Generate tokens in batch
     model.eval()  # Set the model to evaluation mode
+    count = 0
+    max_count = 50
     with torch.no_grad():
-        for batch in dataloader:
-            input_ids = batch["input_ids"].to(device)  # Move input tensors to the device
-            max_lengths = input_ids.size(1) + gen_len   
+        for batch in tqdm(dataloader, total=max_count):
+            count += 1
+            if count > max_count:
+                break
+            input_ids = batch["input_ids"].to(
+                device
+            )  # Move input tensors to the device
+            max_lengths = input_ids.size(1) + gen_len
             try:
                 outputs = model.generate(
                     input_ids=input_ids,
                     max_length=max_lengths,
                     pad_token_id=tokenizer.eos_token_id,
                     use_cache=True,
-                    do_sample=True, 
-                    temperature=0.7, 
-                    num_beams=bm
+                    do_sample=True,
+                    temperature=0.7,
+                    num_beams=bm,
                 )
 
             except RuntimeError as _:
@@ -102,5 +122,7 @@ if __name__ == "__main__":
         print("Please input base_model_name")
         raise ValueError
     act_path = os.path.join(args.act, "sparse_mistral_7b/refined_web.pt")
-    base_path = os.path.join(args.base, "sparse_mistral_7b_refined_web_50p_no_adapter_2600steps")
+    base_path = os.path.join(
+        args.base, "sparse_mistral_7b_refined_web_50p_no_adapter_2600steps"
+    )
     benchmark_decode(args.B, args.bm, args.method, args.gen, act_path, base_path)

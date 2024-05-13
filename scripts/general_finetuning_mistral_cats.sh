@@ -9,7 +9,8 @@ model_name="sparse_mistral_7b"
 base_model_repo_id="mistralai/Mistral-7B-v0.1"
 
 for targeted_sparsity in "${targeted_sparsity_list[@]}"; do
-  echo "Targeted sparsity: $targeted_sparsity"
+  sparsity_percentage=$(printf "%.0f" $(echo "$targeted_sparsity * 100" | bc))
+  echo "Targeted Sparsity Percentage: $sparsity_percentage"
   is_first_training = 1
   for ((i=1; i<=max_iterations; i++)); do
       current_steps=$((initial_steps + i * step_increment))  # Calculate the number of steps trained so far
@@ -38,7 +39,7 @@ for targeted_sparsity in "${targeted_sparsity_list[@]}"; do
           --tasks openbookqa,arc_easy,winogrande,hellaswag,arc_challenge,piqa,boolq,sciq \
           --batch_size 32 \
           --log_samples \
-          --output_path output/mistral_sparse_${targeted_sparsity}p_${current_steps}steps2
+          --output_path output/mistral_sparse_${sparsity_percentage}p_${current_steps}steps2
   done
 done
 

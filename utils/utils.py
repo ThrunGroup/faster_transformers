@@ -62,6 +62,7 @@ def get_datetime(only_date: bool = False):
     else:
         return now.strftime("%Y-%m-%d")
 
+
 def _get_submodules(model, key):  # Copied from peft package github repo
     parent = model.get_submodule(".".join(key.split(".")[:-1]))
     target_name = key.split(".")[-1]
@@ -69,9 +70,12 @@ def _get_submodules(model, key):  # Copied from peft package github repo
     return parent, target, target_name
 
 
-def plot_post_training_sp(cats_50_sparsity, cats_70_sparsity, cats_90_sparsity, model_name: str = "Mistral-7B"):
-    assert len(cats_50_sparsity)==len(cats_70_sparsity)==len(cats_90_sparsity), \
-        "The lengths of cats_50_sparsity, cats_70_sparsity, and cats_90_sparsity must be the same."
+def plot_post_training_sp(
+    cats_50_sparsity, cats_70_sparsity, cats_90_sparsity, model_name: str = "Mistral-7B"
+):
+    assert (
+        len(cats_50_sparsity) == len(cats_70_sparsity) == len(cats_90_sparsity)
+    ), "The lengths of cats_50_sparsity, cats_70_sparsity, and cats_90_sparsity must be the same."
     # Data setup
     layer_indices = list(range(len(cats_50_sparsity)))
 
@@ -81,7 +85,9 @@ def plot_post_training_sp(cats_50_sparsity, cats_70_sparsity, cats_90_sparsity, 
     sparsity_per_layer = [cats_50_sparsity, cats_70_sparsity, cats_90_sparsity]
 
     for idx in range(3):
-        average_sparsity[idx] = sum(sparsity_per_layer[idx])/ len(sparsity_per_layer[idx])
+        average_sparsity[idx] = sum(sparsity_per_layer[idx]) / len(
+            sparsity_per_layer[idx]
+        )
     markers = ["o", "s", "D"]
 
     # Plotting
@@ -119,5 +125,7 @@ def plot_post_training_sp(cats_50_sparsity, cats_70_sparsity, cats_90_sparsity, 
     plt.title(f"Activation Sparsity of {model_name}")
 
     plt.tight_layout()
-    plt.savefig(f"figures/{model_name}_post_training_sp.png")
+    parent_dir = os.getenv("CATS_RESPATH", "")
+    parent_dir = os.path.join(parent_dir, "figures")
+    plt.savefig(f"{parent_dir}/fig5:{model_name}_post_training_sp.png")
     plt.close()
