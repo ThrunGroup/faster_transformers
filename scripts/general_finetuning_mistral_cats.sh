@@ -1,8 +1,8 @@
 #!/bin/bash
 
-initial_steps=5
-step_increment=5
-max_iterations=2  # This will train up to 2000 steps in increments of 500
+initial_steps=100
+step_increment=250
+max_iterations=10  # This will train up to 2000 steps in increments of 500
 is_first_training=1
 targeted_sparsity_list=(0.5 0.7 0.9)
 model_name="sparse_mistral_7b"

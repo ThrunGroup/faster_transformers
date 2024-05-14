@@ -141,14 +141,12 @@ def plot(
     plt.tight_layout()
 
     result_root = os.getenv("CATS_RESPATH", "result_sub")
-    dirname = os.path.join(result_root, "sparse_silu/figures")
+    dirname = os.path.join(result_root, "figures")
     os.makedirs(dirname, exist_ok=True)
     plt.savefig(
-        f"{dirname}/{model_name}_training_steps_vs_zero_shot_accuracy.png", dpi=300
+        f"{dirname}/fig1: {model_name}_training_steps_vs_zero_shot_accuracy.png", dpi=300
     )
     plt.show()
-    print(f"{dirname}/{model_name}_training_steps_vs_zero_shot_accuracy.png")
-
 
 if __name__ == "__main__":
     # LLAMA
