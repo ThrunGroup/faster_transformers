@@ -3,7 +3,7 @@
 # 50% sparsity
 initial_steps=1
 step_increment=0
-max_iterations=1  # This will train up to 2000 steps in increments of 500
+max_iterations=1
 is_first_training=1
 targeted_sparsity=0.5
 
@@ -26,7 +26,7 @@ done
 # 70% sparsity
 initial_steps=1
 step_increment=0
-max_iterations=1  # This will train up to 2000 steps in increments of 500
+max_iterations=1
 is_first_training=1
 targeted_sparsity=0.7
 
@@ -49,7 +49,7 @@ done
 # 90% sparsity
 initial_steps=1
 step_increment=0
-max_iterations=1  # This will train up to 2000 steps in increments of 500
+max_iterations=1
 is_first_training=1
 targeted_sparsity=0.9
 

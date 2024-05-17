@@ -6,3 +6,4 @@ thrunlab/*
 ckpt/*
 scores/
 figures/
+weights/*

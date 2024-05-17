@@ -186,8 +186,12 @@ def get_sparse_layers(model):
     return sparse_layers
 
 
-def get_threshold(bin_edges: torch.tensor, histogram_counts: torch.tensor, sparsity_level: float):  # Only for L1 Regularization
-    assert len(bin_edges.shape) == len(histogram_counts.shape) == 1, "bin_edges and histogram are expected to be 1-dimensional."
+def get_threshold(
+    bin_edges: torch.tensor, histogram_counts: torch.tensor, sparsity_level: float
+):  # Only for L1 Regularization
+    assert (
+        len(bin_edges.shape) == len(histogram_counts.shape) == 1
+    ), "bin_edges and histogram are expected to be 1-dimensional."
     histogram_counts /= histogram_counts.sum()
     threshold_idx = torch.searchsorted(histogram_counts.cumsum(0), sparsity_level, side="right")
 
@@ -197,14 +201,18 @@ def get_threshold(bin_edges: torch.tensor, histogram_counts: torch.tensor, spars
 def set_regularization_threshold(model, threshold: float = 0.1):
     SparseMLP = get_mlp_class(model)
     for i, layer in enumerate(model.model.layers):
-        if isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats:  # Can set the threshold only the relevant statistics is collected.
+        if (
+            isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
             layer.mlp.regularization_threshold = threshold  # TODO: find better param
 
 
 def set_sparse_threshold(model, sparsity_level: float, use_relu: bool = False):
     SparseMLP = get_mlp_class(model)
     for i, layer in enumerate(model.model.layers):
-        if isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats:  # Can set the threshold only the relevant statistics is collected.
+        if (
+            isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
             if use_relu:
                 layer.mlp.sparse_act_fn = nn.ReLU()
                 layer.mlp.use_relu = True
@@ -238,7 +246,9 @@ def plot_act(model, fig_dir: str = "figures"):
     SparseMLP = get_mlp_class(model)
 
     for i, layer in enumerate(model.model.layers):
-        if isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats:  # Can set the threshold only the relevant statistics is collected.
+        if (
+            isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
             plot_title = f"Layer: {i} Pre-Activation Distribution"
             plot_histogram(layer.mlp.histogram_bins, layer.mlp.pre_act_hist_counts, plot_title)
 
@@ -251,7 +261,9 @@ def save_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     act_dict = {}
     for i, layer in enumerate(model.model.layers):
-        if isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats:  # Can set the threshold only the relevant statistics is collected.
+        if (
+            isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
             act_dict[i] = (
                 layer.mlp.histogram_bins,
                 layer.mlp.pre_act_hist_counts,
@@ -262,14 +274,18 @@ def save_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act
 
 
 def load_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"):
-    assert os.path.exists(filename), f"{filename} does not exist when loading pre/post-activation histogram of SparseMistralSiluMLP."
+    assert os.path.exists(
+        filename
+    ), f"{filename} does not exist when loading pre/post-activation histogram of SparseMistralSiluMLP."
     SparseMLP = get_mlp_class(model)
 
     print("Loading activation histograms...\n\n\n")
 
     act_dict = torch.load(filename)
     for i, layer in enumerate(model.model.layers):
-        if isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats:  # Can set the threshold only the relevant statistics is collected.
+        if (
+            isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats
+        ):  # Can set the threshold only the relevant statistics is collected.
             (
                 layer.mlp.histogram_bins,
                 layer.mlp.pre_act_hist_counts,

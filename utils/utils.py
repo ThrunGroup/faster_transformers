@@ -70,9 +70,7 @@ def _get_submodules(model, key):  # Copied from peft package github repo
     return parent, target, target_name
 
 
-def plot_post_training_sp(
-    cats_50_sparsity, cats_70_sparsity, cats_90_sparsity, model_name: str = "Mistral-7B"
-):
+def plot_post_training_sp(cats_50_sparsity, cats_70_sparsity, cats_90_sparsity, model_name: str = "Mistral-7B"):
     assert (
         len(cats_50_sparsity) == len(cats_70_sparsity) == len(cats_90_sparsity)
     ), "The lengths of cats_50_sparsity, cats_70_sparsity, and cats_90_sparsity must be the same."
@@ -85,9 +83,7 @@ def plot_post_training_sp(
     sparsity_per_layer = [cats_50_sparsity, cats_70_sparsity, cats_90_sparsity]
 
     for idx in range(3):
-        average_sparsity[idx] = sum(sparsity_per_layer[idx]) / len(
-            sparsity_per_layer[idx]
-        )
+        average_sparsity[idx] = sum(sparsity_per_layer[idx]) / len(sparsity_per_layer[idx])
     markers = ["o", "s", "D"]
 
     # Plotting
@@ -127,5 +123,6 @@ def plot_post_training_sp(
     plt.tight_layout()
     parent_dir = os.getenv("CATS_RESPATH", "")
     parent_dir = os.path.join(parent_dir, "figures")
+    os.makedirs(parent_dir, exist_ok=True)
     plt.savefig(f"{parent_dir}/fig5:{model_name}_post_training_sp.png")
     plt.close()

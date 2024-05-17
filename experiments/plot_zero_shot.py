@@ -143,25 +143,23 @@ def plot(
     result_root = os.getenv("CATS_RESPATH", "result_sub")
     dirname = os.path.join(result_root, "sparse_silu/figures")
     os.makedirs(dirname, exist_ok=True)
-    plt.savefig(
-        f"{dirname}/{model_name}_training_steps_vs_zero_shot_accuracy.png", dpi=300
-    )
+    plt.savefig(f"{dirname}/{model_name}_training_steps_vs_zero_shot_accuracy.png", dpi=300)
     plt.show()
     print(f"{dirname}/{model_name}_training_steps_vs_zero_shot_accuracy.png")
 
 
 if __name__ == "__main__":
     # LLAMA
-    parent_directories = [
-        "output",
-    ]
-    plot(
-        "llama",
-        parent_directories,
-        base_model_name="llama_7b_hf",
-        sparse_model_name="llama_sparse.*2",
-        relu_model_name="relu_llama.*",
-    )
+    # parent_directories = [
+    #     "output",
+    # ]
+    # plot(
+    #     "llama",
+    #     parent_directories,
+    #     base_model_name="llama_7b_hf",
+    #     sparse_model_name="llama_sparse.*2",
+    #     relu_model_name="relu_llama.*",
+    # )
 
     # MISTRAL
     parent_directories = [

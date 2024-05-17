@@ -78,9 +78,7 @@ def prepare_sparse_model(
     BaseConfig = MistralConfig if model_type == MISTRAL else LlamaConfig
     BaseCausalLM = MistralForCausalLM if model_type == MISTRAL else LlamaForCausalLM
     SparseConfig = SparseMistralConfig if model_type == MISTRAL else SparseLlamaConfig
-    SparseCausalLM = (
-        SparseMistralforCausalLM if model_type == MISTRAL else SparseLlamaForCausalLM
-    )
+    SparseCausalLM = SparseMistralforCausalLM if model_type == MISTRAL else SparseLlamaForCausalLM
     print(SparseConfig)
     SparseConfig.register_for_auto_class()
     SparseCausalLM.register_for_auto_class("AutoModelForCausalLM")
@@ -114,9 +112,7 @@ def prepare_sparse_model(
             model.config_class = SparseConfig
 
         if use_sparse_model:
-            apply_sparse_silu_mlp(
-                model, model.config, use_sparse_regularization=use_sparse_regularization
-            )
+            apply_sparse_silu_mlp(model, model.config, use_sparse_regularization=use_sparse_regularization)
             enable_sparse_silu(model)
         if use_sparse_predictor:
             apply_sparse_decoder_layer(model, model.config, init_svd=not is_debugging)
@@ -159,9 +155,7 @@ def prepare_sparse_model(
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
     if gradient_checkpointing:
-        model.gradient_checkpointing_enable(
-            gradient_checkpointing_kwargs={"use_reentrant": False}
-        )
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
         model.enable_input_require_grads()  # See https://github.com/huggingface/transformers/issues/23170
     if use_lora:
         peft_config = LoraConfig(
@@ -219,9 +213,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     hist_root = os.getenv("CATS_ACTPATH")
     if is_debugging:
-        act_hist_path = os.path.join(
-            hist_root, f"debugging_{model_name}/{dataset_type}.pt"
-        )
+        act_hist_path = os.path.join(hist_root, f"debugging_{model_name}/{dataset_type}.pt")
     else:
         act_hist_path = os.path.join(hist_root, f"{model_name}/{dataset_type}.pt")
     print("Act hist path: ", act_hist_path)
@@ -254,9 +246,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     )
 
     # Load dataset
-    dataset = get_dataset(
-        dataset_type, tokenizer, model_type, max_seq_length=exp_config.max_seq_length
-    )
+    dataset = get_dataset(dataset_type, tokenizer, model_type, max_seq_length=exp_config.max_seq_length)
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
     data_collator = dataset.get_data_collator()
 
@@ -324,9 +314,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         tokenizer=tokenizer,
         data_collator=data_collator,
         args=trainer_config,
-        train_dataset=train_dataset.with_format(
-            "torch"
-        ),  # train_dataset.with_format("torch"),
+        train_dataset=train_dataset.with_format("torch"),  # train_dataset.with_format("torch"),
         eval_dataset=val_dataset.with_format("torch"),
         callbacks=[graceful_regularization_scheduler],
         use_sparse_regularization=use_sparse_regularization,
@@ -334,9 +322,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     graceful_regularization_scheduler.set_trainer(trainer)
 
     if gradient_checkpointing:
-        model.gradient_checkpointing_enable(
-            gradient_checkpointing_kwargs={"use_reentrant": False}
-        )
+        model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
         config.use_cache = False
         model.config.use_cache = False
         # model.enable_input_require_grads()  # See https://github.com/huggingface/transformers/issues/23170
@@ -353,7 +339,9 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             load_act_hist(base_model, act_hist_path)
         elif not exp_config.use_relu:
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
-            trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
+            trainer.is_deepspeed_enabled = (
+                False  # A way to go around the value error when using ds stage 2 for evaluation
+            )
             trainer.evaluate(sampled_train_dataset)
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
             save_act_hist(base_model, act_hist_path)
@@ -386,6 +374,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
                 plot_act(base_model, fig_dir=fig_dir)
         else:
             plot_act(base_model, fig_dir=fig_dir)
+        print("<<<<<<Plotting to ", fig_dir)
 
     # Train Model after deactivating collecting statistics
     deactivate_stats(base_model)
@@ -399,15 +388,15 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             disable_sparse_predictor(base_model)
 
             is_deepspeed_enabled = trainer.is_deepspeed_enabled
-            trainer.is_deepspeed_enabled = False  # A way to go around the value error when using ds stage 2 for evaluation
+            trainer.is_deepspeed_enabled = (
+                False  # A way to go around the value error when using ds stage 2 for evaluation
+            )
             print(trainer.evaluate(test_dataset))
             trainer.is_deepspeed_enabled = is_deepspeed_enabled
 
             enable_sparse_predictor(base_model)
         else:
-            warnings.warn(
-                "use_spm arg is ignored as use_spare_model arg is not activated."
-            )
+            warnings.warn("use_spm arg is ignored as use_spare_model arg is not activated.")
 
     if exp_config.do_training:
         trainer.train(resume_from_checkpoint=not is_first_training)
@@ -421,9 +410,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         if exp_config.use_sparse_model:
             enable_sparse_predictor(model)
         else:
-            warnings.warn(
-                "use_spm arg is ignored as use_spare_model arg is not activated."
-            )
+            warnings.warn("use_spm arg is ignored as use_spare_model arg is not activated.")
 
     if exp_config.print_sparsity:
         activate_stats(model, exp_config.print_act_stats)
@@ -451,9 +438,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         if exp_config.use_relu:
             no_adapter_output_dir = output_dir + f"_no_adapter"
         else:
-            no_adapter_output_dir = (
-                output_dir + f"_no_adapter_{exp_config.max_steps}steps"
-            )
+            no_adapter_output_dir = output_dir + f"_no_adapter_{exp_config.max_steps}steps"
         with open(f"model_directory{exp_config.process_index}.txt", "w") as f:
             f.write(no_adapter_output_dir)
         model.save_pretrained(no_adapter_output_dir)
@@ -473,7 +458,10 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     # Also save log dictionary in json file
     log_dict_filename = os.path.join("exp_logs", run_name + "_log.json")
-    os.makedirs(os.path.dirname(log_dict_filename), exist_ok=True,)
+    os.makedirs(
+        os.path.dirname(log_dict_filename),
+        exist_ok=True,
+    )
     try:
         with open(log_dict_filename, "w") as f:
             json.dump(log_dict, f, indent=4)

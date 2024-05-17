@@ -7,14 +7,14 @@ from utils.utils import plot_post_training_sp
 
 
 def plot_sparsities():
-    for target_model_type in ["llama"]:
+    for target_model_type in ["mistral"]:
+        # for target_model_type in ["llama", "mistral"]:
         log_directory = "exp_logs"
         cats_50p = {}
         cats_70p = {}
         cats_90p = {}
         for filename in os.listdir(log_directory):
             if filename.endswith(".json"):
-
                 # Extract the percentage value
                 percentage_match = re.search(r"(\d+)p", filename)
                 percentage = percentage_match.group(1) if percentage_match else None
@@ -29,6 +29,8 @@ def plot_sparsities():
                 with open(os.path.join(log_directory, filename), "r") as file:
                     data = json.load(file)
 
+                if percentage is None:
+                    continue
                 if int(percentage) == 50:
                     cats_50p = data["sparsity_list"]
                 elif int(percentage) == 70:
@@ -44,9 +46,9 @@ def plot_sparsities():
             raise NotImplementedError(f"{target_model_type} isn't implemented")
         plot_post_training_sp(cats_50p, cats_70p, cats_90p, title)
 
-
-
-    assert len(cats_50p) == len(cats_70p) == len(cats_90p), "All experiments should have been run at 50%, 70%, and 90% sparsity level"
+    assert (
+        len(cats_50p) == len(cats_70p) == len(cats_90p)
+    ), "All experiments should have been run at 50%, 70%, and 90% sparsity level"
 
 
 if __name__ == "__main__":

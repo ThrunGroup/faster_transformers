@@ -1,9 +1,8 @@
 #!/bin/bash
 
-initial_steps=5
-step_increment=5
-max_iterations=2  # This will train up to 2000 steps in increments of 500
-is_first_training=1
+initial_steps=100
+step_increment=250
+max_iterations=5
 targeted_sparsity_list=(0.5 0.7 0.9)
 model_name="sparse_mistral_7b"
 base_model_repo_id="mistralai/Mistral-7B-v0.1"
@@ -11,7 +10,7 @@ base_model_repo_id="mistralai/Mistral-7B-v0.1"
 for targeted_sparsity in "${targeted_sparsity_list[@]}"; do
   sparsity_percentage=$(printf "%.0f" $(echo "$targeted_sparsity * 100" | bc))
   echo "Targeted Sparsity Percentage: $sparsity_percentage"
-  is_first_training = 1
+  is_first_training=1
   for ((i=1; i<=max_iterations; i++)); do
       current_steps=$((initial_steps + i * step_increment))  # Calculate the number of steps trained so far
 
@@ -33,7 +32,8 @@ for targeted_sparsity in "${targeted_sparsity_list[@]}"; do
       echo "model directory: $model_directory"
 
       echo "Evaluating after $current_steps steps..."
-      accelerate launch -m --main_process_port 12329 lm_eval \
+      accelerate launch -m --main_process_port 12329 \
+          --config_file accelerate_config.yaml lm_eval \
           --model hf \
           --model_args pretrained=$model_directory,trust_remote_code=True \
           --tasks openbookqa,arc_easy,winogrande,hellaswag,arc_challenge,piqa,boolq,sciq \

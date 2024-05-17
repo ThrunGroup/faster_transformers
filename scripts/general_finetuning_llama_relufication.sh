@@ -3,7 +3,7 @@
 # Initial steps and increment
 initial_steps=100
 step_increment=250
-max_iterations=10  # This will train up to 2000 steps in increments of 500
+max_iterations=5
 is_first_training=1
 
 for ((i=1; i<=max_iterations; i++)); do
@@ -29,7 +29,9 @@ for ((i=1; i<=max_iterations; i++)); do
     echo "model directory: $model_directory"
 
     echo "Evaluating after $current_steps steps..."
-    accelerate launch -m --main_process_port 12329 lm_eval --model hf \
+    accelerate launch -m --main_process_port 12329 \
+        --config_file accelerate_config.yaml lm_eval \
+        --model hf \
         --model_args pretrained=$model_directory,trust_remote_code=True \
         --tasks openbookqa,arc_easy,winogrande,hellaswag,arc_challenge,piqa,boolq,sciq \
         --batch_size 16 \
