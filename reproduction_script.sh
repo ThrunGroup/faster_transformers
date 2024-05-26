@@ -7,6 +7,8 @@ pip install -e .
 pip install -r requirements.txt
 pip install flash-attn --no-build-isolation
 
+accelerate config
+
 # Install the flash_gemv package
 cd flash_gemv
 pip install -e .
