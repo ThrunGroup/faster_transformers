@@ -1,6 +1,7 @@
 from transformers import (
     AutoTokenizer,
-    LlamaConfig,
+    MistralForCausalLM,
+    MistralConfig,
 )
 from torch.utils.data import DataLoader
 from utils.constants import MISTRAL_7B, REFINED_WEB
@@ -12,7 +13,7 @@ import os
 
 
 def prepare_sparse_model(base_model_name):
-    save_dir = os.getenv("CATS_RESPATH", "result_sub")
+    save_dir = os.getenv("CATS_RESPATH", "results")
     save_path = os.path.join(save_dir, "throughput.csv")
 
     with open(save_path, "a") as f:
@@ -21,9 +22,9 @@ def prepare_sparse_model(base_model_name):
             file=f,
         )
 
-    BaseConfig = LlamaConfig
-    SparseConfig = SparseLlamaConfig
-    SparseCausalLM = SparseLlamaForCausalLM
+    BaseConfig = MistralConfig
+    SparseConfig = MistralForCausalLM
+    SparseCausalLM = SparseMistralforCausalLM
     SparseConfig.register_for_auto_class()
     SparseCausalLM.register_for_auto_class("AutoModelForCausalLM")
 
@@ -33,8 +34,7 @@ def prepare_sparse_model(base_model_name):
     model = SparseCausalLM.from_pretrained(
         base_model_name,
         config=config,
-        torch_dtype=torch.float32,
-        # attn_implementation="flash_attention_2",
+        torch_dtype=torch.bfloat16,
         device_map="auto",
     )
     model.config_class = SparseConfig
@@ -86,9 +86,7 @@ def benchmark_decode(B, bm, method, gen_len, act_hist_path, base_model_name):
             count += 1
             if count > max_count:
                 break
-            input_ids = batch["input_ids"].to(
-                device
-            )  # Move input tensors to the device
+            input_ids = batch["input_ids"].to(device)  # Move input tensors to the device
             max_lengths = input_ids.size(1) + gen_len
             try:
                 outputs = model.generate(
@@ -112,17 +110,27 @@ if __name__ == "__main__":
     parser.add_argument("--bm", type=int, default=1)
     parser.add_argument("--gen", type=int, default=501)
     parser.add_argument("--method", type=int, default=0)
-    parser.add_argument("--act", type=str, default="None")
-    parser.add_argument("--base", type=str, default="None")
+    parser.add_argument("--root_path", type=str, default=".")
+    parser.add_argument("--weights_dir", type=str, default="None")
+    parser.add_argument("--results_dir", type=str, default="None")
+
     args = parser.parse_args()
-    if args.act == "None":
-        print("Please input act_hist_path")
+    if args.weights_dir == "None":
+        print("Please specify weights_dir")
         raise ValueError
-    if args.base == "None":
-        print("Please input base_model_name")
+    if args.results_dir == "None":
+        print("Please specify results_dir")
         raise ValueError
-    act_path = os.path.join(args.act, "sparse_mistral_7b/refined_web.pt")
-    base_path = os.path.join(
-        args.base, "sparse_mistral_7b_refined_web_50p_no_adapter_2600steps"
+
+    act_hist_path = os.path.join(
+        args.root_path,
+        args.results_dir,
+        "general_finetuning",
+        "sparse_mistral_7b",
+        "refined_web_activation_histogram.pt",
     )
-    benchmark_decode(args.B, args.bm, args.method, args.gen, act_path, base_path)
+    base_path = os.path.join(
+        args.root_path, args.weights_dir, "general_finetuning", "sparse_mistral_7b_refined_web_50p_no_adapter_350steps"
+    )
+    print(base_path)
+    benchmark_decode(args.B, args.bm, args.method, args.gen, act_hist_path, base_path)

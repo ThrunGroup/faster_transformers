@@ -312,11 +312,12 @@ def plot_histogram(
     threshold: float = 0.5,
     title: str = "Activation Distribution",
     fig_dir: str = "figures",
+    activation_histogram_dir: str = None,
     layer_index: int = 0,
 ):
     if is_mainprocess():
-        torch.save(bin_edges, f"{fig_dir}/bin_edges_{layer_index}.pt")
-        torch.save(histogram_counts, f"{fig_dir}/histogram_counts_{layer_index}.pt")
+        torch.save(bin_edges, f"{activation_histogram_dir}/bin_edges_{layer_index}.pt")
+        torch.save(histogram_counts, f"{activation_histogram_dir}/histogram_counts_{layer_index}.pt")
 
     fig, ax = plt.subplots()
 
@@ -377,16 +378,12 @@ def plot_histogram(
     plt.close(fig)
 
 
-def plot_act(model, fig_dir: str = "figures"):
+def plot_activation_histogram(model, fig_dir: str, activation_histogram_dir: str):
     SparseMLP = get_mlp_class(model)
 
     for i, layer in enumerate(model.model.layers):
-        if (
-            isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats
-        ):  # Can set the threshold only the relevant statistics is collected.
-            # plot_title = f"Layer: {i} Pre-Activation Distribution"
-            # plot_histogram(layer.mlp.histogram_bins, layer.mlp.pre_act_hist_counts, plot_title, fig_dir, layer_index=i)
-
+        if isinstance(layer.mlp, SparseMLP) and layer.mlp.is_stats:
+            # Can set the threshold only the relevant statistics is collected.
             plot_title = f"Layer: {i} Post-Activation Absolute Distribution"
             plot_histogram(
                 layer.mlp.histogram_bins,
@@ -394,6 +391,7 @@ def plot_act(model, fig_dir: str = "figures"):
                 layer.mlp.dead_threshold,
                 plot_title,
                 fig_dir,
+                activation_histogram_dir,
                 layer_index=i,
             )
 

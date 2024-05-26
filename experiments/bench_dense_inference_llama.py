@@ -12,7 +12,7 @@ from utils.constants import LLAMA, REFINED_WEB
 
 
 def benchmark_decode(B, bm, gen_len):
-    save_dir = os.getenv("CATS_RESPATH", "result_sub")
+    save_dir = os.getenv("CATS_RESPATH", "results")
     save_path = os.path.join(save_dir, "throughput.csv")
 
     with open(save_path, "a") as f:
@@ -47,9 +47,7 @@ def benchmark_decode(B, bm, gen_len):
             count += 1
             if count > max_count:
                 break
-            input_ids = batch["input_ids"].to(
-                device
-            )  # Move input tensors to the device
+            input_ids = batch["input_ids"].to(device)  # Move input tensors to the device
             max_lengths = input_ids.size(1) + gen_len
             try:
                 outputs = model.generate(

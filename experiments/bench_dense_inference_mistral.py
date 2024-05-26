@@ -12,7 +12,7 @@ from utils.constants import MISTRAL_7B, REFINED_WEB
 
 
 def benchmark_decode(B, bm, gen_len):
-    save_dir = os.getenv("CATS_RESPATH", "result_sub")
+    save_dir = os.getenv("CATS_RESPATH", "results")
     save_path = os.path.join(save_dir, "throughput.csv")
 
     with open(save_path, "a") as f:
@@ -26,9 +26,7 @@ def benchmark_decode(B, bm, gen_len):
     model = AutoModelForCausalLM.from_pretrained(
         path,
         trust_remote_code=True,
-        # torch_dtype=torch.float32,
         torch_dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2",
         device_map="auto",
     )
     tokenizer = AutoTokenizer.from_pretrained(path)
@@ -51,9 +49,7 @@ def benchmark_decode(B, bm, gen_len):
             count += 1
             if count > max_count:
                 break
-            input_ids = batch["input_ids"].to(
-                device
-            )  # Move input tensors to the device
+            input_ids = batch["input_ids"].to(device)  # Move input tensors to the device
             max_lengths = input_ids.size(1) + gen_len
             try:
                 outputs = model.generate(

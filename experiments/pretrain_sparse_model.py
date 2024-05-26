@@ -211,12 +211,19 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     print("FIRST TRAINING? : ", is_first_training)
 
-    hist_root = os.getenv("CATS_ACTPATH")
+    run_name = get_run_name(exp_config)
+    folder_name = "general_finetuning"
     if is_debugging:
-        act_hist_path = os.path.join(hist_root, f"debugging_{model_name}/{dataset_type}.pt")
-    else:
-        act_hist_path = os.path.join(hist_root, f"{model_name}/{dataset_type}.pt")
-    print("Act hist path: ", act_hist_path)
+        folder_name = "debugging_" + folder_name
+    checkpoint_dir = os.path.join(exp_config.checkpoint_dir, folder_name, run_name)
+    results_dir = os.path.join(exp_config.results_dir, folder_name, exp_config.model_name, run_name)
+    fig_dir = os.path.join(results_dir, "figures")
+    bin_edge_dir = os.path.join(results_dir, "bin_edges")
+    os.makedirs(fig_dir, exist_ok=True)
+    os.makedirs(bin_edge_dir, exist_ok=True)
+    act_hist_path = os.path.join(
+        exp_config.results_dir, folder_name, exp_config.model_name, f"{dataset_type}_activation_histogram.pt"
+    )
 
     # If not using sparse Mistral model, all flags related to sparse model should be set as zero or false.
     if not exp_config.use_sparse_model:
@@ -227,8 +234,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     if exp_config.use_relu:
         exp_config.targeted_sparsity = "ReLU"
-
-    run_name = get_run_name(exp_config)
 
     # Load model
     model, tokenizer, config = prepare_sparse_model(
@@ -250,11 +255,6 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     train_dataset, val_dataset, test_dataset = dataset.get_tokenized_dataset()
     data_collator = dataset.get_data_collator()
 
-    output_dir = os.path.join(exp_config.output_dir, run_name)
-    if is_debugging:
-        output_dir += "_debugging"
-    ds_print(f"Output directory: {output_dir}")
-
     # Use only 500 samples of training dataset to collect statistics
     sampled_train_dataset = train_dataset.select(range(100))
 
@@ -273,7 +273,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             )
 
     trainer_config = TrainingArguments(
-        output_dir=output_dir,
+        output_dir=checkpoint_dir,
         evaluation_strategy="steps",
         eval_steps=25,  # early stopping counts only when eval step and save step match
         max_steps=10 if is_debugging else exp_config.max_steps,
@@ -283,7 +283,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         learning_rate=1e-5,
         weight_decay=0.01,
         num_train_epochs=exp_config.num_epochs,
-        logging_dir="exp_logs",
+        logging_dir=results_dir,
         save_total_limit=1,
         greater_is_better=False,
         gradient_accumulation_steps=exp_config.gradient_accumulation_steps,
@@ -367,14 +367,11 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     # Plot activation histograms
     if is_plot:
-        fig_dir = f"figures/{run_name}"
-        os.makedirs(fig_dir, exist_ok=True)
         if is_running_deepspeed():
             if is_mainprocess():
-                plot_act(base_model, fig_dir=fig_dir)
+                plot_activation_histogram(base_model, fig_dir, bin_edge_dir)
         else:
-            plot_act(base_model, fig_dir=fig_dir)
-        print("<<<<<<Plotting to ", fig_dir)
+            plot_activation_histogram(base_model, fig_dir, bin_edge_dir)
 
     # Train Model after deactivating collecting statistics
     deactivate_stats(base_model)
@@ -420,6 +417,8 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
     print(eval_result)
     log_dict = {}
 
+    log_dict.update({"perplexity": eval_result["eval_loss"]})
+
     if exp_config.print_sparsity:
         total_sparsity, sparsity_list = print_dead_neuron_stats(model)
         log_dict.update({"total_sparsity": total_sparsity})
@@ -427,22 +426,21 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
 
     if exp_config.print_act_stats:
         save_act_hist(model, act_hist_path)
-        plot_act(model)
+        plot_activation_histogram(model, fig_dir, bin_edge_dir)
 
     if exp_config.model_save:
         # Save thresholds
         if exp_config.use_sparse_model:
             thresholds = [float(m.mlp.dead_threshold) for m in model.model.layers]
             model.config.thresholds = thresholds
-        # model.config.save_pretrained(output_dir)
         if exp_config.use_relu:
-            no_adapter_output_dir = output_dir + f"_no_adapter"
+            no_adapter_checkpoint_dir = checkpoint_dir + f"_no_adapter"
         else:
-            no_adapter_output_dir = output_dir + f"_no_adapter_{exp_config.max_steps}steps"
+            no_adapter_checkpoint_dir = checkpoint_dir + f"_no_adapter_{exp_config.max_steps}steps"
         with open(f"model_directory{exp_config.process_index}.txt", "w") as f:
-            f.write(no_adapter_output_dir)
-        model.save_pretrained(no_adapter_output_dir)
-        tokenizer.save_pretrained(no_adapter_output_dir)
+            f.write(no_adapter_checkpoint_dir)
+        model.save_pretrained(no_adapter_checkpoint_dir)
+        tokenizer.save_pretrained(no_adapter_checkpoint_dir)
 
     if push_to_hub:
         trainer.model = model
@@ -457,7 +455,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
             wandb.log(log_dict)
 
     # Also save log dictionary in json file
-    log_dict_filename = os.path.join("exp_logs", run_name + "_log.json")
+    log_dict_filename = os.path.join(results_dir, "log.json")
     os.makedirs(
         os.path.dirname(log_dict_filename),
         exist_ok=True,

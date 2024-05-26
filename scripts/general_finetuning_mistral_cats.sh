@@ -4,6 +4,7 @@ initial_steps=100
 step_increment=250
 max_iterations=5
 targeted_sparsity_list=(0.5 0.7 0.9)
+targeted_sparsity_list=(0.5)
 model_name="sparse_mistral_7b"
 base_model_repo_id="mistralai/Mistral-7B-v0.1"
 
@@ -21,7 +22,7 @@ for targeted_sparsity in "${targeted_sparsity_list[@]}"; do
         --use_wandb --max_steps $current_steps --model_save \
         --train_batch_size 1 --test_batch_size 4 --use_flash_attn --gradient_accumulation_steps 8 \
         --ds_config_path ds_config.json --max_seq_length 1024  \
-        --output_dir $1 --is_first_training $is_first_training \
+        --checkpoint_dir $1 --results_dir $2 --is_first_training $is_first_training \
         --gradient_checkpointing \
         --model_name $model_name \
         --base_model_repo_id $base_model_repo_id \
@@ -39,7 +40,7 @@ for targeted_sparsity in "${targeted_sparsity_list[@]}"; do
           --tasks openbookqa,arc_easy,winogrande,hellaswag,arc_challenge,piqa,boolq,sciq \
           --batch_size 32 \
           --log_samples \
-          --output_path output/mistral_sparse_${sparsity_percentage}p_${current_steps}steps2
+          --output_path ${2}/evaluations/mistral_sparse_${sparsity_percentage}p_${current_steps}steps2
   done
 done
 

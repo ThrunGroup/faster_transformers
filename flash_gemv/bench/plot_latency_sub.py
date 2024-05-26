@@ -58,7 +58,7 @@ for idx in range(2):
     plt.xlabel("Sparsity")
     plt.legend(["Dense", "CATS-with-Custom-Kernel", "Optimal"])
     plt.title(titles[idx])
-    save_dir = os.path.join(os.getenv("CATS_RESPATH", "result_sub"), "figures")
+    save_dir = os.path.join(os.getenv("CATS_RESPATH", ""), "speedup", "figures")
     print(f"Saving figure 4 to {save_dir}")
     os.makedirs(save_dir, exist_ok=True)
     plt.savefig(save_dir + f"/fig4: {models[idx]}_mlp_latency.png")

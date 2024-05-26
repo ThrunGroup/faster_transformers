@@ -1,1 +1,0 @@
-python experiments/plot_act_sparsity.py

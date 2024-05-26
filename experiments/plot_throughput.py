@@ -11,7 +11,7 @@ labels = [256, 512, 1024, 2048]
 throughput_dict = {k: {label: [] for label in labels} for k in keys}
 
 for idx in range(2):
-    filepath = os.path.join(os.getenv("CATS_RESPATH", "result_sub"), "throughput.csv")
+    filepath = os.path.join(os.getenv("CATS_RESPATH", "results"), "throughput.csv")
 
     # Open the file and read data
     with open(filepath, newline="") as csvfile:
@@ -65,6 +65,6 @@ for idx in range(2):
         plt.xticks(fontsize="xx-large", fontweight="bold")  # Rotating the x-axis labels for better readability
         plt.tight_layout()  # Adjust the plot to ensure everything fits without overlapping
 
-        save_dir = os.getenv("CATS_RESPATH", "result_sub")
+        save_dir = os.getenv("CATS_RESPATH", "results")
         plt.savefig(os.path.join(save_dir, f"figures/fig3: e2e_gen_{model}_fp32.pdf"))
         print((os.path.join(save_dir, f"figures/fig3: e2e_gen_{model}_fp32.pdf")))

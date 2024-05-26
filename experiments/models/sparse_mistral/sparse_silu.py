@@ -1573,7 +1573,7 @@ def plot_histogram(
     plt.clf()
 
 
-def plot_act(model, fig_dir: str = "figures"):
+def plot_activation_histogram(model, fig_dir: str = "figures"):
     for i, layer in enumerate(model.model.layers):
         if (
             isinstance(layer.self_attn, SparseMistralAttention) and layer.self_attn.is_stats
