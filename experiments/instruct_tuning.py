@@ -415,7 +415,7 @@ def train(exp_config, use_wandb: bool = True, use_sweep: bool = False):
         gradient_checkpointing=gradient_checkpointing,
         bf16=True if not is_debugging else False,
         ddp_find_unused_parameters=True,
-        hub_model_id=f"thrunlab/{model_name}",
+        hub_model_id=f"anon/{model_name}",
         push_to_hub=push_to_hub,
         seed=seed,
         data_seed=seed,

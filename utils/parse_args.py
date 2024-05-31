@@ -107,8 +107,8 @@ def parse_args():
     )
     parser.add_argument("--model_name", type=str, default="Mistral_Sparse", help="Name of the model")
     parser.add_argument("--dataset_type", type=str, default="cola", help="Dataset Type")
-    parser.add_argument("--checkpoint_dir", type=str, default="/scr/jay/ckpt", help="Checkpoint Directory")
-    parser.add_argument("--results_dir", type=str, default="/scr/jay/ckpt", help="Log Directory")
+    parser.add_argument("--checkpoint_dir", type=str, default="/scr/anon/ckpt", help="Checkpoint Directory")
+    parser.add_argument("--results_dir", type=str, default="/scr/anon/ckpt", help="Log Directory")
     parser.add_argument("--num_epochs", type=float, default=7, help="Number of training epochs")
     parser.add_argument("--max_steps", type=int, default=-1, help="Number of maximum training steps")
     parser.add_argument(

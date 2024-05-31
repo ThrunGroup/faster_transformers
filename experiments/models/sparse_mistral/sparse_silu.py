@@ -1209,7 +1209,7 @@ class GracefulRegularizationScheduler(TrainerCallback):
         self.test_dataset = test_dataset
         self.targeted_sparsity = targeted_sparsity
         self.keep_regularization_with_kill = keep_regularization_with_kill
-        self.act_hist_path = f"/matx/u/vxbrando/histograms/warm_up_reg_{targeted_sparsity}/act_hist.pt"
+        self.act_hist_path = f"/anon/u/anon/histograms/warm_up_reg_{targeted_sparsity}/act_hist.pt"
         if self.is_enabled:
             print("GracefulRegularizationScheduler is enabled.")
         self.trainer = None
@@ -1246,11 +1246,11 @@ class GracefulRegularizationScheduler(TrainerCallback):
         if state.global_step % 2000 == 0:
             if is_mainprocess():
                 ds_print(
-                    f"Saving to /scr/lukeai/{self.model_name}_{state.global_step}.pt",
+                    f"Saving to /scr/anon/{self.model_name}_{state.global_step}.pt",
                 )
                 torch.save(
                     model.state_dict(),
-                    f"/scr/lukeai/{self.model_name}_{state.global_step}.pt",
+                    f"/scr/anon/{self.model_name}_{state.global_step}.pt",
                 )
 
 
@@ -1308,11 +1308,11 @@ class GradualSparsificationScheduler(TrainerCallback):
         if state.global_step % 2000 == 0:
             if is_running_deepspeed and is_mainprocess():
                 ds_print(
-                    f"Saving to /matx/u/lukeai/{self.model_name}_{state.global_step - 2}.pt",
+                    f"Saving to /anon/u/anon/{self.model_name}_{state.global_step - 2}.pt",
                 )
                 torch.save(
                     model.state_dict(),
-                    f"/matx/u/lukeai/{self.model_name}_{state.global_step - 2}.pt",
+                    f"/anon/u/anon/{self.model_name}_{state.global_step - 2}.pt",
                 )
 
 
@@ -1594,7 +1594,7 @@ def plot_activation_histogram(model, fig_dir: str = "figures"):
             )
 
 
-def save_act_hist(model, dirname="/scr/jay/models/mistral/pre_finetune/cola_act_hist"):
+def save_act_hist(model, dirname="/scr/anon/models/mistral/pre_finetune/cola_act_hist"):
     os.makedirs(dirname, exist_ok=True)
     act_dict = {}
     for i, layer in enumerate(model.model.layers):
@@ -1624,7 +1624,7 @@ def save_act_hist(model, dirname="/scr/jay/models/mistral/pre_finetune/cola_act_
     torch.save(act_dict, dirname + "/attn_layers.pt")
 
 
-def load_act_hist(model, dirname="/scr/jay/models/mistral/pre_finetune/cola_act_hist"):
+def load_act_hist(model, dirname="/scr/anon/models/mistral/pre_finetune/cola_act_hist"):
     assert os.path.exists(
         dirname
     ), f"{dirname} does not exist when loading pre/post-activation histogram of SparseMistralSiluMLP."

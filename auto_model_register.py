@@ -26,7 +26,7 @@ from utils.constants import MISTRAL_7B
 # model = AutoModelForCausalLM.from_pretrained(path, trust_remote_code=True,)
 # print(model)
 
-# path = "/scr/jay/ckpt/Mistral_Sparse_refined_web_70p"
+# path = "/scr/anon/ckpt/Mistral_Sparse_refined_web_70p"
 # model = AutoModelForCausalLM.from_pretrained(path, trust_remote_code=True,)
 # config = AutoConfig.from_pretrained(path, trust_remote_code=True,)
 # print(config)
@@ -36,7 +36,7 @@ from utils.constants import MISTRAL_7B
 #
 #
 
-# prefix = "/scr/jay/ckpt/Mistral_Sparse_refined_web"
+# prefix = "/scr/anon/ckpt/Mistral_Sparse_refined_web"
 
 
 # for sparsity in ["50p", "70p", "90p"]:
@@ -53,9 +53,9 @@ from utils.constants import MISTRAL_7B
 #         config.use_relu = False
 #         config.save_pretrained(path)
 
-# path = "/scr/jay/ckpt/sparse_models/unit_test"
-path = "/scr/jay/ckpt/2024-03-10/Mistral_Sparse_refined_web_50p_no_adapter"
-# path = "thrunlab/Mistral_Sparse_refined_web_relu_2024-03-01"
+# path = "/scr/anon/ckpt/sparse_models/unit_test"
+path = "/scr/anon/ckpt/2024-03-10/Mistral_Sparse_refined_web_50p_no_adapter"
+# path = "anon/Mistral_Sparse_refined_web_relu_2024-03-01"
 # #
 model = AutoModelForCausalLM.from_pretrained(path, trust_remote_code=True)
 tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
@@ -81,7 +81,7 @@ print(model)
 # model = model.merge_and_unload()
 # print(model)
 
-# path = "/scr/jay/ckpt/2024-03-01/Mistral_Sparse_refined_web_relu"
+# path = "/scr/anon/ckpt/2024-03-01/Mistral_Sparse_refined_web_relu"
 # model.save_pretrained(path + "_auto")
 # model = AutoModelForCausalLM.from_pretrained(path + "_auto", trust_remote_code=True)
 # print(model)

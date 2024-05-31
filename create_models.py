@@ -19,7 +19,7 @@ from transformers import (
 from utils.constants import MISTRAL_7B
 
 if __name__ == "__main__":
-    act_hist_path = f"/scr/jay/exps/pre_finetune/Mistral_Sparse/refined_web_act_hist.pt"
+    act_hist_path = f"/scr/anon/exps/pre_finetune/Mistral_Sparse/refined_web_act_hist.pt"
     relu_model, relu_tokenizer, relu_config = prepare_sparse_model(
         use_flash_attn=True, base_model_name=MISTRAL_7B, use_relu=True, use_lora=False
     )
@@ -32,8 +32,8 @@ if __name__ == "__main__":
     thresholds = [float(m.mlp.dead_threshold) for m in sparse_model.model.layers]
     sparse_model.config.thresholds = thresholds
 
-    relu_path = "/scr/jay/exps/relu_mistral"
-    sparse_path = "/scr/jay/exps/sparse_mistral"
+    relu_path = "/scr/anon/exps/relu_mistral"
+    sparse_path = "/scr/anon/exps/sparse_mistral"
 
     relu_model.save_pretrained(relu_path)
     relu_tokenizer.save_pretrained(relu_path)
@@ -54,7 +54,7 @@ if __name__ == "__main__":
 # AutoConfig.register("sparse_mistral", SparseMistralConfig)
 # AutoModelForCausalLM.register(SparseMistralConfig, SparseMistralforCausalLM)
 
-# path = "/scr/jay/ckpt/Mistral_Sparse_refined_web_70p"
+# path = "/scr/anon/ckpt/Mistral_Sparse_refined_web_70p"
 # model = AutoModelForCausalLM.from_pretrained(path, trust_remote_code=True,)
 # config = AutoConfig.from_pretrained(path, trust_remote_code=True,)
 # print(config)

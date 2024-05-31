@@ -256,7 +256,7 @@ def plot_activation_histogram(model, fig_dir: str = "figures"):
             plot_histogram(layer.mlp.histogram_bins, layer.mlp.post_act_hist_counts, plot_title)
 
 
-def save_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"):
+def save_act_hist(model, filename="/scr/anon/models/mistral/pre_finetune/cola_act_hist.pt"):
     SparseMLP = get_mlp_class(model)
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     act_dict = {}
@@ -273,7 +273,7 @@ def save_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act
     torch.save(act_dict, filename)
 
 
-def load_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"):
+def load_act_hist(model, filename="/scr/anon/models/mistral/pre_finetune/cola_act_hist.pt"):
     assert os.path.exists(
         filename
     ), f"{filename} does not exist when loading pre/post-activation histogram of SparseMistralSiluMLP."

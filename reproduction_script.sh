@@ -1,18 +1,18 @@
 #!/bin/bash
-#
-#set -e
-#
-## Install the requirements
-#pip install -e .
-#pip install -r requirements.txt
-#pip install flash-attn --no-build-isolation
 
-#accelerate config
+set -e
 
-## Install the flash_gemv package
-#cd flash_gemv
-#pip install -e .
-#cd ..
+# Install the requirements
+pip install -e .
+pip install -r requirements.txt
+pip install flash-attn --no-build-isolation
+
+accelerate config
+
+# Install the flash_gemv package
+cd flash_gemv
+pip install -e .
+cd ..
 
 # Get the root folder for faster_transformer
 export PYTHONPATH=${PYTHONPATH}:$PWD

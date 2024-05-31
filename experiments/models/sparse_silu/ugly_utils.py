@@ -396,7 +396,7 @@ def plot_activation_histogram(model, fig_dir: str, activation_histogram_dir: str
             )
 
 
-def save_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"):
+def save_act_hist(model, filename="/scr/anon/models/mistral/pre_finetune/cola_act_hist.pt"):
     SparseMLP = get_mlp_class(model)
     os.makedirs(os.path.dirname(filename), exist_ok=True)
     act_dict = {}
@@ -413,7 +413,7 @@ def save_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act
     torch.save(act_dict, filename)
 
 
-def load_act_hist(model, filename="/scr/jay/models/mistral/pre_finetune/cola_act_hist.pt"):
+def load_act_hist(model, filename="/scr/anon/models/mistral/pre_finetune/cola_act_hist.pt"):
     assert os.path.exists(
         filename
     ), f"{filename} does not exist when loading pre/post-activation histogram of SparseMistralSiluMLP."
@@ -1092,7 +1092,7 @@ class GracefulRegularizationScheduler(TrainerCallback):
         self.test_dataset = test_dataset
         self.targeted_sparsity = targeted_sparsity
         self.keep_regularization_with_kill = keep_regularization_with_kill
-        self.act_hist_path = f"/scr/lukeai/histograms/warm_up_reg_{targeted_sparsity}/act_hist.pt"
+        self.act_hist_path = f"/scr/anon/histograms/warm_up_reg_{targeted_sparsity}/act_hist.pt"
         if self.is_enabled:
             print("GracefulRegularizationScheduler is enabled.")
         self.trainer = None
@@ -1182,11 +1182,11 @@ class GradualSparsificationScheduler(TrainerCallback):
         if state.global_step % 2000 == 0:
             if is_running_deepspeed and is_mainprocess():
                 ds_print(
-                    f"Saving to /matx/u/lukeai/{self.model_name}_{state.global_step - 2}.pt",
+                    f"Saving to /anon/u/anon/{self.model_name}_{state.global_step - 2}.pt",
                 )
                 torch.save(
                     model.state_dict(),
-                    f"/matx/u/lukeai/{self.model_name}_{state.global_step - 2}.pt",
+                    f"/anon/u/anon/{self.model_name}_{state.global_step - 2}.pt",
                 )
 
 
