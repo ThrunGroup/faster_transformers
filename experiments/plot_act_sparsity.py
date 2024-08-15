@@ -7,7 +7,7 @@ from utils.utils import plot_post_training_sp
 
 
 def plot_sparsities():
-    for target_model_type in ["llama"]:
+    for target_model_type in ["llama", "mistral"]:
         log_directory = "exp_logs"
         cats_50p = {}
         cats_70p = {}

@@ -2,32 +2,67 @@ import importlib
 import json
 import os
 from typing import List
-
 import torch
 import torch.nn as nn
+import flash_gemv
+import warnings
+
+from experiments.models.sparse_silu.ugly_utils import get_threshold
 from transformers import (
     PretrainedConfig,
     PreTrainedModel,
     AutoConfig,
-    AutoModelForCausalLM,
-    MistralForCausalLM,
     LlamaForCausalLM,
     # GemmaForCausalLM,
 )
-
-from experiments.models.sparse_silu.ugly_utils import get_threshold
 from utils.constants import MISTRAL_7B
 from utils.utils import _get_submodules
 
+
 def model_class_to_pkg_str(model_obj):
-    if isinstance(model_obj, MistralForCausalLM):
-        return "MistralForCausalLM"
-    elif isinstance(model_obj, LlamaForCausalLM):
-        return "LlamaForCausalLM"
-    # elif isinstance(model_obj, GemmaForCausalLM):
-    #     return "GemmaForCausalLM"
-    else:
-        raise NotImplementedError(f"{model_obj.__class__} is not implemented ")
+    # if False:  # isinstance(model_obj, MistralForCausalLM):
+    #     return "MistralForCausalLM"
+    # elif isinstance(model_obj, LlamaForCausalLM):
+    #     return "LlamaForCausalLM"
+    # # elif isinstance(model_obj, GemmaForCausalLM):
+    # #     return "GemmaForCausalLM"
+    # else:
+    model_class = model_obj.__class__
+    print(f"model class name: {model_class.__name__}")
+    return model_class.__name__
+    # raise NotImplementedError(f"{model_obj.__class__} is not implemented ")
+
+
+def custom_forward_for_swiglu(self, x):
+    assert "MLP" in self.__class__.__name__, "{} is not an MLP".format(
+        self.__class__.__name__
+    )
+    warnings.warn(
+        "Using custom forward for MLP. Note that only batch size <= 4 is possible."
+    )
+    threshold = self.act_fn.threshold
+    return flash_gemv.gemv_gemv_triton(
+        x,
+        self.act_fn(self.gate_proj(x)),
+        self.up_proj.weight,
+        self.wdown_t,
+        threshold,
+    )
+
+
+def replace_mp_with_gemv(
+    target_module,
+    target_name: str,
+):
+    if "mlp" in target_name:
+        print(f"Replacing {target_name} forward function with Gemv.")
+        target_module.wdown_t = target_module.down_proj.weight.t().contiguous()
+        setattr(
+            target_module,
+            "forward",
+            lambda x: custom_forward_for_swiglu(target_module, x),
+        )
+
 
 class Cats(nn.Module):
     def __init__(
@@ -62,7 +97,9 @@ class Cats(nn.Module):
         self.collect_stats = True
 
     def set_threshold(self, threshold: float):
-        self.threshold = nn.Parameter(torch.tensor(threshold), requires_grad=False)
+        if isinstance(threshold, float):
+            threshold = torch.tensor(threshold)
+        self.threshold = nn.Parameter(threshold.clone().detach(), requires_grad=False)
 
     def forward(self, x):
         x = self.wrapped_module(x)
@@ -132,10 +169,12 @@ class CatsConfig(PretrainedConfig):
         wrapped_model_class_name: str = "MistralForCausalLM",
         target_modules: List[str] = ["act_fn"],
         target_sparsity: float = 0.5,
+        kernel_inject_targets=["mlp"],
         **kwargs,
     ):
         self.target_modules = target_modules
         self.target_sparsity = target_sparsity
+        self.kernel_inject_targets = kernel_inject_targets
         self.wrapped_model_class_name = wrapped_model_class_name
         self.__dict__.update(wrapped_model_config.__dict__)
         super().__init__(**kwargs)
@@ -159,7 +198,17 @@ class CatsModel(PreTrainedModel, nn.Module):
             self.wrapped_model = self.wrapped_model_class.from_pretrained(
                 **pretrained_kwargs
             )
+        self.kernel_inject_targets = config.kernel_inject_targets
         self.inject_cats()
+
+    def inject_kernel(self):
+        if self.kernel_inject_targets is not None:
+            for name, module in self.wrapped_model.named_modules():
+                parent, target, target_name = _get_submodules(self.wrapped_model, name)
+                if target_name in self.kernel_inject_targets:
+                    print(f"injecting kernel to {name}")
+                    if target_name in self.kernel_inject_targets:
+                        replace_mp_with_gemv(target, target_name)
 
     def inject_cats(self):
         for name, module in self.wrapped_model.named_modules():
@@ -186,6 +235,13 @@ class CatsModel(PreTrainedModel, nn.Module):
                 module.disable_collect_stats()
                 module.print_sparsity = False
 
+    def init_stats(self) -> None:
+        print("Initialize stats")
+
+        for name, module in self.wrapped_model.named_modules():
+            if isinstance(module, Cats):
+                module.num_elems_act = 0
+                module.num_zeros_act = 0
 
     def set_thresholds(self):
         print("Setting threshold")
@@ -201,7 +257,7 @@ class CatsModel(PreTrainedModel, nn.Module):
     def get_sparsity(self):
         sparsity_dict = {}
         idx = 0
-        for module in self.wrapped_model.named_modules():
+        for name, module in self.wrapped_model.named_modules():
             if isinstance(module, Cats):
                 sparsity_dict[idx] = float(module.num_zeros_act / module.num_elems_act)
                 idx += 1
@@ -214,8 +270,37 @@ class CatsModel(PreTrainedModel, nn.Module):
         except AttributeError:
             return getattr(self.wrapped_model, name)
 
-    def forward(self, *args, **kwargs):
-        return self.wrapped_model.forward(*args, **kwargs)
+    def __call__(self, *args, **kwargs):
+        """Override the __call__ method to use the wrapped model's forward method."""
+        return self.wrapped_model(*args, **kwargs)
+
+    def generate(self, *args, **kwargs):
+        return self.wrapped_model.generate(*args, **kwargs)
 
 
-# def get_cats_model(model):
+def get_cats_model(
+    model,
+    target_modules: List[str] = ["act_fn"],
+    target_sparsity: float = 0.5,
+    sparsity_type: str = "Constant",
+    kernel_inject_targets: List[str] = ["mlp"],
+):
+    config = model.config
+    wrapped_model_class_name = model_class_to_pkg_str(model)
+
+    cats_config = CatsConfig(
+        config,
+        wrapped_model_class_name,
+        target_modules=target_modules,
+        target_sparsity=target_sparsity,
+        kernel_inject_targets=kernel_inject_targets,
+    )
+    pretrained_kwargs = {
+        "pretrained_model_name_or_path": config.name_or_path,
+        "torch_dtype": model.dtype,
+        "attn_implementation": config._attn_implementation,
+    }
+    print(pretrained_kwargs)
+    cats_model = CatsModel(cats_config, pretrained_kwargs=pretrained_kwargs)
+
+    return cats_model

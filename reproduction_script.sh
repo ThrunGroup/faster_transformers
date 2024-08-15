@@ -24,9 +24,6 @@ export CATS_RESPATH="$project_path/$result_path"
 ### Collect the statistics before General finetuning & plot figure 1
 bash scripts/plot_mlp_histogram.sh $ckpt_path
 
-### Plot figure 5: activation sparsity (figure 5) after general finetuning
-bash scripts/plot_post_training_act_sparsity.sh $ckpt_path
-
 ### Experiments for Table 1. Results are saved in "output/"
 bash scripts/zero_shot_evaluation_without_general_finetuning.sh $ckpt_path
 
@@ -40,6 +37,9 @@ bash scripts/general_finetuning_llama_relufication.sh $ckpt_path
 bash scripts/general_finetuning_mistral_cats.sh $ckpt_path
 bash scripts/general_finetuning_mistral_relufication.sh $ckpt_path
 python experiments/plot_zero_shot.py # Plot figure 1
+
+### Plot figure 5: activation sparsity (figure 5) after general finetuning
+bash scripts/plot_post_training_act_sparsity.sh $ckpt_path
 
 
 
