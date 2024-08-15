@@ -134,6 +134,7 @@ def sample_cats_zero_shot(
     print(f"Without kernel injection: {time.time()-start_time}")
 
     model.inject_kernel()
+    # Generate for compiling purpose
     with torch.no_grad():
         for step, batch in tqdm(enumerate(eval_dataloader, start=1), total=1):
             size = batch["input_ids"].shape
