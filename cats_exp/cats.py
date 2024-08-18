@@ -40,6 +40,10 @@ def custom_forward_for_swiglu(self, x):
     warnings.warn(
         "Using custom forward for MLP. Note that only batch size <= 4 is possible."
     )
+    beam_width, seq_len, _ = x.shape
+    if seq_len > 1:
+        return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))
+
     threshold = self.act_fn.threshold
     return flash_gemv.gemv_gemv_triton(
         x,
@@ -68,7 +72,7 @@ class Cats(nn.Module):
     def __init__(
         self,
         wrapped_module: nn.Module,
-        threshold: float = 0,
+        threshold: float = 0.0,
         hist_num_bins: int = 1000,
         hist_min: int = -1,
         hist_max: int = 1,
@@ -89,6 +93,7 @@ class Cats(nn.Module):
         self.num_elems_act = 0
         self.collect_stats = True
         self.print_sparsity = True
+        self.is_kernel = False
 
     def disable_collect_stats(self):
         self.collect_stats = False
@@ -96,50 +101,63 @@ class Cats(nn.Module):
     def enable_collect_stats(self):
         self.collect_stats = True
 
+    def enable_kernel_injection(self):
+        self.is_kernel = True
+
+    def disable_kernel_injection(self):
+        self.is_kernel = False
+
     def set_threshold(self, threshold: float):
         if isinstance(threshold, float):
             threshold = torch.tensor(threshold)
         self.threshold = nn.Parameter(threshold.clone().detach(), requires_grad=False)
 
+    def _update_stats(self, x):
+        if torch.cuda.is_available():
+            pre_activation = x.float()
+            post_activation = torch.abs(pre_activation)
+            self.hist_counts += torch.cat(
+                (
+                    (pre_activation < self.hist_min).sum().unsqueeze(0),
+                    torch.histc(
+                        pre_activation,
+                        bins=self.num_bins - 3,
+                        min=self.hist_min,
+                        max=self.hist_max,
+                    ),
+                    (pre_activation > self.hist_max).sum().unsqueeze(0),
+                )
+            ).cpu()
+            self.abs_hist_counts += torch.cat(
+                (
+                    (post_activation < self.hist_min).sum().unsqueeze(0),
+                    torch.histc(
+                        post_activation,
+                        bins=self.num_bins - 3,
+                        min=self.hist_min,
+                        max=self.hist_max,
+                    ),
+                    (post_activation > self.hist_max).sum().unsqueeze(0),
+                )
+            ).cpu()
+        else:
+            self.hist_counts += torch.histogram(x, bins=self.histogram_bins)[0]
+            self.abs_hist_counts += torch.histogram(
+                torch.abs(x), bins=self.histogram_bins
+            )[0]
+
+    def _update_sparsity(self, x):
+        self.num_zeros_act += torch.sum(x == 0)
+        self.num_elems_act += torch.numel(x)
+
     def forward(self, x):
         x = self.wrapped_module(x)
         if self.collect_stats:
-            if torch.cuda.is_available():
-                pre_activation = x.float()
-                post_activation = torch.abs(pre_activation)
-                self.hist_counts += torch.cat(
-                    (
-                        (pre_activation < self.hist_min).sum().unsqueeze(0),
-                        torch.histc(
-                            pre_activation,
-                            bins=self.num_bins - 3,
-                            min=self.hist_min,
-                            max=self.hist_max,
-                        ),
-                        (pre_activation > self.hist_max).sum().unsqueeze(0),
-                    )
-                ).cpu()
-                self.abs_hist_counts += torch.cat(
-                    (
-                        (post_activation < self.hist_min).sum().unsqueeze(0),
-                        torch.histc(
-                            post_activation,
-                            bins=self.num_bins - 3,
-                            min=self.hist_min,
-                            max=self.hist_max,
-                        ),
-                        (post_activation > self.hist_max).sum().unsqueeze(0),
-                    )
-                ).cpu()
-            else:
-                self.hist_counts += torch.histogram(x, bins=self.histogram_bins)[0]
-                self.abs_hist_counts += torch.histogram(
-                    torch.abs(x), bins=self.histogram_bins
-                )[0]
-        x[abs(x) < self.threshold] = 0
+            self._update_stats(self, x)
+        if not self.is_kernel:
+            x[abs(x) < self.threshold] = 0
         if self.print_sparsity:
-            self.num_zeros_act += torch.sum(x == 0)
-            self.num_elems_act += torch.numel(x)
+            self._update_sparsity(x)
 
         return x
 
@@ -170,12 +188,14 @@ class CatsConfig(PretrainedConfig):
         target_modules: List[str] = ["act_fn"],
         target_sparsity: float = 0.5,
         kernel_inject_targets=["mlp"],
+        is_inject_kernel: bool = False,
         **kwargs,
     ):
         self.target_modules = target_modules
         self.target_sparsity = target_sparsity
         self.kernel_inject_targets = kernel_inject_targets
         self.wrapped_model_class_name = wrapped_model_class_name
+        self.is_inject_kernel = is_inject_kernel
         self.__dict__.update(wrapped_model_config.__dict__)
         super().__init__(**kwargs)
 
@@ -187,17 +207,22 @@ class CatsModel(PreTrainedModel, nn.Module):
         self,
         config,
         pretrained_kwargs: dict = None,
+        model: PreTrainedModel = None,
     ):
         super().__init__(config)
         transformers_module = importlib.import_module("transformers")
         self.wrapped_model_class = getattr(
             transformers_module, config.wrapped_model_class_name
         )
-        self.wrapped_model = self.wrapped_model_class(config)
         if pretrained_kwargs is not None:
             self.wrapped_model = self.wrapped_model_class.from_pretrained(
                 **pretrained_kwargs
             )
+        else:
+            if model is None:
+                self.wrapped_model = self.wrapped_model_class(config)
+            else:
+                self.wrapped_model = model
         self.kernel_inject_targets = config.kernel_inject_targets
         self.inject_cats()
 
@@ -209,6 +234,8 @@ class CatsModel(PreTrainedModel, nn.Module):
                     print(f"injecting kernel to {name}")
                     if target_name in self.kernel_inject_targets:
                         replace_mp_with_gemv(target, target_name)
+                if isinstance(target, Cats):
+                    target.enable_kernel_injection()
 
     def inject_cats(self):
         for name, module in self.wrapped_model.named_modules():
@@ -253,6 +280,7 @@ class CatsModel(PreTrainedModel, nn.Module):
                     self.config.target_sparsity,
                 )
                 module.set_threshold(threshold)
+                print(f"{name}: {threshold}!")
 
     def get_sparsity(self):
         sparsity_dict = {}
@@ -274,8 +302,14 @@ class CatsModel(PreTrainedModel, nn.Module):
         """Override the __call__ method to use the wrapped model's forward method."""
         return self.wrapped_model(*args, **kwargs)
 
+    def forward(self, *args, **kwargs):
+        return self.wrapped_model(*args, **kwargs)
+
     def generate(self, *args, **kwargs):
         return self.wrapped_model.generate(*args, **kwargs)
+
+    def gradient_checkpointing_enable(self, gradient_checkpointing_kwargs=None):
+        self.wrapped_model.gradient_checkpointing_enable(gradient_checkpointing_kwargs)
 
 
 def get_cats_model(
@@ -284,6 +318,8 @@ def get_cats_model(
     target_sparsity: float = 0.5,
     sparsity_type: str = "Constant",
     kernel_inject_targets: List[str] = ["mlp"],
+    is_inject_kernel: bool = False,
+    is_share_params: bool = True,
 ):
     config = model.config
     wrapped_model_class_name = model_class_to_pkg_str(model)
@@ -294,6 +330,7 @@ def get_cats_model(
         target_modules=target_modules,
         target_sparsity=target_sparsity,
         kernel_inject_targets=kernel_inject_targets,
+        is_inject_kernel=is_inject_kernel,
     )
     pretrained_kwargs = {
         "pretrained_model_name_or_path": config.name_or_path,
@@ -301,6 +338,13 @@ def get_cats_model(
         "attn_implementation": config._attn_implementation,
     }
     print(pretrained_kwargs)
-    cats_model = CatsModel(cats_config, pretrained_kwargs=pretrained_kwargs)
+    if is_share_params:
+        cats_model = CatsModel(cats_config, model=model)
+    else:
+        cats_model = CatsModel(
+            cats_config,
+            pretrained_kwargs=pretrained_kwargs,
+            model=None,
+        )
 
     return cats_model
