@@ -153,7 +153,7 @@ class Cats(nn.Module):
     def forward(self, x):
         x = self.wrapped_module(x)
         if self.collect_stats:
-            self._update_stats(self, x)
+            self._update_stats(x)
         if not self.is_kernel:
             x[abs(x) < self.threshold] = 0
         if self.print_sparsity:

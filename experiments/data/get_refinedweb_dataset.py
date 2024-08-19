@@ -96,7 +96,7 @@ class RefinedWeb(Dataset):
             with open(validation_path, "wb") as f:
                 pickle.dump(val_dataset, f)
             print("Preprocessed and saved data to disk.")
-        train_dataset.filter(lambda item: len(item["input_ids"]) < self.max_seq_length)
+        # train_dataset.filter(lambda item: len(item["input_ids"]) < self.max_seq_length)
         train_dataset.shuffle()
         return train_dataset, val_dataset, test_dataset
 
@@ -105,7 +105,7 @@ class RefinedWeb(Dataset):
             examples["content"],
             truncation=True,
             max_length=self.max_seq_length,
-            return_overflowing_tokens=True,
+            # return_overflowing_tokens=True,
             # return_length=True,
         )
 
