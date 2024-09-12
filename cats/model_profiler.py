@@ -26,7 +26,7 @@ from torch.optim.lr_scheduler import OneCycleLR, CosineAnnealingLR
 
 
 from experiments.data.get_dataset import get_dataset
-from cats.cats import (
+from cats.cats_model import (
     CatsModelForCausalLM,
     CatsConfig,
     get_cats_model,

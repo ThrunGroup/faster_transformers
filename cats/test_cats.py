@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import os
 
 # Assuming the CatsModel and related classes are in a file named cats_model.py
-from cats.cats import CatsModelForCausalLM, CatsConfig, get_cats_model
+from cats.cats_model import CatsModelForCausalLM, CatsConfig, get_cats_model
 
 
 class TestCatsModel(unittest.TestCase):
