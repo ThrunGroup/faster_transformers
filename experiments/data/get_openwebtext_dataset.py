@@ -5,16 +5,17 @@ from .dataset import Dataset
 
 
 class OpenWebText(Dataset):
-    def __init__(self, tokenizer, model_type):
+    def __init__(self, tokenizer, model_type, min_length=0, max_length=1024):
         """
         :param tokenizer: Tokenizer to tokenize the inputs
-        :param model: Model to finetune / evaluate
-        :param metrics: Metrics to evaluate the model
-        :param prefix: Prefix to the inputs to start the summarization task
+        :param model_type: Type of the model
+        :param min_length: Minimum length of the text
+        :param max_length: Maximum length of the text
         """
-        super().__init__(tokenizer,model_type)
-        # self.tokenizer.pad_token = tokenizer.mask_toke
+        super().__init__(tokenizer, model_type)
         self.tokenizer.pad_token = tokenizer.eos_token
+        self.min_length = min_length
+        self.max_length = max_length
 
     def get_tokenized_dataset(self):
         """
@@ -23,22 +24,29 @@ class OpenWebText(Dataset):
         """
         dataset = load_dataset("stas/openwebtext-10k", split="train[:50]")
         dataset = dataset.train_test_split(test_size=0.2)
-        tokenized_dataset = dataset.map(self.preprocess, batched=True)
+        tokenized_dataset = dataset.map(
+            self.preprocess, batched=True, remove_columns=dataset["train"].column_names
+        )
         print(tokenized_dataset)
-
-        # train_dataset = TextDataset(tokenizer=self.tokenizer, file_path=train_dataset['text'], block_size=128)
-        # test_dataset = TextDataset(tokenizer=self.tokenizer, file_path=test_dataset['text'], block_size=128)
 
         return tokenized_dataset["train"], tokenized_dataset["test"]
 
     def preprocess(self, examples):
         inputs = self.tokenizer(
-            examples["text"], max_length=1024, truncation=True
+            examples["text"],
+            max_length=self.max_length,
+            truncation=True,
+            padding="max_length",
         )
 
+        # Filter out examples that are too short
+        mask = [len(ids) >= self.min_length for ids in inputs["input_ids"]]
+
         return {
-            "input_ids": inputs["input_ids"],
-            "attention_mask": inputs["attention_mask"],
+            "input_ids": [ids for ids, m in zip(inputs["input_ids"], mask) if m],
+            "attention_mask": [
+                mask for mask, m in zip(inputs["attention_mask"], mask) if m
+            ],
         }
 
     def get_data_collator(self):
@@ -47,7 +55,7 @@ class OpenWebText(Dataset):
         and converting them into a format that can be consumed by the model.
         """
         data_collator = DataCollatorForLanguageModeling(
-            tokenizer=self.tokenizer, mlm=False, mlm_probability=0.15
+            tokenizer=self.tokenizer, mlm=False
         )
         return data_collator
 

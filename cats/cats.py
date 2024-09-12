@@ -1,24 +1,27 @@
+import logging
 import importlib
 import json
 import os
-from typing import List
+import warnings
+from typing import List, Dict
+
 import torch
 import torch.nn as nn
-import warnings
-
-from experiments.models.sparse_silu.ugly_utils import get_threshold
 from transformers import (
     PretrainedConfig,
     PreTrainedModel,
     AutoConfig,
-    LlamaForCausalLM,
     # GemmaForCausalLM,
 )
-
-from cats_exp.ops.sparse_mm import gemv_gemv_triton, gemv_triton
 from transformers import modeling_utils
+
+from cats.kernels.sparse_mm import gemv_gemv_triton, gemv_triton
+from experiments.models.sparse_silu.ugly_utils import get_threshold
 from utils.constants import MISTRAL_7B
 from utils.utils import _get_submodules
+
+
+logger = logging.getLogger(__name__)
 
 
 def model_class_to_pkg_str(model_obj):
@@ -48,6 +51,7 @@ def custom_forward_for_swiglu(self, x):
     )
 
 
+# Kernel Method 1 (simple 2-layer mlp)
 def custom_forward_for_simple_mlp(self, x):
     assert "MLP" in self.__class__.__name__, "{} is not an MLP".format(
         self.__class__.__name__
@@ -67,6 +71,7 @@ def custom_forward_for_simple_mlp(self, x):
     )
 
 
+# Kernel method 2 (LLama like mlp)
 def replace_mlp_with_gemv_gemv(
     target_module,
     target_name: str,
@@ -75,7 +80,7 @@ def replace_mlp_with_gemv_gemv(
     Replace the forward function of the target module (llama-like MLP module) with a custom forward function that uses gemv_gemv_triton.
     """
     if "mlp" in target_name:
-        print(f"Replacing {target_name} forward function with Gemv.")
+        logger.info(f"Replacing {target_name} forward function with Gemv.")
         target_module.wdown_t = target_module.down_proj.weight.t().contiguous()
         setattr(
             target_module,
@@ -92,7 +97,7 @@ def replace_mlp_with_gemv(
     Replace the forward function of the target module (2-layer MLP module) with a custom forward function that uses gemv_triton.
     """
     if "mlp" in target_name:
-        print(f"Replacing {target_name} forward function with Gemv.")
+        logger.info(f"Replacing {target_name} forward function with Gemv.")
         target_module.weight_t = target_module.wrapped_module.weight.t().contiguous()
         setattr(
             target_module,
@@ -191,16 +196,17 @@ class Cats(nn.Module):
                 self._update_stats(x)
             if not self.is_kernel:
                 x[abs(x) < self.threshold] = 0
-            x = self.wrapped_module
+            if self.print_sparsity:
+                self._update_sparsity(x)
+            x = self.wrapped_module(x)
         else:
             x = self.wrapped_module(x)
             if self.collect_stats:
                 self._update_stats(x)
             if not self.is_kernel:
                 x[abs(x) < self.threshold] = 0
-
-        if self.print_sparsity:
-            self._update_sparsity(x)
+            if self.print_sparsity:
+                self._update_sparsity(x)
 
         return x
 
@@ -228,19 +234,31 @@ class CatsConfig(PretrainedConfig):
         self,
         wrapped_model_config=AutoConfig.from_pretrained(MISTRAL_7B),
         wrapped_model_class_name: str = "MistralForCausalLM",
-        target_modules: List[str] = ["act_fn"],
+        pre_target_modules: List[str] = [],
+        post_target_modules: List[str] = ["act_fn"],
         target_sparsity: float = 0.5,
-        kernel_inject_targets=["mlp"],
+        kernel_inject_targets: Dict[str, int] = {"mlp": 2},
         is_inject_kernel: bool = False,
-        pre_apply: bool = False,
         **kwargs,
     ):
-        self.target_modules = target_modules
+        """
+        Args:
+            wrapped_model_config (PretrainedConfig): The configuration of the wrapped model.
+            wrapped_model_class_name (str): The name of the wrapped model class.
+            pre_target_modules (List[str]): The list of module names to replace with CATS (applied before wrapped module).
+            post_target_modules (List[str]): The list of module names to replace with CATS (applied after wrapped module).
+            target_sparsity (float): The target sparsity level.
+            kernel_inject_targets (Dict[str, int]): The dictionary with module name as a key and with kernel method
+            as a value.
+            is_inject_kernel (bool): Whether to inject the kernel.
+            **kwargs: Additional keyword arguments.
+        """
+        self.pre_target_modules = pre_target_modules
+        self.post_target_modules = post_target_modules
         self.target_sparsity = target_sparsity
         self.kernel_inject_targets = kernel_inject_targets
         self.wrapped_model_class_name = wrapped_model_class_name
         self.is_inject_kernel = is_inject_kernel
-        self.pre_apply = pre_apply
         self.__dict__.update(wrapped_model_config.__dict__)
         super().__init__(**kwargs)
 
@@ -275,36 +293,47 @@ class CatsModelForCausalLM(PreTrainedModel, nn.Module):
         if self.kernel_inject_targets is not None:
             for name, module in self.wrapped_model.named_modules():
                 parent, target, target_name = _get_submodules(self.wrapped_model, name)
-                if target_name in self.kernel_inject_targets:
-                    print(f"injecting kernel to {name}")
-                    if target_name in self.kernel_inject_targets:
-                        if isinstance(target, nn.Linear):
-                            replace_mlp_with_gemv(target, target_name)
-                        elif isinstance(target, modeling_utils.Swiglu):
-                            replace_mlp_with_gemv_gemv(target, target_name)
+                if target_name in self.kernel_inject_targets.keys():
+                    logger.info(f"injecting kernel to {name}")
+                    if self.kernel_inject_targets[target_name] == 1:
+                        replace_mlp_with_gemv(target, target_name)
+                    elif self.kernel_inject_targets[target_name] == 2:
                         replace_mlp_with_gemv_gemv(target, target_name)
+                    else:
+                        raise NotImplementedError(
+                            f"Kernel method {self.kernel_inject_targets[target_name]} is not implemented."
+                        )
                 if isinstance(target, Cats):
                     target.enable_kernel_injection()
 
     def inject_cats(self):
         for name, module in self.wrapped_model.named_modules():
             parent, target, target_name = _get_submodules(self.wrapped_model, name)
-            if target_name in self.config.target_modules:
-                # print(f"{name} is replaced.")
+            if target_name in self.config.pre_target_modules:
+                logger.info(
+                    f"injecting cats into {target_name}, {type(target)} (pre-apply)"
+                )
 
                 # Replace target module with target module + CATS
-                cats = Cats(wrapped_module=target, pre_apply=self.config.pre_apply)
+                cats = Cats(wrapped_module=target, pre_apply=True)
+                setattr(parent, target_name, cats)
+            elif target_name in self.config.post_target_modules:
+                logger.info(
+                    f"injecting cats into {target_name}, {type(target)} (post-apply)"
+                )
+
+                cats = Cats(wrapped_module=target, pre_apply=False)
                 setattr(parent, target_name, cats)
 
     def enable_collect_stats(self):
-        print("enable stats")
+        logger.info("enable stats")
         for name, module in self.wrapped_model.named_modules():
             if isinstance(module, Cats):
                 module.enable_collect_stats()
                 module.print_sparsity = True
 
     def disable_collect_stats(self) -> None:
-        print("disable stats")
+        logger.info("disable stats")
 
         for name, module in self.wrapped_model.named_modules():
             if isinstance(module, Cats):
@@ -312,7 +341,7 @@ class CatsModelForCausalLM(PreTrainedModel, nn.Module):
                 module.print_sparsity = False
 
     def init_stats(self) -> None:
-        print("Initialize stats")
+        logger.info("Initialize stats")
 
         for name, module in self.wrapped_model.named_modules():
             if isinstance(module, Cats):
@@ -320,7 +349,7 @@ class CatsModelForCausalLM(PreTrainedModel, nn.Module):
                 module.num_zeros_act = 0
 
     def set_thresholds(self):
-        print("Setting threshold")
+        logger.info("Setting threshold")
         for name, module in self.wrapped_model.named_modules():
             if isinstance(module, Cats):
                 threshold = get_threshold(
@@ -361,38 +390,63 @@ class CatsModelForCausalLM(PreTrainedModel, nn.Module):
 
 
 def get_cats_model(
-    model,
-    target_modules: List[str] = ["act_fn"],
+    model: PreTrainedModel,
+    pre_target_modules: List[str] = [],
+    post_target_modules: List[str] = ["act_fn"],
     target_sparsity: float = 0.5,
     sparsity_type: str = "Constant",
-    kernel_inject_targets: List[str] = ["mlp"],
+    kernel_inject_targets: Dict[str, int] = {"mlp": 2},
     is_inject_kernel: bool = False,
     is_share_params: bool = True,
-):
+) -> CatsModelForCausalLM:
+    """
+    Create a CATS model from an existing model.
+
+    Args:
+        model (PreTrainedModel): The base model to wrap with CATS.
+        pre_target_modules (List[str]): Modules to apply CATS before.
+        post_target_modules (List[str]): Modules to apply CATS after.
+        target_sparsity (float): Target sparsity level.
+        sparsity_type (str): Type of sparsity (currently unused).
+        kernel_inject_targets (Dict[str, int]): Modules to inject kernels into.
+        is_inject_kernel (bool): Whether to inject kernels.
+        is_share_params (bool): Whether to share parameters with the base model.
+
+    Returns:
+        CatsModelForCausalLM: The CATS-wrapped model.
+    """
     config = model.config
     wrapped_model_class_name = model_class_to_pkg_str(model)
 
     cats_config = CatsConfig(
         config,
-        wrapped_model_class_name,
-        target_modules=target_modules,
+        wrapped_model_class_name=wrapped_model_class_name,
+        pre_target_modules=pre_target_modules,
+        post_target_modules=post_target_modules,
         target_sparsity=target_sparsity,
         kernel_inject_targets=kernel_inject_targets,
         is_inject_kernel=is_inject_kernel,
     )
+
     pretrained_kwargs = {
         "pretrained_model_name_or_path": config.name_or_path,
         "torch_dtype": model.dtype,
-        "attn_implementation": config._attn_implementation,
+        "attn_implementation": getattr(config, "_attn_implementation", None),
     }
-    # print(pretrained_kwargs)
+
     if is_share_params:
+        logger.info("Creating CATS model with shared parameters")
         cats_model = CatsModelForCausalLM(cats_config, model=model)
     else:
+        logger.info("Creating CATS model with separate parameters")
         cats_model = CatsModelForCausalLM(
             cats_config,
             pretrained_kwargs=pretrained_kwargs,
             model=None,
         )
+
+    if is_inject_kernel:
+        logger.info("Injecting kernels into CATS model")
+        cats_model.inject_kernel()
 
     return cats_model

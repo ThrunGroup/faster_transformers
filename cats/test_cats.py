@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import os
 
 # Assuming the CatsModel and related classes are in a file named cats_model.py
-from cats_exp.cats import CatsModel, CatsConfig, get_cats_model
+from cats.cats import CatsModelForCausalLM, CatsConfig, get_cats_model
 
 
 class TestCatsModel(unittest.TestCase):
@@ -20,11 +20,11 @@ class TestCatsModel(unittest.TestCase):
             self.base_model,
             target_modules=["act_fn"],
             target_sparsity=0.5,
-            kernel_inject_targets=["mlp"],
+            kernel_inject_targets={"mlp": 2},
             is_inject_kernel=False,
             is_share_params=True,
         )
-        self.assertIsInstance(cats_model, CatsModel)
+        self.assertIsInstance(cats_model, CatsModelForCausalLM)
 
     def test_save_and_load_cats_model(self):
         cats_model = get_cats_model(self.base_model, is_share_params=False)
@@ -35,7 +35,7 @@ class TestCatsModel(unittest.TestCase):
             cats_model.save_pretrained(save_path)
 
             # Load the model
-            loaded_model = CatsModel.from_pretrained(save_path)
+            loaded_model = CatsModelForCausalLM.from_pretrained(save_path)
 
             # Check if the loaded model has the same configuration
             # self.assertEqual(cats_model.config.to_dict(), loaded_model.config.to_dict())
