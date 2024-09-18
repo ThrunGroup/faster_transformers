@@ -5,7 +5,6 @@ import random
 import csv
 import math
 import bitsandbytes as bnb
-from accelerate import Accelerator
 from torch.nn import CrossEntropyLoss
 from torch.utils.data.dataloader import DataLoader
 from torch.optim import AdamW
@@ -489,6 +488,7 @@ if __name__ == "__main__":
     base_config["use_lora"] = False
     base_config["train_model"] = False
     base_config["model_name"] = "Base_Mistral"
+    base_config["run_generation"] = True
     base_config["run_generation_wo_kernel"] = True
     run_experiment(base_config)
 
@@ -516,14 +516,15 @@ if __name__ == "__main__":
 
     for sparsity in target_sparsities:
         config = default_config.copy()
+        config["use_lora"] = False
         config["target_sparsity"] = sparsity
         config["post_target_modules"] = ["act_fn"]
         config["pre_target_modules"] = ["q_proj", "o_proj", "gate_proj"]
         config["kernel_inject_targets"] = {
             "mlp": 2,
-            "q_proj": 1,
-            "o_proj": 1,
-            "gate_proj": 1,
+            # "q_proj": 1,
+            # "o_proj": 1,
+            # "gate_proj": 1,
         }
         config["run_generation"] = True
         config["train_model"] = False
