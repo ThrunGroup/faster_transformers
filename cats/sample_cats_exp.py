@@ -5,6 +5,8 @@ import random
 import csv
 import math
 import bitsandbytes as bnb
+from accelerate import Accelerator
+
 from torch.nn import CrossEntropyLoss
 from torch.utils.data.dataloader import DataLoader
 from torch.optim import AdamW

@@ -129,3 +129,17 @@ def plot_post_training_sp(
     parent_dir = os.path.join(parent_dir, "figures")
     plt.savefig(f"{parent_dir}/fig5:{model_name}_post_training_sp.png")
     plt.close()
+
+
+def get_threshold(
+    bin_edges: torch.tensor, histogram_counts: torch.tensor, sparsity_level: float
+):  # Only for L1 Regularization
+    assert (
+        len(bin_edges.shape) == len(histogram_counts.shape) == 1
+    ), "bin_edges and histogram are expected to be 1-dimensional."
+    histogram_counts /= histogram_counts.sum()
+    threshold_idx = torch.searchsorted(
+        histogram_counts.cumsum(0), sparsity_level, side="right"
+    )
+
+    return bin_edges[threshold_idx]

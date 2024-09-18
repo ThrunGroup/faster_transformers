@@ -16,9 +16,8 @@ from transformers import (
 from transformers import modeling_utils
 
 from cats.kernels.sparse_mm import gemv_gemv_triton, gemv_triton
-from experiments.models.sparse_silu.ugly_utils import get_threshold
 from utils.constants import MISTRAL_7B
-from utils.utils import _get_submodules
+from utils.utils import _get_submodules, get_threshold
 
 
 logger = logging.getLogger(__name__)
